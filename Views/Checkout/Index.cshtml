@@ -24,9 +24,23 @@
     <p class="small mb-0" style="color:var(--text-muted);">Provide your delivery address and preferred payment method below.</p>
 </div>
 
-<form asp-controller="Checkout" asp-action="ProcessOrder" method="post">
+<form asp-controller="Checkout" asp-action="ProcessOrder" method="post" id="checkoutForm">
     @Html.AntiForgeryToken()
     <input type="hidden" asp-for="IdempotencyToken" />
+    <input type="hidden" asp-for="ExpectedGrandTotal" id="hiddenExpectedGrandTotal" value="@Model.Cart.GrandTotal" />
+
+    @if (!string.IsNullOrEmpty(Model.PriceChangeWarning))
+    {
+        <div class="alert alert-warning border border-warning-subtle rounded-4 p-3 mb-4 shadow-sm reveal-on-scroll">
+            <div class="d-flex align-items-center gap-3">
+                <i class="fa-solid fa-triangle-exclamation fs-4 text-warning"></i>
+                <div>
+                    <h6 class="fw-bold mb-1">Pricing / Delivery Update Notice</h6>
+                    <p class="small mb-0">@Model.PriceChangeWarning</p>
+                </div>
+            </div>
+        </div>
+    }
 
     <div class="row g-4">
         <!-- Main Form Fields -->
@@ -208,35 +222,35 @@
 
                 <div class="d-flex justify-content-between mb-2 small">
                     <span style="color:var(--text-muted);">Subtotal</span>
-                    <strong style="color:var(--text-primary);">@ShippingTaxService.FormatCurrency(Model.Cart.SubTotal)</strong>
+                    <strong style="color:var(--text-primary);" id="summarySubtotal">@ShippingTaxService.FormatCurrency(Model.Cart.SubTotal)</strong>
                 </div>
 
                 @if (Model.Cart.CouponDiscountAmount > 0)
                 {
-                    <div class="d-flex justify-content-between mb-2 small fw-bold" style="color:var(--status-success);">
+                    <div class="d-flex justify-content-between mb-2 small fw-bold" style="color:var(--status-success);" id="summaryDiscountRow">
                         <span>Discount (@Model.Cart.AppliedCouponCode)</span>
-                        <span>-@ShippingTaxService.FormatCurrency(Model.Cart.CouponDiscountAmount)</span>
+                        <span id="summaryDiscount">-@ShippingTaxService.FormatCurrency(Model.Cart.CouponDiscountAmount)</span>
                     </div>
                 }
 
                 <div class="d-flex justify-content-between mb-2 small">
-                    <span style="color:var(--text-muted);">GST Tax</span>
-                    <strong style="color:var(--text-primary);">@ShippingTaxService.FormatCurrency(Model.Cart.EstimatedTax)</strong>
+                    <span style="color:var(--text-muted);">GST Tax (@Model.Cart.TaxRatePercent%)</span>
+                    <strong style="color:var(--text-primary);" id="summaryTax">@ShippingTaxService.FormatCurrency(Model.Cart.EstimatedTax)</strong>
                 </div>
 
                 <div class="d-flex justify-content-between mb-3 small">
                     <span style="color:var(--text-muted);">Shipping</span>
-                    <strong style="color:var(--text-primary);">@(Model.Cart.EffectiveShippingFee == 0 ? "FREE" : ShippingTaxService.FormatCurrency(Model.Cart.EffectiveShippingFee))</strong>
+                    <strong style="color:var(--text-primary);" id="summaryShipping">@(Model.Cart.EffectiveShippingFee == 0 ? "FREE" : ShippingTaxService.FormatCurrency(Model.Cart.EffectiveShippingFee))</strong>
                 </div>
 
                 <hr style="border-color:var(--border-subtle) !important;" />
 
                 <div class="d-flex justify-content-between fs-5 fw-bold mb-4">
                     <span style="color:var(--text-primary);">Total</span>
-                    <span class="font-heading" style="color:var(--brand-primary);">@ShippingTaxService.FormatCurrency(Model.Cart.GrandTotal)</span>
+                    <span class="font-heading" style="color:var(--brand-primary);" id="summaryGrandTotal">@ShippingTaxService.FormatCurrency(Model.Cart.GrandTotal)</span>
                 </div>
 
-                <button type="submit" class="btn btn-primary-custom w-100 py-3 rounded-pill fw-bold shadow-sm mb-3">
+                <button type="submit" class="btn btn-primary-custom w-100 py-3 rounded-pill fw-bold shadow-sm mb-3" id="btnPlaceOrder">
                     <i class="fa-solid fa-lock me-2"></i>Place Order
                 </button>
 
@@ -247,3 +261,48 @@
         </div>
     </div>
 </form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const shipRadios = document.querySelectorAll('input[name="ShippingMethod"]');
+            const summaryTax = document.getElementById('summaryTax');
+            const summaryShipping = document.getElementById('summaryShipping');
+            const summaryGrandTotal = document.getElementById('summaryGrandTotal');
+            const hiddenExpectedTotal = document.getElementById('hiddenExpectedGrandTotal');
+
+            async function updateTotals(method) {
+                try {
+                    const resp = await fetch('/Checkout/Recalculate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value || ''
+                        },
+                        body: JSON.stringify({ shippingMethod: method })
+                    });
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        if (summaryTax) summaryTax.textContent = data.tax;
+                        if (summaryShipping) summaryShipping.textContent = data.shipping;
+                        if (summaryGrandTotal) summaryGrandTotal.textContent = data.grandTotal;
+                        if (hiddenExpectedTotal && data.grandTotalValue !== undefined) {
+                            hiddenExpectedTotal.value = data.grandTotalValue;
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to recalculate checkout totals:", e);
+                }
+            }
+
+            shipRadios.forEach(radio => {
+                radio.addEventListener('change', function () {
+                    if (this.checked) {
+                        updateTotals(this.value);
+                    }
+                });
+            });
+        });
+    </script>
+}

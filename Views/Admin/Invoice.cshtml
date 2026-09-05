@@ -1,4 +1,5 @@
 @model HamaraCommerce.Models.Order
+@inject HamaraCommerce.Services.IShippingTaxService ShippingTaxService
 @{
     ViewData["Title"] = "Tax Invoice #" + Model.Id;
 }
@@ -9,7 +10,7 @@
         <div class="d-flex justify-content-between align-items-center mb-5 pb-4 border-bottom">
             <div>
                 <h2 class="brand-title text-dark">Hamara<span>Commerce</span></h2>
-                <p class="small text-muted mb-0">100 Tech Plaza, Suite 400, Seattle, WA 98101<br>GST/Tax ID: US-984210492</p>
+                <p class="small text-muted mb-0">100 Tech Plaza, Suite 400, Lahore, Pakistan<br>NTN / GST ID: PK-8941029-4</p>
             </div>
             <div class="text-end">
                 <h3 class="fw-bold font-heading mb-1 text-primary">TAX INVOICE</h3>
@@ -55,8 +56,8 @@
                     <tr>
                         <td class="fw-bold text-dark">@item.ProductTitle</td>
                         <td class="text-center">@item.Quantity</td>
-                        <td class="text-end">@item.UnitPrice.ToString("C")</td>
-                        <td class="text-end fw-bold">@item.TotalPrice.ToString("C")</td>
+                        <td class="text-end">@ShippingTaxService.FormatCurrency(item.UnitPrice, Model.Currency)</td>
+                        <td class="text-end fw-bold">@ShippingTaxService.FormatCurrency(item.TotalPrice, Model.Currency)</td>
                     </tr>
                 }
             </tbody>
@@ -67,20 +68,27 @@
             <div class="col-md-5 text-end">
                 <div class="d-flex justify-content-between mb-2">
                     <span class="text-muted">Subtotal:</span>
-                    <span class="fw-bold">@Model.Subtotal.ToString("C")</span>
+                    <span class="fw-bold">@ShippingTaxService.FormatCurrency(Model.Subtotal, Model.Currency)</span>
+                </div>
+                @if (Model.DiscountAmount > 0)
+                {
+                    <div class="d-flex justify-content-between mb-2 text-success">
+                        <span>Discount:</span>
+                        <span class="fw-bold">-@ShippingTaxService.FormatCurrency(Model.DiscountAmount, Model.Currency)</span>
+                    </div>
+                }
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Tax (GST):</span>
+                    <span class="fw-bold">@ShippingTaxService.FormatCurrency(Model.TaxAmount, Model.Currency)</span>
                 </div>
                 <div class="d-flex justify-content-between mb-2">
-                    <span class="text-muted">Tax (8%):</span>
-                    <span class="fw-bold">@Model.TaxAmount.ToString("C")</span>
-                </div>
-                <div class="d-flex justify-content-between mb-2">
-                    <span class="text-muted">Shipping:</span>
-                    <span class="fw-bold">@Model.ShippingFee.ToString("C")</span>
+                    <span class="text-muted">Shipping (@Model.ShippingMethod):</span>
+                    <span class="fw-bold">@(Model.ShippingFee == 0 ? "FREE" : ShippingTaxService.FormatCurrency(Model.ShippingFee, Model.Currency))</span>
                 </div>
                 <hr />
                 <div class="d-flex justify-content-between fs-5 fw-bold text-primary">
                     <span>Total Amount Paid:</span>
-                    <span>@Model.TotalAmount.ToString("C")</span>
+                    <span>@ShippingTaxService.FormatCurrency(Model.TotalAmount, Model.Currency)</span>
                 </div>
             </div>
         </div>

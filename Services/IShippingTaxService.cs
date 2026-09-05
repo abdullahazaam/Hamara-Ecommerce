@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using HamaraCommerce.Models;
 
 namespace HamaraCommerce.Services
 {
@@ -24,5 +25,7 @@ namespace HamaraCommerce.Services
         (bool isValid, decimal cost, string displayName) CalculateShippingFee(string methodCode, decimal subtotal, bool hasFreeShippingCoupon = false);
         decimal CalculateTax(decimal taxableSubtotal);
         string FormatCurrency(decimal amount);
+        string FormatCurrency(decimal amount, string? currencyCode = null, string? currencySymbol = null);
+        StoreSetting GetStoreSettings();
     }
 }

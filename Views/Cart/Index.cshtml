@@ -145,7 +145,7 @@ else
                 }
 
                 <div class="d-flex justify-content-between mb-2 small">
-                    <span style="color:var(--text-muted);">Estimated Tax (5% GST)</span>
+                    <span style="color:var(--text-muted);">Estimated Tax (@Model.TaxRatePercent% GST)</span>
                     <strong style="color:var(--text-primary);">@ShippingTaxService.FormatCurrency(Model.EstimatedTax)</strong>
                 </div>
 

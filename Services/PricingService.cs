@@ -12,30 +12,45 @@ namespace HamaraCommerce.Services
     public class PricingService : IPricingService
     {
         private const int MaxAllowedQuantityPerItem = 50;
-        private const decimal DefaultSalesTaxRate = 0.08m; // 8% sales tax
-        private const decimal StandardShippingFee = 15.00m;
-        private const decimal FreeShippingThreshold = 100.00m;
 
         private readonly ApplicationDbContext _context;
+        private readonly IShippingTaxService _shippingTaxService;
         private readonly ILogger<PricingService> _logger;
 
-        public PricingService(ApplicationDbContext context, ILogger<PricingService> logger)
+        public PricingService(
+            ApplicationDbContext context,
+            IShippingTaxService shippingTaxService,
+            ILogger<PricingService> logger)
         {
             _context = context;
+            _shippingTaxService = shippingTaxService;
             _logger = logger;
         }
 
-        public async Task<ShoppingCartViewModel> CalculateCartAsync(CartData cartData, string? userId = null)
+        public async Task<ShoppingCartViewModel> CalculateCartAsync(CartData cartData, string? userId = null, string? shippingMethod = null)
         {
+            var storeSettings = _shippingTaxService.GetStoreSettings();
+            var selectedShippingMethod = string.IsNullOrWhiteSpace(shippingMethod) ? "Standard" : shippingMethod.Trim();
+
             var result = new ShoppingCartViewModel
             {
-                AppliedCouponCode = cartData.AppliedCouponCode?.Trim().ToUpperInvariant()
+                AppliedCouponCode = cartData.AppliedCouponCode?.Trim().ToUpperInvariant(),
+                CurrencyCode = storeSettings.CurrencyCode,
+                CurrencySymbol = storeSettings.CurrencySymbol,
+                TaxRatePercent = storeSettings.TaxRatePercent,
+                ShippingMethodCode = selectedShippingMethod
             };
 
             if (cartData.Items == null || !cartData.Items.Any())
             {
                 result.ShippingFee = 0m;
                 result.EffectiveShippingFee = 0m;
+                result.FormattedSubTotal = _shippingTaxService.FormatCurrency(0m, result.CurrencyCode, result.CurrencySymbol);
+                result.FormattedDiscount = _shippingTaxService.FormatCurrency(0m, result.CurrencyCode, result.CurrencySymbol);
+                result.FormattedTax = _shippingTaxService.FormatCurrency(0m, result.CurrencyCode, result.CurrencySymbol);
+                result.FormattedShipping = _shippingTaxService.FormatCurrency(0m, result.CurrencyCode, result.CurrencySymbol);
+                result.FormattedGrandTotal = _shippingTaxService.FormatCurrency(0m, result.CurrencyCode, result.CurrencySymbol);
+                result.FormattedTotalSavings = _shippingTaxService.FormatCurrency(0m, result.CurrencyCode, result.CurrencySymbol);
                 return result;
             }
 
@@ -171,23 +186,30 @@ namespace HamaraCommerce.Services
                 result.CouponDiscountAmount = 0m;
             }
 
-            // 6. Tax Calculation (on taxable subtotal)
+            // 6. Tax Calculation (on taxable subtotal via authoritative store settings)
             decimal taxableAmount = Math.Max(0m, result.SubTotal - result.CouponDiscountAmount);
-            result.EstimatedTax = Math.Max(0m, Math.Round(taxableAmount * DefaultSalesTaxRate, 2));
+            result.EstimatedTax = _shippingTaxService.CalculateTax(taxableAmount);
 
-            // 7. Shipping Calculation
-            result.ShippingFee = StandardShippingFee;
-            if (result.SubTotal == 0 || result.SubTotal >= FreeShippingThreshold || result.CouponGrantsFreeShipping || result.AppliedCouponCode == "FREESHIP")
-            {
-                result.EffectiveShippingFee = 0.00m;
-            }
-            else
-            {
-                result.EffectiveShippingFee = StandardShippingFee;
-            }
+            // 7. Shipping Calculation (authoritative via store settings & selected delivery tier)
+            var (isShipValid, calculatedShippingFee, shippingName) = _shippingTaxService.CalculateShippingFee(
+                result.ShippingMethodCode, 
+                result.SubTotal, 
+                result.CouponGrantsFreeShipping || result.AppliedCouponCode == "FREESHIP");
+
+            result.ShippingMethodName = string.IsNullOrEmpty(shippingName) ? result.ShippingMethodCode : shippingName;
+            result.ShippingFee = calculatedShippingFee;
+            result.EffectiveShippingFee = calculatedShippingFee;
 
             // 8. Authoritative Grand Total (strictly non-negative)
             result.GrandTotal = Math.Max(0m, (result.SubTotal - result.CouponDiscountAmount) + result.EstimatedTax + result.EffectiveShippingFee);
+
+            // 9. Format all currency strings consistently
+            result.FormattedSubTotal = _shippingTaxService.FormatCurrency(result.SubTotal, result.CurrencyCode, result.CurrencySymbol);
+            result.FormattedDiscount = _shippingTaxService.FormatCurrency(result.CouponDiscountAmount, result.CurrencyCode, result.CurrencySymbol);
+            result.FormattedTax = _shippingTaxService.FormatCurrency(result.EstimatedTax, result.CurrencyCode, result.CurrencySymbol);
+            result.FormattedShipping = result.EffectiveShippingFee == 0m ? "FREE" : _shippingTaxService.FormatCurrency(result.EffectiveShippingFee, result.CurrencyCode, result.CurrencySymbol);
+            result.FormattedGrandTotal = _shippingTaxService.FormatCurrency(result.GrandTotal, result.CurrencyCode, result.CurrencySymbol);
+            result.FormattedTotalSavings = _shippingTaxService.FormatCurrency(result.TotalSavings, result.CurrencyCode, result.CurrencySymbol);
 
             return result;
         }

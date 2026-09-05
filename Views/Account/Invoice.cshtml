@@ -106,8 +106,8 @@
                             </td>
                             <td class="text-center font-monospace small">@(string.IsNullOrEmpty(item.SKU) ? "-" : item.SKU)</td>
                             <td class="text-center fw-bold">@item.Quantity</td>
-                            <td class="text-end">@ShippingTaxService.FormatCurrency(item.UnitPrice)</td>
-                            <td class="text-end fw-bold">@ShippingTaxService.FormatCurrency(item.TotalPrice)</td>
+                            <td class="text-end">@ShippingTaxService.FormatCurrency(item.UnitPrice, Model.Currency)</td>
+                            <td class="text-end fw-bold">@ShippingTaxService.FormatCurrency(item.TotalPrice, Model.Currency)</td>
                         </tr>
                     }
                 </tbody>
@@ -120,26 +120,26 @@
                 <table class="table table-sm table-borderless">
                     <tr>
                         <td class="text-muted">Subtotal:</td>
-                        <td class="text-end fw-semibold">@ShippingTaxService.FormatCurrency(Model.Subtotal)</td>
+                        <td class="text-end fw-semibold">@ShippingTaxService.FormatCurrency(Model.Subtotal, Model.Currency)</td>
                     </tr>
                     @if (Model.DiscountAmount > 0)
                     {
                         <tr class="text-success">
                             <td>Coupon Discount @(Model.CouponCode != null ? $"({Model.CouponCode})" : ""):</td>
-                            <td class="text-end fw-bold">-@ShippingTaxService.FormatCurrency(Model.DiscountAmount)</td>
+                            <td class="text-end fw-bold">-@ShippingTaxService.FormatCurrency(Model.DiscountAmount, Model.Currency)</td>
                         </tr>
                     }
                     <tr>
-                        <td class="text-muted">Sales Tax (5% GST):</td>
-                        <td class="text-end fw-semibold">@ShippingTaxService.FormatCurrency(Model.TaxAmount)</td>
+                        <td class="text-muted">Sales Tax (GST):</td>
+                        <td class="text-end fw-semibold">@ShippingTaxService.FormatCurrency(Model.TaxAmount, Model.Currency)</td>
                     </tr>
                     <tr>
-                        <td class="text-muted">Shipping Fee:</td>
-                        <td class="text-end fw-semibold">@(Model.ShippingFee == 0 ? "FREE" : ShippingTaxService.FormatCurrency(Model.ShippingFee))</td>
+                        <td class="text-muted">Shipping Fee (@Model.ShippingMethod):</td>
+                        <td class="text-end fw-semibold">@(Model.ShippingFee == 0 ? "FREE" : ShippingTaxService.FormatCurrency(Model.ShippingFee, Model.Currency))</td>
                     </tr>
                     <tr class="border-top fs-5">
                         <td class="fw-bold">Grand Total:</td>
-                        <td class="text-end fw-bold text-primary">@ShippingTaxService.FormatCurrency(Model.TotalAmount)</td>
+                        <td class="text-end fw-bold text-primary">@ShippingTaxService.FormatCurrency(Model.TotalAmount, Model.Currency)</td>
                     </tr>
                 </table>
             </div>

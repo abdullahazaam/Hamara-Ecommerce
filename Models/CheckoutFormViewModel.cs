@@ -71,8 +71,17 @@ namespace HamaraCommerce.Models
         public string? SandboxCvc { get; set; }
         public bool SimulatePaymentFailure { get; set; } = false;
 
+        // Dynamic Total Revalidation & Transparent Charging
+        public decimal? ExpectedGrandTotal { get; set; }
+        public string? PriceChangeWarning { get; set; }
+
         // Computed View Models for Checkout Sidebar
         public ShoppingCartViewModel Cart { get; set; } = new();
         public bool IsDevelopmentSandboxEnabled { get; set; } = false;
+    }
+
+    public class CheckoutRecalculateRequest
+    {
+        public string ShippingMethod { get; set; } = "Standard";
     }
 }

@@ -86,10 +86,26 @@ namespace HamaraCommerce.Models
         public decimal ProductDiscountTotal { get; set; }
         public decimal CouponDiscountAmount { get; set; }
         public decimal TotalDiscount => CouponDiscountAmount;
+        public decimal TotalSavings => ProductDiscountTotal + CouponDiscountAmount;
         public decimal EstimatedTax { get; set; }
-        public decimal ShippingFee { get; set; } = 15.00m;
+        public decimal TaxRatePercent { get; set; }
+        public decimal ShippingFee { get; set; }
         public decimal EffectiveShippingFee { get; set; }
         public decimal GrandTotal { get; set; }
+
+        // Currency and Delivery Configuration
+        public string ShippingMethodCode { get; set; } = "Standard";
+        public string ShippingMethodName { get; set; } = string.Empty;
+        public string CurrencyCode { get; set; } = "PKR";
+        public string CurrencySymbol { get; set; } = "Rs. ";
+
+        // Formatted Output (Configured Currency)
+        public string FormattedSubTotal { get; set; } = string.Empty;
+        public string FormattedDiscount { get; set; } = string.Empty;
+        public string FormattedTax { get; set; } = string.Empty;
+        public string FormattedShipping { get; set; } = string.Empty;
+        public string FormattedGrandTotal { get; set; } = string.Empty;
+        public string FormattedTotalSavings { get; set; } = string.Empty;
 
         public int ItemCount => Items.Where(i => i.IsAvailable).Sum(i => i.Quantity);
         public bool HasOutOfStockItems => Items.Any(i => !i.IsAvailable);

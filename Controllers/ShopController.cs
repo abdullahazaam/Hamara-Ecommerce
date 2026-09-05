@@ -18,12 +18,18 @@ namespace HamaraCommerce.Controllers
         private readonly ApplicationDbContext _context;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly ISeoService _seoService;
+        private readonly IShippingTaxService _shippingTaxService;
 
-        public ShopController(ApplicationDbContext context, UserManager<ApplicationUser> userManager, ISeoService seoService)
+        public ShopController(
+            ApplicationDbContext context, 
+            UserManager<ApplicationUser> userManager, 
+            ISeoService seoService,
+            IShippingTaxService shippingTaxService)
         {
             _context = context;
             _userManager = userManager;
             _seoService = seoService;
+            _shippingTaxService = shippingTaxService;
         }
 
         public async Task<IActionResult> Index(
@@ -127,7 +133,7 @@ namespace HamaraCommerce.Controllers
             }
 
             var t = term.ToLower().Trim();
-            var results = await _context.Products
+            var rawResults = await _context.Products
                 .AsNoTracking()
                 .Where(p => p.Status == ProductStatus.Published && 
                            (p.Title.ToLower().Contains(t) || p.CategoryName.ToLower().Contains(t) || p.Brand.ToLower().Contains(t)))
@@ -137,11 +143,20 @@ namespace HamaraCommerce.Controllers
                 {
                     id = p.Id,
                     title = p.Title,
-                    price = p.Price.ToString("C"),
+                    price = p.Price,
                     image = p.MainImage,
                     category = p.CategoryName
                 })
                 .ToListAsync(cancellationToken);
+
+            var results = rawResults.Select(p => new
+            {
+                p.id,
+                p.title,
+                price = _shippingTaxService.FormatCurrency(p.price),
+                p.image,
+                p.category
+            });
 
             return Json(results);
         }

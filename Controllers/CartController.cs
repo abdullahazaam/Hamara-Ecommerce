@@ -11,15 +11,18 @@ namespace HamaraCommerce.Controllers
     {
         private readonly ICartService _cartService;
         private readonly IPricingService _pricingService;
+        private readonly IShippingTaxService _shippingTaxService;
         private readonly ILogger<CartController> _logger;
 
         public CartController(
             ICartService cartService,
             IPricingService pricingService,
+            IShippingTaxService shippingTaxService,
             ILogger<CartController> logger)
         {
             _cartService = cartService;
             _pricingService = pricingService;
+            _shippingTaxService = shippingTaxService;
             _logger = logger;
         }
 
@@ -51,12 +54,12 @@ namespace HamaraCommerce.Controllers
                     message,
                     warning,
                     itemCount = cart.ItemCount,
-                    subtotal = cart.SubTotal.ToString("C"),
-                    productDiscount = cart.ProductDiscountTotal.ToString("C"),
-                    couponDiscount = cart.CouponDiscountAmount.ToString("C"),
-                    tax = cart.EstimatedTax.ToString("C"),
-                    shipping = cart.EffectiveShippingFee.ToString("C"),
-                    grandTotal = cart.GrandTotal.ToString("C"),
+                    subtotal = _shippingTaxService.FormatCurrency(cart.SubTotal),
+                    productDiscount = _shippingTaxService.FormatCurrency(cart.ProductDiscountTotal),
+                    couponDiscount = _shippingTaxService.FormatCurrency(cart.CouponDiscountAmount),
+                    tax = _shippingTaxService.FormatCurrency(cart.EstimatedTax),
+                    shipping = cart.EffectiveShippingFee == 0 ? "FREE" : _shippingTaxService.FormatCurrency(cart.EffectiveShippingFee),
+                    grandTotal = _shippingTaxService.FormatCurrency(cart.GrandTotal),
                     couponCode = cart.AppliedCouponCode,
                     couponValid = cart.CouponIsValid,
                     hasOutOfStock = cart.HasOutOfStockItems,
@@ -68,12 +71,12 @@ namespace HamaraCommerce.Controllers
                         sku = i.SKU,
                         title = i.Title,
                         imageUrl = i.ImageUrl,
-                        unitPrice = i.UnitPrice.ToString("C"),
-                        oldPrice = i.OldPrice.ToString("C"),
+                        unitPrice = _shippingTaxService.FormatCurrency(i.UnitPrice),
+                        oldPrice = _shippingTaxService.FormatCurrency(i.OldPrice),
                         quantity = i.Quantity,
                         availableStock = i.AvailableStock,
                         isAvailable = i.IsAvailable,
-                        lineTotal = i.LineTotal.ToString("C"),
+                        lineTotal = _shippingTaxService.FormatCurrency(i.LineTotal),
                         warning = i.WarningMessage
                     })
                 });
@@ -112,12 +115,12 @@ namespace HamaraCommerce.Controllers
                     success,
                     message,
                     itemCount = cart.ItemCount,
-                    subtotal = cart.SubTotal.ToString("C"),
-                    productDiscount = cart.ProductDiscountTotal.ToString("C"),
-                    couponDiscount = cart.CouponDiscountAmount.ToString("C"),
-                    tax = cart.EstimatedTax.ToString("C"),
-                    shipping = cart.EffectiveShippingFee.ToString("C"),
-                    grandTotal = cart.GrandTotal.ToString("C"),
+                    subtotal = _shippingTaxService.FormatCurrency(cart.SubTotal),
+                    productDiscount = _shippingTaxService.FormatCurrency(cart.ProductDiscountTotal),
+                    couponDiscount = _shippingTaxService.FormatCurrency(cart.CouponDiscountAmount),
+                    tax = _shippingTaxService.FormatCurrency(cart.EstimatedTax),
+                    shipping = cart.EffectiveShippingFee == 0 ? "FREE" : _shippingTaxService.FormatCurrency(cart.EffectiveShippingFee),
+                    grandTotal = _shippingTaxService.FormatCurrency(cart.GrandTotal),
                     couponCode = cart.AppliedCouponCode,
                     couponValid = cart.CouponIsValid,
                     hasOutOfStock = cart.HasOutOfStockItems,
@@ -129,11 +132,11 @@ namespace HamaraCommerce.Controllers
                         sku = i.SKU,
                         title = i.Title,
                         imageUrl = i.ImageUrl,
-                        unitPrice = i.UnitPrice.ToString("C"),
+                        unitPrice = _shippingTaxService.FormatCurrency(i.UnitPrice),
                         quantity = i.Quantity,
                         availableStock = i.AvailableStock,
                         isAvailable = i.IsAvailable,
-                        lineTotal = i.LineTotal.ToString("C"),
+                        lineTotal = _shippingTaxService.FormatCurrency(i.LineTotal),
                         warning = i.WarningMessage
                     })
                 });
@@ -163,12 +166,12 @@ namespace HamaraCommerce.Controllers
                     success,
                     message,
                     itemCount = cart.ItemCount,
-                    subtotal = cart.SubTotal.ToString("C"),
-                    productDiscount = cart.ProductDiscountTotal.ToString("C"),
-                    couponDiscount = cart.CouponDiscountAmount.ToString("C"),
-                    tax = cart.EstimatedTax.ToString("C"),
-                    shipping = cart.EffectiveShippingFee.ToString("C"),
-                    grandTotal = cart.GrandTotal.ToString("C"),
+                    subtotal = _shippingTaxService.FormatCurrency(cart.SubTotal),
+                    productDiscount = _shippingTaxService.FormatCurrency(cart.ProductDiscountTotal),
+                    couponDiscount = _shippingTaxService.FormatCurrency(cart.CouponDiscountAmount),
+                    tax = _shippingTaxService.FormatCurrency(cart.EstimatedTax),
+                    shipping = cart.EffectiveShippingFee == 0 ? "FREE" : _shippingTaxService.FormatCurrency(cart.EffectiveShippingFee),
+                    grandTotal = _shippingTaxService.FormatCurrency(cart.GrandTotal),
                     couponCode = cart.AppliedCouponCode,
                     couponValid = cart.CouponIsValid,
                     hasOutOfStock = cart.HasOutOfStockItems,
@@ -179,9 +182,9 @@ namespace HamaraCommerce.Controllers
                         variantName = i.VariantName,
                         title = i.Title,
                         imageUrl = i.ImageUrl,
-                        unitPrice = i.UnitPrice.ToString("C"),
+                        unitPrice = _shippingTaxService.FormatCurrency(i.UnitPrice),
                         quantity = i.Quantity,
-                        lineTotal = i.LineTotal.ToString("C")
+                        lineTotal = _shippingTaxService.FormatCurrency(i.LineTotal)
                     })
                 });
             }
@@ -207,12 +210,12 @@ namespace HamaraCommerce.Controllers
                     success,
                     message,
                     itemCount = cart.ItemCount,
-                    subtotal = cart.SubTotal.ToString("C"),
-                    productDiscount = cart.ProductDiscountTotal.ToString("C"),
-                    couponDiscount = cart.CouponDiscountAmount.ToString("C"),
-                    tax = cart.EstimatedTax.ToString("C"),
-                    shipping = cart.EffectiveShippingFee.ToString("C"),
-                    grandTotal = cart.GrandTotal.ToString("C"),
+                    subtotal = _shippingTaxService.FormatCurrency(cart.SubTotal),
+                    productDiscount = _shippingTaxService.FormatCurrency(cart.ProductDiscountTotal),
+                    couponDiscount = _shippingTaxService.FormatCurrency(cart.CouponDiscountAmount),
+                    tax = _shippingTaxService.FormatCurrency(cart.EstimatedTax),
+                    shipping = cart.EffectiveShippingFee == 0 ? "FREE" : _shippingTaxService.FormatCurrency(cart.EffectiveShippingFee),
+                    grandTotal = _shippingTaxService.FormatCurrency(cart.GrandTotal),
                     couponCode = cart.AppliedCouponCode,
                     couponDescription = cart.CouponDescription,
                     couponValid = cart.CouponIsValid
@@ -248,12 +251,12 @@ namespace HamaraCommerce.Controllers
                     success,
                     message,
                     itemCount = cart.ItemCount,
-                    subtotal = cart.SubTotal.ToString("C"),
-                    productDiscount = cart.ProductDiscountTotal.ToString("C"),
-                    couponDiscount = cart.CouponDiscountAmount.ToString("C"),
-                    tax = cart.EstimatedTax.ToString("C"),
-                    shipping = cart.EffectiveShippingFee.ToString("C"),
-                    grandTotal = cart.GrandTotal.ToString("C"),
+                    subtotal = _shippingTaxService.FormatCurrency(cart.SubTotal),
+                    productDiscount = _shippingTaxService.FormatCurrency(cart.ProductDiscountTotal),
+                    couponDiscount = _shippingTaxService.FormatCurrency(cart.CouponDiscountAmount),
+                    tax = _shippingTaxService.FormatCurrency(cart.EstimatedTax),
+                    shipping = cart.EffectiveShippingFee == 0 ? "FREE" : _shippingTaxService.FormatCurrency(cart.EffectiveShippingFee),
+                    grandTotal = _shippingTaxService.FormatCurrency(cart.GrandTotal),
                     couponCode = cart.AppliedCouponCode,
                     couponValid = false
                 });
@@ -273,12 +276,12 @@ namespace HamaraCommerce.Controllers
             return Json(new
             {
                 itemCount = cart.ItemCount,
-                subtotal = cart.SubTotal.ToString("C"),
-                productDiscount = cart.ProductDiscountTotal.ToString("C"),
-                couponDiscount = cart.CouponDiscountAmount.ToString("C"),
-                tax = cart.EstimatedTax.ToString("C"),
-                shipping = cart.EffectiveShippingFee.ToString("C"),
-                grandTotal = cart.GrandTotal.ToString("C"),
+                subtotal = _shippingTaxService.FormatCurrency(cart.SubTotal),
+                productDiscount = _shippingTaxService.FormatCurrency(cart.ProductDiscountTotal),
+                couponDiscount = _shippingTaxService.FormatCurrency(cart.CouponDiscountAmount),
+                tax = _shippingTaxService.FormatCurrency(cart.EstimatedTax),
+                shipping = cart.EffectiveShippingFee == 0 ? "FREE" : _shippingTaxService.FormatCurrency(cart.EffectiveShippingFee),
+                grandTotal = _shippingTaxService.FormatCurrency(cart.GrandTotal),
                 couponCode = cart.AppliedCouponCode,
                 couponValid = cart.CouponIsValid,
                 hasOutOfStock = cart.HasOutOfStockItems,
@@ -290,12 +293,12 @@ namespace HamaraCommerce.Controllers
                     sku = i.SKU,
                     title = i.Title,
                     imageUrl = i.ImageUrl,
-                    unitPrice = i.UnitPrice.ToString("C"),
-                    oldPrice = i.OldPrice.ToString("C"),
+                    unitPrice = _shippingTaxService.FormatCurrency(i.UnitPrice),
+                    oldPrice = _shippingTaxService.FormatCurrency(i.OldPrice),
                     quantity = i.Quantity,
                     availableStock = i.AvailableStock,
                     isAvailable = i.IsAvailable,
-                    lineTotal = i.LineTotal.ToString("C"),
+                    lineTotal = _shippingTaxService.FormatCurrency(i.LineTotal),
                     warning = i.WarningMessage
                 })
             });

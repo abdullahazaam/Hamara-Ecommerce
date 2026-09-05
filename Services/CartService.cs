@@ -16,7 +16,7 @@ namespace HamaraCommerce.Services
     public interface ICartService
     {
         Task<CartData> GetRawCartDataAsync();
-        Task<ShoppingCartViewModel> GetCartViewModelAsync();
+        Task<ShoppingCartViewModel> GetCartViewModelAsync(string? shippingMethod = null);
         Task<(bool success, string message, string? warning)> AddToCartAsync(int productId, int quantity = 1, int? variantId = null);
         Task<(bool success, string message)> UpdateQuantityAsync(int productId, int quantity, int? variantId = null);
         Task<(bool success, string message)> RemoveFromCartAsync(int productId, int? variantId = null);
@@ -140,10 +140,10 @@ namespace HamaraCommerce.Services
             }
         }
 
-        public async Task<ShoppingCartViewModel> GetCartViewModelAsync()
+        public async Task<ShoppingCartViewModel> GetCartViewModelAsync(string? shippingMethod = null)
         {
             var rawData = await GetRawCartDataAsync();
-            return await _pricingService.CalculateCartAsync(rawData, CurrentUserId);
+            return await _pricingService.CalculateCartAsync(rawData, CurrentUserId, shippingMethod);
         }
 
         public async Task<(bool success, string message, string? warning)> AddToCartAsync(int productId, int quantity = 1, int? variantId = null)

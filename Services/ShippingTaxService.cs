@@ -10,10 +10,10 @@ namespace HamaraCommerce.Services
 {
     public class ShippingTaxService : IShippingTaxService
     {
-        private readonly IConfiguration _config;
-        private readonly IServiceProvider _serviceProvider;
+        private readonly IConfiguration? _config;
+        private readonly IServiceProvider? _serviceProvider;
 
-        public ShippingTaxService(IConfiguration config, IServiceProvider serviceProvider)
+        public ShippingTaxService(IConfiguration? config = null, IServiceProvider? serviceProvider = null)
         {
             _config = config;
             _serviceProvider = serviceProvider;
@@ -23,10 +23,13 @@ namespace HamaraCommerce.Services
         {
             try
             {
-                using var scope = _serviceProvider.CreateScope();
-                var db = scope.ServiceProvider.GetService<ApplicationDbContext>();
-                var setting = db?.StoreSettings.FirstOrDefault();
-                if (setting != null) return setting;
+                if (_serviceProvider != null)
+                {
+                    using var scope = _serviceProvider.CreateScope();
+                    var db = scope.ServiceProvider.GetService<ApplicationDbContext>();
+                    var setting = db?.StoreSettings.FirstOrDefault();
+                    if (setting != null) return setting;
+                }
             }
             catch
             {
@@ -35,14 +38,14 @@ namespace HamaraCommerce.Services
 
             return new StoreSetting
             {
-                StoreName = _config["Commerce:StoreName"] ?? "Hamara Commerce",
-                StoreEmail = _config["Commerce:StoreEmail"] ?? "support@hamaracommerce.pk",
-                StorePhone = _config["Commerce:StorePhone"] ?? "+92 300 1234567",
-                StoreAddress = _config["Commerce:StoreAddress"] ?? "Plaza 45, Main Boulevard, Gulberg III, Lahore, Pakistan",
-                CurrencyCode = _config["Commerce:CurrencyCode"] ?? "PKR",
-                CurrencySymbol = _config["Commerce:CurrencySymbol"] ?? "Rs. ",
-                TaxRatePercent = decimal.TryParse(_config["Commerce:SalesTaxRate"], out var rate) ? rate * 100m : 5.0m,
-                FreeShippingThreshold = decimal.TryParse(_config["Commerce:FreeShippingThreshold"], out var t) ? t : 5000.00m,
+                StoreName = _config?["Commerce:StoreName"] ?? "Hamara Commerce",
+                StoreEmail = _config?["Commerce:StoreEmail"] ?? "support@hamaracommerce.pk",
+                StorePhone = _config?["Commerce:StorePhone"] ?? "+92 300 1234567",
+                StoreAddress = _config?["Commerce:StoreAddress"] ?? "Plaza 45, Main Boulevard, Gulberg III, Lahore, Pakistan",
+                CurrencyCode = _config?["Commerce:CurrencyCode"] ?? "PKR",
+                CurrencySymbol = _config?["Commerce:CurrencySymbol"] ?? "Rs. ",
+                TaxRatePercent = decimal.TryParse(_config?["Commerce:SalesTaxRate"], out var rate) ? rate * 100m : 5.0m,
+                FreeShippingThreshold = decimal.TryParse(_config?["Commerce:FreeShippingThreshold"], out var t) ? t : 5000.00m,
                 StandardShippingFee = 250.0m,
                 ExpressShippingFee = 500.0m,
                 LowStockThreshold = 5,
@@ -114,9 +117,38 @@ namespace HamaraCommerce.Services
             return Math.Max(0m, Math.Round(taxableSubtotal * SalesTaxRate, 2));
         }
 
+        public StoreSetting GetStoreSettings() => GetActiveSettings();
+
         public string FormatCurrency(decimal amount)
         {
-            return $"{CurrencySymbol}{amount:N2}";
+            var s = GetActiveSettings();
+            return $"{s.CurrencySymbol}{amount:N2}";
+        }
+
+        public string FormatCurrency(decimal amount, string? currencyCode = null, string? currencySymbol = null)
+        {
+            if (!string.IsNullOrEmpty(currencySymbol))
+            {
+                return $"{currencySymbol}{amount:N2}";
+            }
+
+            var s = GetActiveSettings();
+            if (string.IsNullOrEmpty(currencyCode) || string.Equals(currencyCode, s.CurrencyCode, StringComparison.OrdinalIgnoreCase))
+            {
+                return $"{s.CurrencySymbol}{amount:N2}";
+            }
+
+            // Historical or alternative currency format
+            var symbol = currencyCode.ToUpperInvariant() switch
+            {
+                "PKR" => "Rs. ",
+                "USD" => "$",
+                "EUR" => "€",
+                "GBP" => "£",
+                _ => $"{currencyCode} "
+            };
+
+            return $"{symbol}{amount:N2}";
         }
     }
 }

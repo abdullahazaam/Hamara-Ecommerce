@@ -90,10 +90,42 @@ namespace HamaraCommerce.Controllers
                 ShippingMethod = "Standard",
                 PaymentMethod = "CashOnDelivery",
                 IdempotencyToken = idempotencyToken,
+                ExpectedGrandTotal = cart.GrandTotal,
                 IsDevelopmentSandboxEnabled = _paymentGateway.IsDevelopmentSandboxAvailable
             };
 
             return View(model);
+        }
+
+        // ==========================================
+        // 1.1 RECALCULATE CHECKOUT SUMMARY (AJAX)
+        // ==========================================
+        [HttpPost]
+        public async Task<IActionResult> Recalculate([FromBody] CheckoutRecalculateRequest request)
+        {
+            var user = User.Identity?.IsAuthenticated == true ? await _userManager.GetUserAsync(User) : null;
+            var rawCart = await _cartService.GetRawCartDataAsync();
+            var cart = await _pricingService.CalculateCartAsync(rawCart, user?.Id, request.ShippingMethod);
+
+            return Json(new
+            {
+                subtotal = cart.FormattedSubTotal,
+                subtotalValue = cart.SubTotal,
+                discount = cart.FormattedDiscount,
+                discountValue = cart.CouponDiscountAmount,
+                couponCode = cart.AppliedCouponCode,
+                tax = cart.FormattedTax,
+                taxValue = cart.EstimatedTax,
+                taxRatePercent = cart.TaxRatePercent,
+                shipping = cart.FormattedShipping,
+                shippingValue = cart.EffectiveShippingFee,
+                shippingMethodName = cart.ShippingMethodName,
+                grandTotal = cart.FormattedGrandTotal,
+                grandTotalValue = cart.GrandTotal,
+                totalSavings = cart.FormattedTotalSavings,
+                currencyCode = cart.CurrencyCode,
+                currencySymbol = cart.CurrencySymbol
+            });
         }
 
         // ==========================================
@@ -105,7 +137,7 @@ namespace HamaraCommerce.Controllers
         {
             var user = User.Identity?.IsAuthenticated == true ? await _userManager.GetUserAsync(User) : null;
             var rawCart = await _cartService.GetRawCartDataAsync();
-            var cart = await _pricingService.CalculateCartAsync(rawCart, user?.Id);
+            var cart = await _pricingService.CalculateCartAsync(rawCart, user?.Id, model.ShippingMethod);
             model.Cart = cart;
             model.IsDevelopmentSandboxEnabled = _paymentGateway.IsDevelopmentSandboxAvailable;
 
@@ -132,7 +164,26 @@ namespace HamaraCommerce.Controllers
                 return View("Index", model);
             }
 
-            // 3. Shipping Method Validation
+            // 3. Price-Change Revalidation
+            // If the customer saw an old total and prices/taxes/delivery changed in between, require review
+            if (model.ExpectedGrandTotal.HasValue && Math.Abs(cart.GrandTotal - model.ExpectedGrandTotal.Value) > 0.01m)
+            {
+                _logger.LogWarning("Checkout price mismatch detected. Expected: {Expected}, Actual: {Actual}",
+                    model.ExpectedGrandTotal.Value, cart.GrandTotal);
+
+                model.PriceChangeWarning = $"Your order total has changed from {_shippingTaxService.FormatCurrency(model.ExpectedGrandTotal.Value)} to {cart.FormattedGrandTotal} due to updated prices, taxes, or delivery fees. Please review the updated total and submit again to confirm.";
+                model.ExpectedGrandTotal = cart.GrandTotal;
+
+                // Refresh idempotency token so resubmission succeeds smoothly
+                var refreshedToken = Guid.NewGuid().ToString("N");
+                HttpContext.Session.SetString(IdempotencySessionKey, refreshedToken);
+                model.IdempotencyToken = refreshedToken;
+
+                ModelState.AddModelError(string.Empty, model.PriceChangeWarning);
+                return View("Index", model);
+            }
+
+            // 4. Shipping Method Validation
             var (isShippingValid, shippingFee, shippingMethodName) = _shippingTaxService.CalculateShippingFee(
                 model.ShippingMethod, cart.SubTotal, cart.CouponGrantsFreeShipping || cart.AppliedCouponCode == "FREESHIP");
 
@@ -142,7 +193,7 @@ namespace HamaraCommerce.Controllers
                 return View("Index", model);
             }
 
-            // 4. Model State Validation
+            // 5. Model State Validation
             if (!ModelState.IsValid)
             {
                 return View("Index", model);
@@ -152,12 +203,11 @@ namespace HamaraCommerce.Controllers
             var publicOrderNumber = GenerateSecureOrderNumber();
             var trackingNumber = $"TRK-{RandomNumberGenerator.GetInt32(10000000, 99999999)}";
 
-            // Authoritative Financials
+            // Authoritative Financials (using unified PricingService calculation)
             decimal subtotal = cart.SubTotal;
             decimal couponDiscount = cart.CouponDiscountAmount;
-            decimal taxableSubtotal = Math.Max(0m, subtotal - couponDiscount);
-            decimal taxAmount = _shippingTaxService.CalculateTax(taxableSubtotal);
-            decimal totalAmount = Math.Max(0m, taxableSubtotal + taxAmount + shippingFee);
+            decimal taxAmount = cart.EstimatedTax;
+            decimal totalAmount = cart.GrandTotal;
 
             // =========================================================================
             // ATOMIC DATABASE TRANSACTION WITH CONCURRENCY & STOCK VERIFICATION
@@ -272,7 +322,7 @@ namespace HamaraCommerce.Controllers
                         Subtotal = subtotal,
                         DiscountAmount = couponDiscount,
                         TaxAmount = taxAmount,
-                        ShippingFee = shippingFee,
+                        ShippingFee = cart.EffectiveShippingFee,
                         TotalAmount = totalAmount,
                         CouponCode = cart.CouponIsValid ? cart.AppliedCouponCode : null,
                         CustomerNotes = model.CustomerNotes?.Trim(),
