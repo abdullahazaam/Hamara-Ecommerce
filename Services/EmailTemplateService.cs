@@ -15,10 +15,24 @@ namespace HamaraCommerce.Services
     public class EmailTemplateService : IEmailTemplateService
     {
         private readonly IShippingTaxService _shippingTaxService;
+        private readonly Microsoft.Extensions.Configuration.IConfiguration? _configuration;
 
-        public EmailTemplateService(IShippingTaxService shippingTaxService)
+        public EmailTemplateService(
+            IShippingTaxService shippingTaxService,
+            Microsoft.Extensions.Configuration.IConfiguration? configuration = null)
         {
             _shippingTaxService = shippingTaxService;
+            _configuration = configuration;
+        }
+
+        private string GetPublicSiteUrl()
+        {
+            var url = _configuration?["PublicSiteUrl"];
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                url = _configuration?["SiteUrl"] ?? "http://localhost:5071";
+            }
+            return url.TrimEnd('/');
         }
 
         public string GenerateAccountVerificationEmail(string customerName, string confirmationUrl)
@@ -72,6 +86,52 @@ namespace HamaraCommerce.Services
                     </tr>");
             }
 
+            var baseUrl = GetPublicSiteUrl();
+            string actionLinksHtml;
+
+            if (order.UserId == null && !string.IsNullOrEmpty(order.GuestAccessToken))
+            {
+                var guestTrackingUrl = $"{baseUrl}/OrderTracking?orderNumber={System.Net.WebUtility.UrlEncode(order.OrderNumber)}&email={System.Net.WebUtility.UrlEncode(order.CustomerEmail)}&guestToken={System.Net.WebUtility.UrlEncode(order.GuestAccessToken)}";
+                var guestInvoiceUrl = $"{baseUrl}/Account/Invoice/{System.Net.WebUtility.UrlEncode(order.OrderNumber)}?guestToken={System.Net.WebUtility.UrlEncode(order.GuestAccessToken)}";
+                var expiryDate = order.GuestAccessExpiry?.ToString("yyyy-MM-dd HH:mm UTC") ?? "30 days";
+
+                actionLinksHtml = $@"
+                <div style=""background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 20px; margin-bottom: 24px;"">
+                    <h3 style=""color: #1e40af; font-size: 15px; margin-top: 0; margin-bottom: 8px;"">
+                        &#128274; Secure Guest Access Links
+                    </h3>
+                    <p style=""color: #1e3a8a; font-size: 13px; line-height: 1.5; margin: 0 0 16px 0;"">
+                        As a guest shopper, you can track this order live or view and print your official tax invoice using the links below:
+                    </p>
+                    <div style=""margin-bottom: 12px;"">
+                        <a href=""{guestTrackingUrl}"" style=""background: #2563eb; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; font-size: 13px; display: inline-block; margin-right: 8px; margin-bottom: 8px;"">
+                            Track Order Live
+                        </a>
+                        <a href=""{guestInvoiceUrl}"" style=""background: #ffffff; color: #1e40af; border: 1px solid #bfdbfe; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; font-size: 13px; display: inline-block; margin-bottom: 8px;"">
+                            View &amp; Print Invoice
+                        </a>
+                    </div>
+                    <p style=""color: #64748b; font-size: 12px; margin: 0; line-height: 1.4;"">
+                        <strong>Security &amp; Expiry Notice:</strong> These secure guest links will expire on <strong>{expiryDate}</strong>. If your link expires or you wish to access full purchase history at any time, simply register a Hamara Commerce account using <strong>{System.Net.WebUtility.HtmlEncode(order.CustomerEmail)}</strong>. All past orders placed with your email will be linked immediately upon email verification.
+                    </p>
+                </div>";
+            }
+            else
+            {
+                var trackingUrl = $"{baseUrl}/OrderTracking?orderNumber={System.Net.WebUtility.UrlEncode(order.OrderNumber)}";
+                var invoiceUrl = $"{baseUrl}/Account/Invoice/{System.Net.WebUtility.UrlEncode(order.OrderNumber)}";
+
+                actionLinksHtml = $@"
+                <div style=""background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: center;"">
+                    <a href=""{trackingUrl}"" style=""background: #2563eb; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; font-size: 13px; display: inline-block; margin-right: 8px; margin-bottom: 8px;"">
+                        Track Order
+                    </a>
+                    <a href=""{invoiceUrl}"" style=""background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; font-size: 13px; display: inline-block; margin-bottom: 8px;"">
+                        View Invoice
+                    </a>
+                </div>";
+            }
+
             var content = $@"
                 <div style=""text-align: center; margin-bottom: 24px;"">
                     <span style=""background: #ecfdf5; color: #065f46; padding: 6px 16px; border-radius: 50px; font-weight: bold; font-size: 13px;"">Order Confirmed</span>
@@ -84,6 +144,8 @@ namespace HamaraCommerce.Services
                     <div style=""margin-bottom: 6px;""><strong>Payment Method:</strong> {order.PaymentMethod}</div>
                     <div><strong>Delivery Address:</strong> {System.Net.WebUtility.HtmlEncode(order.ShippingAddress)}, {System.Net.WebUtility.HtmlEncode(order.City)}, {System.Net.WebUtility.HtmlEncode(order.State)}</div>
                 </div>
+
+                {actionLinksHtml}
 
                 <table style=""width: 100%; border-collapse: collapse; margin-bottom: 24px;"">
                     <thead>

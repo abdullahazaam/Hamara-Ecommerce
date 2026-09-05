@@ -12,6 +12,7 @@ namespace HamaraCommerce.Services
     public class EmailSendResult
     {
         public bool Success { get; set; }
+        public bool IsBlocked { get; set; }
         public string? MessageId { get; set; }
         public string? ErrorMessage { get; set; }
         public bool IsDevelopmentFallback { get; set; }
@@ -21,6 +22,9 @@ namespace HamaraCommerce.Services
 
         public static EmailSendResult Failed(string errorMessage) =>
             new() { Success = false, ErrorMessage = errorMessage };
+
+        public static EmailSendResult Blocked(string reason) =>
+            new() { Success = false, IsBlocked = true, ErrorMessage = reason };
     }
 
     public interface IEmailSender
@@ -56,11 +60,11 @@ namespace HamaraCommerce.Services
             var fromName = _config["Smtp:FromName"] ?? "Hamara Commerce Support";
             var enableSsl = bool.TryParse(_config["Smtp:EnableSsl"] ?? Environment.GetEnvironmentVariable("SMTP_SSL"), out var ssl) ? ssl : true;
 
-            // If SMTP is not configured or in development mode without live credentials, safely record and log email
+            // If SMTP is not configured, honestly report failure / blocked delivery
             if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(pass))
             {
-                _logger.LogInformation("[DEVELOPMENT EMAIL SENDER] To: {ToEmail} | Subject: {Subject} | Status: Recorded to Development Log", toEmail, subject);
-                return EmailSendResult.Succeeded(Guid.NewGuid().ToString("N"), isDev: true);
+                _logger.LogWarning("[SMTP NOT CONFIGURED] Delivery BLOCKED for recipient {ToEmail} (Subject: {Subject}). Missing host/user/password credentials.", toEmail, subject);
+                return EmailSendResult.Blocked("SMTP credentials are not configured. Email delivery is blocked.");
             }
 
             int port = int.TryParse(portStr, out var p) ? p : 587;

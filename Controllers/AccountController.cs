@@ -26,6 +26,7 @@ namespace HamaraCommerce.Controllers
         private readonly IPricingService _pricingService;
         private readonly IEmailSender _emailSender;
         private readonly IEmailTemplateService _emailTemplateService;
+        private readonly IEmailOutboxService? _emailOutboxService;
         private readonly ILogger<AccountController> _logger;
 
         public AccountController(
@@ -36,7 +37,8 @@ namespace HamaraCommerce.Controllers
             IPricingService pricingService,
             IEmailSender emailSender,
             IEmailTemplateService emailTemplateService,
-            ILogger<AccountController> logger)
+            ILogger<AccountController> logger,
+            IEmailOutboxService? emailOutboxService = null)
         {
             _userManager = userManager;
             _signInManager = signInManager;
@@ -46,6 +48,7 @@ namespace HamaraCommerce.Controllers
             _emailSender = emailSender;
             _emailTemplateService = emailTemplateService;
             _logger = logger;
+            _emailOutboxService = emailOutboxService;
         }
 
         private async Task ClaimGuestOrdersAsync(ApplicationUser user)
@@ -308,6 +311,7 @@ namespace HamaraCommerce.Controllers
         // 6. CUSTOMER PRINTABLE INVOICE
         // ==========================================
         [HttpGet]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
         public async Task<IActionResult> Invoice(string id, [FromQuery] string? guestToken = null)
         {
             if (string.IsNullOrWhiteSpace(id)) return NotFound();
@@ -342,10 +346,16 @@ namespace HamaraCommerce.Controllers
 
                 if (!string.IsNullOrEmpty(providedToken) &&
                     !string.IsNullOrEmpty(order.GuestAccessToken) &&
-                    string.Equals(order.GuestAccessToken, providedToken, StringComparison.Ordinal) &&
-                    (order.GuestAccessExpiry == null || order.GuestAccessExpiry.Value >= DateTime.UtcNow))
+                    string.Equals(order.GuestAccessToken, providedToken, StringComparison.Ordinal))
                 {
-                    return View(order);
+                    if (order.GuestAccessExpiry == null || order.GuestAccessExpiry.Value >= DateTime.UtcNow)
+                    {
+                        return View(order);
+                    }
+
+                    // Expired guest token: guide user to recover access via account registration or login
+                    TempData["ErrorMessage"] = $"This guest invoice link has expired for your security. Please sign in or register with {order.CustomerEmail} to recover and view your invoices.";
+                    return RedirectToAction("Login", "Account");
                 }
             }
 
@@ -525,7 +535,34 @@ namespace HamaraCommerce.Controllers
             }
 
             user.WishlistProductIds = wishlist;
-            await _userManager.UpdateAsync(user);
+            IdentityResult updateResult;
+            try
+            {
+                updateResult = await _userManager.UpdateAsync(user);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Database error persisting wishlist for user {UserId}", user.Id);
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
+                    Request.Headers["Accept"].ToString().Contains("application/json"))
+                {
+                    return Json(new { success = false, message = "Could not update wishlist due to a database error. Please try again." });
+                }
+                TempData["ErrorMessage"] = "Could not update wishlist due to a database error. Please try again.";
+                return RedirectToAction(nameof(Wishlist));
+            }
+
+            if (!updateResult.Succeeded)
+            {
+                _logger.LogWarning("Failed to persist wishlist for user {UserId}: {Errors}", user.Id, string.Join(", ", updateResult.Errors.Select(e => e.Description)));
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
+                    Request.Headers["Accept"].ToString().Contains("application/json"))
+                {
+                    return Json(new { success = false, message = "Could not update wishlist. Please try again." });
+                }
+                TempData["ErrorMessage"] = "Could not update wishlist. Please try again.";
+                return RedirectToAction(nameof(Wishlist));
+            }
 
             if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
                 Request.Headers["Accept"].ToString().Contains("application/json"))
@@ -742,14 +779,26 @@ namespace HamaraCommerce.Controllers
                     await _userManager.AddToRoleAsync(user, "Customer");
                     _logger.LogInformation("User {Email} created a new customer account.", model.Email);
 
-                    // Send Account Verification Email (do NOT auto sign in unverified user)
+                    // Queue Account Verification Email (do NOT auto sign in unverified user)
                     try
                     {
                         var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
                         var callbackUrl = Url.Action("ConfirmEmail", "Account", new { userId = user.Id, code = token }, protocol: Request.Scheme) 
                                           ?? $"{Request.Scheme}://{Request.Host}/Account/ConfirmEmail?userId={user.Id}&code={Uri.EscapeDataString(token)}";
                         var emailBody = _emailTemplateService.GenerateAccountVerificationEmail(user.FullName, callbackUrl);
-                        _ = _emailSender.SendEmailAsync(user.Email!, "Verify Your Email - Hamara Commerce", emailBody);
+                        if (_emailOutboxService != null)
+                        {
+                            await _emailOutboxService.QueueEmailAsync(
+                                user.Email!,
+                                "Verify Your Email - Hamara Commerce",
+                                emailBody,
+                                eventKey: $"account-verify:{user.Id}:{DateTime.UtcNow:yyyyMMddHHmmss}"
+                            );
+                        }
+                        else
+                        {
+                            await _emailSender.SendEmailAsync(user.Email!, "Verify Your Email - Hamara Commerce", emailBody);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -793,7 +842,19 @@ namespace HamaraCommerce.Controllers
                 try
                 {
                     var emailBody = _emailTemplateService.GeneratePasswordResetEmail(user.FullName, callbackUrl);
-                    _ = _emailSender.SendEmailAsync(user.Email!, "Reset Your Hamara Commerce Password", emailBody);
+                    if (_emailOutboxService != null)
+                    {
+                        await _emailOutboxService.QueueEmailAsync(
+                            user.Email!,
+                            "Reset Your Hamara Commerce Password",
+                            emailBody,
+                            eventKey: $"password-reset:{user.Id}:{DateTime.UtcNow:yyyyMMddHHmmss}"
+                        );
+                    }
+                    else
+                    {
+                        await _emailSender.SendEmailAsync(user.Email!, "Reset Your Hamara Commerce Password", emailBody);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -877,11 +938,9 @@ namespace HamaraCommerce.Controllers
             // Email confirmed! Claim prior guest orders placed with this email
             await ClaimGuestOrdersAsync(user);
 
-            // Auto-sign-in upon verified confirmation
-            await _signInManager.SignInAsync(user, isPersistent: false);
-            await _cartService.MergeGuestCartAsync(user.Id);
-
-            TempData["SuccessMessage"] = "Your email has been verified! Welcome to Hamara Commerce.";
+            // Do NOT auto-sign in. Require explicit login credentials to ensure normal login eligibility
+            // (e.g. active account status, lockout, two-factor).
+            TempData["SuccessMessage"] = "Your email has been verified! Please sign in with your credentials to continue.";
             return View("ConfirmEmail");
         }
 
@@ -906,7 +965,19 @@ namespace HamaraCommerce.Controllers
                     var callbackUrl = Url.Action("ConfirmEmail", "Account", new { userId = user.Id, code = token }, protocol: Request.Scheme)
                                       ?? $"{Request.Scheme}://{Request.Host}/Account/ConfirmEmail?userId={user.Id}&code={Uri.EscapeDataString(token)}";
                     var emailBody = _emailTemplateService.GenerateAccountVerificationEmail(user.FullName, callbackUrl);
-                    _ = _emailSender.SendEmailAsync(user.Email!, "Verify Your Email - Hamara Commerce", emailBody);
+                    if (_emailOutboxService != null)
+                    {
+                        await _emailOutboxService.QueueEmailAsync(
+                            user.Email!,
+                            "Verify Your Email - Hamara Commerce",
+                            emailBody,
+                            eventKey: $"account-resend-verify:{user.Id}:{DateTime.UtcNow:yyyyMMddHHmmss}"
+                        );
+                    }
+                    else
+                    {
+                        await _emailSender.SendEmailAsync(user.Email!, "Verify Your Email - Hamara Commerce", emailBody);
+                    }
                 }
                 catch (Exception ex)
                 {

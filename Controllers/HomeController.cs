@@ -18,18 +18,21 @@ namespace HamaraCommerce.Controllers
         private readonly ApplicationDbContext _context;
         private readonly ISeoService _seoService;
         private readonly IEmailSender _emailSender;
+        private readonly IEmailOutboxService? _emailOutboxService;
         private readonly ILogger<HomeController> _logger;
 
         public HomeController(
             ApplicationDbContext context,
             ISeoService seoService,
             IEmailSender emailSender,
-            ILogger<HomeController> logger)
+            ILogger<HomeController> logger,
+            IEmailOutboxService? emailOutboxService = null)
         {
             _context = context;
             _seoService = seoService;
             _emailSender = emailSender;
             _logger = logger;
+            _emailOutboxService = emailOutboxService;
         }
 
         [HttpGet]
@@ -182,12 +185,25 @@ namespace HamaraCommerce.Controllers
 
             _logger.LogInformation("Contact inquiry #{Id} received from {Email}", contactMessage.Id, contactMessage.Email);
 
-            // Send notification to support
-            _ = _emailSender.SendEmailAsync(
-                "support@hamaracommerce.pk",
-                $"[Support Desk] New Inquiry: {subject}",
-                $"<p><strong>From:</strong> {System.Net.WebUtility.HtmlEncode(name)} ({System.Net.WebUtility.HtmlEncode(email)})</p><p><strong>Phone:</strong> {System.Net.WebUtility.HtmlEncode(phoneNumber ?? "N/A")}</p><p><strong>Subject:</strong> {System.Net.WebUtility.HtmlEncode(subject)}</p><p><strong>Message:</strong><br />{System.Net.WebUtility.HtmlEncode(message)}</p>",
-                cancellationToken: cancellationToken);
+            // Queue notification to support
+            var inquiryEmailBody = $"<p><strong>From:</strong> {System.Net.WebUtility.HtmlEncode(name)} ({System.Net.WebUtility.HtmlEncode(email)})</p><p><strong>Phone:</strong> {System.Net.WebUtility.HtmlEncode(phoneNumber ?? "N/A")}</p><p><strong>Subject:</strong> {System.Net.WebUtility.HtmlEncode(subject)}</p><p><strong>Message:</strong><br />{System.Net.WebUtility.HtmlEncode(message)}</p>";
+            if (_emailOutboxService != null)
+            {
+                await _emailOutboxService.QueueEmailAsync(
+                    "support@hamaracommerce.pk",
+                    $"[Support Desk] New Inquiry: {subject}",
+                    inquiryEmailBody,
+                    eventKey: $"contact-form:{contactMessage.Id}",
+                    cancellationToken: cancellationToken);
+            }
+            else
+            {
+                _ = _emailSender.SendEmailAsync(
+                    "support@hamaracommerce.pk",
+                    $"[Support Desk] New Inquiry: {subject}",
+                    inquiryEmailBody,
+                    cancellationToken: cancellationToken);
+            }
 
             if (isAjax)
             {

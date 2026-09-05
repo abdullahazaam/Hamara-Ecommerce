@@ -28,10 +28,13 @@ namespace HamaraCommerce.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> Index(string? trackingNumber, string? email, string? guestToken = null)
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+        public async Task<IActionResult> Index(string? trackingNumber, string? email, string? guestToken = null, string? orderNumber = null)
         {
+            var targetNum = !string.IsNullOrWhiteSpace(trackingNumber) ? trackingNumber : orderNumber;
+
             // Initial GET with no query parameters
-            if (string.IsNullOrWhiteSpace(trackingNumber) && string.IsNullOrWhiteSpace(email))
+            if (string.IsNullOrWhiteSpace(targetNum) && string.IsNullOrWhiteSpace(email))
             {
                 // If logged-in customer, show their most recent active order
                 if (User.Identity?.IsAuthenticated == true)
@@ -88,12 +91,13 @@ namespace HamaraCommerce.Controllers
 
             _cache.Set(cacheKey, attempts + 1, TimeSpan.FromMinutes(5));
 
-            var num = (trackingNumber ?? string.Empty).Trim().ToLowerInvariant();
+            var num = (targetNum ?? string.Empty).Trim().ToLowerInvariant();
             var mail = (email ?? string.Empty).Trim().ToLowerInvariant();
 
             // Authentication context
             var currentUser = User.Identity?.IsAuthenticated == true ? await _userManager.GetUserAsync(User) : null;
             bool isAuthorized = false;
+            bool isTokenExpired = false;
 
             var order = await _context.Orders
                 .Include(o => o.Items)
@@ -124,16 +128,21 @@ namespace HamaraCommerce.Controllers
                     }
                     else
                     {
-                        // Anonymous access: MUST match billing email AND valid unexpired GuestAccessToken
+                        // Anonymous access: valid unexpired GuestAccessToken
                         var sessionToken = HttpContext.Session.GetString($"GuestOrderToken_{order.OrderNumber}");
                         var providedToken = !string.IsNullOrEmpty(guestToken) ? guestToken.Trim() : sessionToken;
 
-                        if (!string.IsNullOrEmpty(mail) && string.Equals(order.CustomerEmail, mail, StringComparison.OrdinalIgnoreCase) &&
-                            !string.IsNullOrEmpty(providedToken) && !string.IsNullOrEmpty(order.GuestAccessToken) &&
-                            string.Equals(order.GuestAccessToken, providedToken, StringComparison.Ordinal) &&
-                            (order.GuestAccessExpiry == null || order.GuestAccessExpiry.Value >= DateTime.UtcNow))
+                        if (!string.IsNullOrEmpty(providedToken) && !string.IsNullOrEmpty(order.GuestAccessToken) &&
+                            string.Equals(order.GuestAccessToken, providedToken, StringComparison.Ordinal))
                         {
-                            isAuthorized = true;
+                            if (order.GuestAccessExpiry != null && order.GuestAccessExpiry.Value < DateTime.UtcNow)
+                            {
+                                isTokenExpired = true;
+                            }
+                            else if (string.IsNullOrEmpty(mail) || string.Equals(order.CustomerEmail, mail, StringComparison.OrdinalIgnoreCase))
+                            {
+                                isAuthorized = true;
+                            }
                         }
                     }
                 }
@@ -141,8 +150,15 @@ namespace HamaraCommerce.Controllers
 
             if (!isAuthorized || order == null)
             {
-                // Generic secure message: does not reveal whether the tracking number or email exists
-                ViewBag.NotFoundMessage = "No matching order found for the provided details. For guest orders, please use the tracking link sent to your email or sign in with your verified account.";
+                if (isTokenExpired && order != null)
+                {
+                    ViewBag.NotFoundMessage = $"This guest tracking link has expired for your security. Please register or sign in with {order.CustomerEmail} to recover and view your full order history.";
+                }
+                else
+                {
+                    // Generic secure message: does not reveal whether the tracking number or email exists
+                    ViewBag.NotFoundMessage = "No matching order found for the provided details. For guest orders, please use the tracking link sent to your email or sign in with your verified account.";
+                }
                 return View((Order?)null);
             }
 

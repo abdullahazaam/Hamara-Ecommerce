@@ -31,6 +31,7 @@ namespace HamaraCommerce.Data
         public DbSet<NewsletterSubscription> NewsletterSubscriptions { get; set; }
         public DbSet<CheckoutIdempotencyRecord> CheckoutIdempotencyRecords { get; set; }
         public DbSet<CouponRedemption> CouponRedemptions { get; set; }
+        public DbSet<EmailOutboxMessage> EmailOutboxMessages { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -565,6 +566,28 @@ namespace HamaraCommerce.Data
                     .WithMany()
                     .HasForeignKey(r => r.OrderId)
                     .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ==========================================
+            // EMAIL OUTBOX CONFIGURATION
+            // ==========================================
+            modelBuilder.Entity<EmailOutboxMessage>(entity =>
+            {
+                entity.ToTable("EmailOutboxMessages");
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.EventKey).HasMaxLength(150);
+                entity.Property(e => e.ToEmail).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.Subject).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.HtmlBody).IsRequired();
+                entity.Property(e => e.LastError).HasMaxLength(1000);
+
+                entity.HasIndex(e => e.EventKey)
+                    .IsUnique()
+                    .HasFilter("[EventKey] IS NOT NULL");
+
+                entity.HasIndex(e => new { e.Status, e.NextAttemptAt });
+                entity.HasIndex(e => e.CreatedAt);
             });
         }
     }

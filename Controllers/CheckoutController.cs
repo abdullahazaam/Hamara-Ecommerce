@@ -27,6 +27,7 @@ namespace HamaraCommerce.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IEmailSender _emailSender;
         private readonly IEmailTemplateService _emailTemplateService;
+        private readonly IEmailOutboxService? _emailOutboxService;
         private readonly ILogger<CheckoutController> _logger;
 
         public CheckoutController(
@@ -38,7 +39,8 @@ namespace HamaraCommerce.Controllers
             UserManager<ApplicationUser> userManager,
             IEmailSender emailSender,
             IEmailTemplateService emailTemplateService,
-            ILogger<CheckoutController> logger)
+            ILogger<CheckoutController> logger,
+            IEmailOutboxService? emailOutboxService = null)
         {
             _context = context;
             _cartService = cartService;
@@ -49,6 +51,7 @@ namespace HamaraCommerce.Controllers
             _emailSender = emailSender;
             _emailTemplateService = emailTemplateService;
             _logger = logger;
+            _emailOutboxService = emailOutboxService;
         }
 
         // ==========================================
@@ -756,10 +759,22 @@ namespace HamaraCommerce.Controllers
             try
             {
                 var emailHtml = _emailTemplateService.GenerateOrderConfirmationEmail(createdOrder);
-                _ = _emailSender.SendEmailAsync(
-                    createdOrder.CustomerEmail,
-                    $"Order Confirmed - #{createdOrder.OrderNumber} | Hamara Commerce",
-                    emailHtml);
+                if (_emailOutboxService != null)
+                {
+                    await _emailOutboxService.QueueEmailAsync(
+                        toEmail: createdOrder.CustomerEmail,
+                        subject: $"Order Confirmed - #{createdOrder.OrderNumber} | Hamara Commerce",
+                        htmlBody: emailHtml,
+                        eventKey: $"order-confirmation:{createdOrder.OrderNumber}"
+                    );
+                }
+                else
+                {
+                    _ = _emailSender.SendEmailAsync(
+                        createdOrder.CustomerEmail,
+                        $"Order Confirmed - #{createdOrder.OrderNumber} | Hamara Commerce",
+                        emailHtml);
+                }
             }
             catch (Exception emailEx)
             {

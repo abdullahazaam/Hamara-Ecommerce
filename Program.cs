@@ -93,8 +93,13 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 .AddDefaultTokenProviders();
 
 // ==========================================
-// 5. SECURE AUTHENTICATION COOKIE
+// 5. SECURE AUTHENTICATION COOKIE & SESSION VALIDATION
 // ==========================================
+builder.Services.Configure<SecurityStampValidatorOptions>(options =>
+{
+    options.ValidationInterval = TimeSpan.Zero;
+});
+
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.Cookie.HttpOnly = true;
@@ -106,6 +111,19 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LogoutPath = "/Account/Logout";
     options.AccessDeniedPath = "/Account/AccessDenied";
     options.SlidingExpiration = true;
+
+    // Disabled sessions rejection: invalidate principal if user is inactive or deleted
+    options.Events.OnValidatePrincipal = async context =>
+    {
+        var userManager = context.HttpContext.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
+        var user = await userManager.GetUserAsync(context.Principal);
+        if (user == null || !user.IsActive)
+        {
+            context.RejectPrincipal();
+            await Microsoft.AspNetCore.Authentication.AuthenticationHttpContextExtensions.SignOutAsync(
+                context.HttpContext, IdentityConstants.ApplicationScheme);
+        }
+    };
 });
 
 // ==========================================
@@ -167,6 +185,8 @@ builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IImageUploadService, ImageUploadService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>();
+builder.Services.AddScoped<IEmailOutboxService, EmailOutboxService>();
+builder.Services.AddHostedService<EmailOutboxBackgroundService>();
 builder.Services.AddScoped<ISeoService, SeoService>();
 
 var app = builder.Build();

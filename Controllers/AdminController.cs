@@ -29,6 +29,7 @@ namespace HamaraCommerce.Controllers
         private readonly IPricingService _pricingService;
         private readonly IEmailSender _emailSender;
         private readonly IEmailTemplateService _emailTemplateService;
+        private readonly IEmailOutboxService? _emailOutboxService;
         private readonly ILogger<AdminController> _logger;
 
         public AdminController(
@@ -39,7 +40,8 @@ namespace HamaraCommerce.Controllers
             IPricingService pricingService,
             IEmailSender emailSender,
             IEmailTemplateService emailTemplateService,
-            ILogger<AdminController> logger)
+            ILogger<AdminController> logger,
+            IEmailOutboxService? emailOutboxService = null)
         {
             _context = context;
             _userManager = userManager;
@@ -49,6 +51,7 @@ namespace HamaraCommerce.Controllers
             _emailSender = emailSender;
             _emailTemplateService = emailTemplateService;
             _logger = logger;
+            _emailOutboxService = emailOutboxService;
         }
 
         // ==========================================
@@ -235,7 +238,19 @@ namespace HamaraCommerce.Controllers
             try
             {
                 var emailBody = _emailTemplateService.GenerateOrderStatusUpdateEmail(order, prevStatus.ToString(), status.ToString());
-                _ = _emailSender.SendEmailAsync(order.CustomerEmail, $"Order #{order.OrderNumber} Update: {status}", emailBody);
+                if (_emailOutboxService != null)
+                {
+                    await _emailOutboxService.QueueEmailAsync(
+                        order.CustomerEmail,
+                        $"Order #{order.OrderNumber} Update: {status}",
+                        emailBody,
+                        eventKey: $"order-status:{order.OrderNumber}:{status}"
+                    );
+                }
+                else
+                {
+                    _ = _emailSender.SendEmailAsync(order.CustomerEmail, $"Order #{order.OrderNumber} Update: {status}", emailBody);
+                }
             }
             catch (Exception ex)
             {
@@ -302,7 +317,19 @@ namespace HamaraCommerce.Controllers
             try
             {
                 var emailBody = _emailTemplateService.GenerateOrderCancellationEmail(order, reason);
-                _ = _emailSender.SendEmailAsync(order.CustomerEmail, $"Order #{order.OrderNumber} Cancellation Notice", emailBody);
+                if (_emailOutboxService != null)
+                {
+                    await _emailOutboxService.QueueEmailAsync(
+                        order.CustomerEmail,
+                        $"Order #{order.OrderNumber} Cancellation Notice",
+                        emailBody,
+                        eventKey: $"order-cancel:{order.OrderNumber}"
+                    );
+                }
+                else
+                {
+                    _ = _emailSender.SendEmailAsync(order.CustomerEmail, $"Order #{order.OrderNumber} Cancellation Notice", emailBody);
+                }
             }
             catch (Exception ex)
             {

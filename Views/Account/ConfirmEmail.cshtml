@@ -1,4 +1,4 @@
-﻿@{
+@{
     ViewData["Title"] = "Email Verification";
     var isError = ViewBag.ErrorMessage != null;
 }
@@ -35,11 +35,11 @@
                 </div>
                 <h1 class="h4 font-heading fw-bold mb-2" style="color:var(--text-primary);">Email Verified!</h1>
                 <p class="small mb-4" style="color:var(--text-muted);">
-                    Thank you for verifying your email address. Your account is now fully active, and your previous order history has been linked.
+                    Thank you for verifying your email address. Your account is now fully active, and your previous order history has been linked. Please sign in with your credentials to continue.
                 </p>
                 <div class="d-flex flex-column gap-2">
-                    <a asp-action="Index" class="btn btn-primary-custom py-2.5 rounded-pill">
-                        <i class="fa-solid fa-user me-1"></i>Go to Account Dashboard
+                    <a asp-action="Login" class="btn btn-primary-custom py-2.5 rounded-pill">
+                        <i class="fa-solid fa-right-to-bracket me-1"></i>Sign In to Your Account
                     </a>
                     <a asp-controller="Shop" asp-action="Index" class="btn btn-glass py-2 rounded-pill">
                         Start Shopping
