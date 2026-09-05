@@ -62,6 +62,19 @@ namespace HamaraCommerce.Services
             }
         }
 
+        private string? CurrentUserEmail
+        {
+            get
+            {
+                var user = HttpContext?.User;
+                if (user?.Identity?.IsAuthenticated == true)
+                {
+                    return user.FindFirstValue(ClaimTypes.Email) ?? user.Identity?.Name;
+                }
+                return null;
+            }
+        }
+
         public async Task<CartData> GetRawCartDataAsync()
         {
             // 1. Check Session first
@@ -302,7 +315,7 @@ namespace HamaraCommerce.Services
 
             // Compute current subtotal
             var cartVm = await _pricingService.CalculateCartAsync(rawCart, CurrentUserId);
-            var validation = await _pricingService.ValidateCouponAsync(couponCode, cartVm.SubTotal, CurrentUserId, rawCart.Items);
+            var validation = await _pricingService.ValidateCouponAsync(couponCode, cartVm.SubTotal, CurrentUserId, CurrentUserEmail, rawCart.Items);
 
             if (!validation.IsValid || validation.Coupon == null)
             {
@@ -311,7 +324,7 @@ namespace HamaraCommerce.Services
 
             rawCart.AppliedCouponCode = validation.Coupon.Code;
             await PersistCartAsync(rawCart);
-            return (true, $"Coupon '{validation.Coupon.Code}' applied successfully!");
+            return (true, validation.Message ?? $"Coupon '{validation.Coupon.Code}' applied successfully!");
         }
 
         public async Task<(bool success, string message)> RemoveCouponAsync()

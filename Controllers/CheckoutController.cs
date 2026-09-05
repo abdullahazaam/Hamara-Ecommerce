@@ -185,7 +185,7 @@ namespace HamaraCommerce.Controllers
 
             // 4. Shipping Method Validation
             var (isShippingValid, shippingFee, shippingMethodName) = _shippingTaxService.CalculateShippingFee(
-                model.ShippingMethod, cart.SubTotal, cart.CouponGrantsFreeShipping || cart.AppliedCouponCode == "FREESHIP");
+                model.ShippingMethod, cart.SubTotal, cart.CouponGrantsFreeShipping);
 
             if (!isShippingValid)
             {
@@ -259,7 +259,7 @@ namespace HamaraCommerce.Controllers
                     // Step B: Revalidate Coupon
                     if (cart.CouponIsValid && !string.IsNullOrEmpty(cart.AppliedCouponCode))
                     {
-                        var couponValidation = await _pricingService.ValidateCouponAsync(cart.AppliedCouponCode, subtotal, user?.Id, rawCart.Items);
+                        var couponValidation = await _pricingService.ValidateCouponAsync(cart.AppliedCouponCode, subtotal, user?.Id, model.CustomerEmail, rawCart.Items);
                         if (!couponValidation.IsValid)
                         {
                             transactionError = $"Coupon error: {couponValidation.Message}";
@@ -369,12 +369,39 @@ namespace HamaraCommerce.Controllers
                         });
                     }
 
-                    // Step F: Record Coupon Usage
+                    // Step F: Atomically Reserve/Record Coupon Usage
                     if (cart.CouponIsValid && !string.IsNullOrEmpty(cart.AppliedCouponCode))
                     {
                         var coupon = await _context.Coupons.FirstOrDefaultAsync(c => c.Code == cart.AppliedCouponCode);
                         if (coupon != null)
                         {
+                            var now = DateTime.UtcNow;
+                            if (!coupon.IsActive || now < coupon.StartDate || now > coupon.ExpiryDate || (coupon.UsageLimit > 0 && coupon.UsageCount >= coupon.UsageLimit))
+                            {
+                                transactionError = $"Coupon '{coupon.Code}' is no longer valid or its global usage limit has been reached.";
+                                await transaction.RollbackAsync();
+                                return;
+                            }
+
+                            if (coupon.PerUserLimit > 0)
+                            {
+                                var emailLower = model.CustomerEmail?.Trim().ToLowerInvariant();
+                                var hasUser = !string.IsNullOrEmpty(user?.Id);
+                                var hasEmail = !string.IsNullOrEmpty(emailLower);
+
+                                var priorRedemptions = await _context.Orders
+                                    .Where(o => o.CouponCode == coupon.Code && o.Status != OrderStatus.Cancelled && o.Status != OrderStatus.Refunded)
+                                    .Where(o => (hasUser && o.UserId == user!.Id) || (hasEmail && o.CustomerEmail.ToLower() == emailLower))
+                                    .CountAsync();
+
+                                if (priorRedemptions >= coupon.PerUserLimit)
+                                {
+                                    transactionError = $"You have already redeemed coupon '{coupon.Code}' the maximum allowed times ({coupon.PerUserLimit} per customer).";
+                                    await transaction.RollbackAsync();
+                                    return;
+                                }
+                            }
+
                             coupon.UsageCount++;
                         }
                     }

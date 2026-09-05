@@ -673,15 +673,25 @@ namespace HamaraCommerce.Data
             // 5. SEED COUPONS
             if (!context.Coupons.Any())
             {
-            var coupons = new List<Coupon>
-            {
-                new Coupon { Code = "SAVE10", Description = "10% off your entire order", DiscountPercentage = 10, MinimumSpend = 50, IsActive = true },
-                new Coupon { Code = "HAMARA20", Description = "20% special discount on orders over $100", DiscountPercentage = 20, MinimumSpend = 100, IsActive = true },
-                new Coupon { Code = "FREESHIP", Description = "Free Express Shipping on any order", DiscountPercentage = 0, FixedDiscountAmount = 15.00m, MinimumSpend = 0, IsActive = true },
-                new Coupon { Code = "WELCOME50", Description = "$50 Flat discount on purchases above $300", FixedDiscountAmount = 50.00m, MinimumSpend = 300, IsActive = true }
-            };
+                var coupons = new List<Coupon>
+                {
+                    new Coupon { Code = "SAVE10", Description = "10% off your entire order", DiscountPercentage = 10, MinimumSpend = 50, IsActive = true },
+                    new Coupon { Code = "HAMARA20", Description = "20% special discount on orders over $100", DiscountPercentage = 20, MinimumSpend = 100, IsActive = true },
+                    new Coupon { Code = "FREESHIP", Description = "Free Express Shipping on any order", DiscountPercentage = 0, FixedDiscountAmount = 0m, FreeShipping = true, MinimumSpend = 0, IsActive = true },
+                    new Coupon { Code = "WELCOME50", Description = "$50 Flat discount on purchases above $300", FixedDiscountAmount = 50.00m, MinimumSpend = 300, IsActive = true }
+                };
                 context.Coupons.AddRange(coupons);
                 context.SaveChanges();
+            }
+            else
+            {
+                var seededFreeShip = context.Coupons.FirstOrDefault(c => c.Code == "FREESHIP");
+                if (seededFreeShip != null && (!seededFreeShip.FreeShipping || seededFreeShip.FixedDiscountAmount != 0m))
+                {
+                    seededFreeShip.FreeShipping = true;
+                    seededFreeShip.FixedDiscountAmount = 0m;
+                    context.SaveChanges();
+                }
             }
 
             // 6. SEED ROLES AND USERS (ASP.NET Core Identity)

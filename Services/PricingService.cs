@@ -162,7 +162,16 @@ namespace HamaraCommerce.Services
             // 5. Coupon Evaluation
             if (!string.IsNullOrWhiteSpace(result.AppliedCouponCode) && result.SubTotal > 0)
             {
-                var couponCheck = await ValidateCouponAsync(result.AppliedCouponCode, result.SubTotal, userId, cartData.Items);
+                string? userEmail = null;
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    userEmail = await _context.Users
+                        .Where(u => u.Id == userId)
+                        .Select(u => u.Email)
+                        .FirstOrDefaultAsync();
+                }
+
+                var couponCheck = await ValidateCouponAsync(result.AppliedCouponCode, result.SubTotal, userId, userEmail, cartData.Items);
                 if (couponCheck.IsValid && couponCheck.Coupon != null)
                 {
                     result.CouponIsValid = true;
@@ -179,6 +188,7 @@ namespace HamaraCommerce.Services
                     result.CouponIsValid = false;
                     result.CouponValidationMessage = couponCheck.Message;
                     result.CouponDiscountAmount = 0m;
+                    result.CouponGrantsFreeShipping = false;
                 }
             }
             else
@@ -194,7 +204,7 @@ namespace HamaraCommerce.Services
             var (isShipValid, calculatedShippingFee, shippingName) = _shippingTaxService.CalculateShippingFee(
                 result.ShippingMethodCode, 
                 result.SubTotal, 
-                result.CouponGrantsFreeShipping || result.AppliedCouponCode == "FREESHIP");
+                result.CouponGrantsFreeShipping);
 
             result.ShippingMethodName = string.IsNullOrEmpty(shippingName) ? result.ShippingMethodCode : shippingName;
             result.ShippingFee = calculatedShippingFee;
@@ -214,11 +224,16 @@ namespace HamaraCommerce.Services
             return result;
         }
 
-        public async Task<CouponValidationResult> ValidateCouponAsync(string couponCode, decimal subtotal, string? userId = null, List<CartItemData>? items = null)
+        public async Task<CouponValidationResult> ValidateCouponAsync(
+            string couponCode, 
+            decimal subtotal, 
+            string? userId = null, 
+            string? customerEmail = null, 
+            List<CartItemData>? items = null)
         {
             if (string.IsNullOrWhiteSpace(couponCode))
             {
-                return new CouponValidationResult { IsValid = false, Message = "Coupon code cannot be empty." };
+                return new CouponValidationResult { IsValid = false, Message = "Please enter a valid coupon code." };
             }
 
             var code = couponCode.Trim().ToUpperInvariant();
@@ -229,100 +244,183 @@ namespace HamaraCommerce.Services
 
             if (coupon == null)
             {
-                return new CouponValidationResult { IsValid = false, Message = "Invalid coupon code." };
+                return new CouponValidationResult { IsValid = false, Message = $"Coupon '{code}' does not exist." };
             }
 
             // Rule 1: Active Status
             if (!coupon.IsActive)
             {
-                return new CouponValidationResult { IsValid = false, Message = "This coupon code is no longer active." };
+                return new CouponValidationResult { IsValid = false, Message = $"Coupon '{coupon.Code}' is no longer active." };
             }
 
             // Rule 2: Start and Expiry Dates
             var now = DateTime.UtcNow;
             if (now < coupon.StartDate)
             {
-                return new CouponValidationResult { IsValid = false, Message = $"This coupon is not active yet (starts {coupon.StartDate:MMM dd, yyyy})." };
+                return new CouponValidationResult { IsValid = false, Message = $"Coupon '{coupon.Code}' is not active yet (starts on {coupon.StartDate:MMM dd, yyyy})." };
             }
 
             if (now > coupon.ExpiryDate)
             {
-                return new CouponValidationResult { IsValid = false, Message = $"This coupon expired on {coupon.ExpiryDate:MMM dd, yyyy}." };
+                return new CouponValidationResult { IsValid = false, Message = $"Coupon '{coupon.Code}' expired on {coupon.ExpiryDate:MMM dd, yyyy}." };
             }
 
-            // Rule 3: Total Usage Limit
-            if (coupon.UsageCount >= coupon.UsageLimit)
+            // Rule 3: Total Global Usage Limit
+            if (coupon.UsageLimit > 0 && coupon.UsageCount >= coupon.UsageLimit)
             {
-                return new CouponValidationResult { IsValid = false, Message = "This coupon has reached its maximum global redemption limit." };
+                return new CouponValidationResult { IsValid = false, Message = $"Coupon '{coupon.Code}' has reached its maximum global redemption limit." };
             }
 
-            // Rule 4: Per-User Redemption Limit
-            if (!string.IsNullOrEmpty(userId))
+            // Rule 4: Per-Customer Redemption Limit (Checked across non-cancelled and non-refunded orders)
+            // Explicit guest eligibility tracking using customerEmail prevents guest limit bypass
+            if (coupon.PerUserLimit > 0)
             {
-                int userRedemptionCount = await _context.Orders
-                    .CountAsync(o => o.UserId == userId && o.CouponCode == code);
+                var emailLower = customerEmail?.Trim().ToLowerInvariant();
+                var hasUser = !string.IsNullOrEmpty(userId);
+                var hasEmail = !string.IsNullOrEmpty(emailLower);
 
-                if (userRedemptionCount >= coupon.PerUserLimit)
+                if (hasUser || hasEmail)
                 {
-                    return new CouponValidationResult { IsValid = false, Message = $"You have already redeemed this coupon the maximum allowed times ({coupon.PerUserLimit} per account)." };
+                    var priorRedemptions = await _context.Orders
+                        .Where(o => o.CouponCode == code && o.Status != OrderStatus.Cancelled && o.Status != OrderStatus.Refunded)
+                        .Where(o => (hasUser && o.UserId == userId) || (hasEmail && o.CustomerEmail.ToLower() == emailLower))
+                        .CountAsync();
+
+                    if (priorRedemptions >= coupon.PerUserLimit)
+                    {
+                        return new CouponValidationResult
+                        {
+                            IsValid = false,
+                            Message = $"You have already redeemed coupon '{coupon.Code}' the maximum allowed times ({coupon.PerUserLimit} per customer)."
+                        };
+                    }
                 }
             }
 
-            // Rule 5: Minimum Spend Requirement
-            if (subtotal < coupon.MinimumSpend)
+            // Rule 5: Restricted Category or Product Item-Level Calculation
+            // Rule: Restricted coupons discount only the eligible items, not the entire basket.
+            bool hasCategoryRestriction = coupon.ApplicableCategoryId.HasValue;
+            bool hasProductRestriction = coupon.ApplicableProductId.HasValue;
+            bool isRestricted = hasCategoryRestriction || hasProductRestriction;
+
+            decimal eligibleSubtotal = subtotal;
+
+            if (isRestricted)
             {
-                return new CouponValidationResult { IsValid = false, Message = $"This coupon requires a minimum subtotal of {coupon.MinimumSpend:C} (current subtotal is {subtotal:C})." };
+                if (items == null || !items.Any())
+                {
+                    string targetName = coupon.ApplicableCategory?.Name 
+                        ?? (hasCategoryRestriction ? "the specified category" : (coupon.ApplicableProduct?.Title ?? "the specified product"));
+                    return new CouponValidationResult
+                    {
+                        IsValid = false,
+                        Message = $"Coupon '{coupon.Code}' is restricted to '{targetName}', but no matching items were found in your cart."
+                    };
+                }
+
+                var productIds = items.Select(i => i.ProductId).Distinct().ToList();
+                var products = await _context.Products
+                    .Include(p => p.Variants)
+                    .Where(p => productIds.Contains(p.Id))
+                    .ToDictionaryAsync(p => p.Id);
+
+                decimal restrictedSubtotal = 0m;
+                int eligibleCount = 0;
+
+                foreach (var item in items)
+                {
+                    if (products.TryGetValue(item.ProductId, out var prod) && prod.Status == ProductStatus.Published)
+                    {
+                        bool categoryMatch = !hasCategoryRestriction || prod.CategoryId == coupon.ApplicableCategoryId!.Value;
+                        bool productMatch = !hasProductRestriction || prod.Id == coupon.ApplicableProductId!.Value;
+
+                        if (categoryMatch && productMatch)
+                        {
+                            decimal unitPrice = prod.Price;
+                            if (item.VariantId.HasValue && item.VariantId.Value > 0)
+                            {
+                                var variant = prod.Variants.FirstOrDefault(v => v.Id == item.VariantId.Value && v.IsActive);
+                                if (variant != null)
+                                {
+                                    unitPrice = Math.Max(0m, prod.Price + variant.PriceAdjustment);
+                                }
+                            }
+
+                            int qty = Math.Max(1, item.Quantity);
+                            restrictedSubtotal += unitPrice * qty;
+                            eligibleCount += qty;
+                        }
+                    }
+                }
+
+                if (eligibleCount == 0 || restrictedSubtotal <= 0m)
+                {
+                    string targetName = coupon.ApplicableCategory?.Name 
+                        ?? (hasCategoryRestriction ? "the specified category" : (coupon.ApplicableProduct?.Title ?? "the specified product"));
+                    return new CouponValidationResult
+                    {
+                        IsValid = false,
+                        Message = $"Coupon '{coupon.Code}' is only valid for '{targetName}', but no matching items were found in your cart."
+                    };
+                }
+
+                eligibleSubtotal = restrictedSubtotal;
             }
 
-            // Rule 6: Applicable Category Restriction
-            if (coupon.ApplicableCategoryId.HasValue && items != null && items.Any())
+            // Rule 6: Minimum Spend Requirement
+            // Minimum spend on restricted coupons applies to eligible items subtotal; on general coupons to overall subtotal.
+            if (coupon.MinimumSpend > 0 && eligibleSubtotal < coupon.MinimumSpend)
             {
-                var pIds = items.Select(i => i.ProductId).ToList();
-                bool hasCategoryMatch = await _context.Products
-                    .AnyAsync(p => pIds.Contains(p.Id) && p.CategoryId == coupon.ApplicableCategoryId.Value);
-
-                if (!hasCategoryMatch)
+                if (isRestricted)
                 {
-                    return new CouponValidationResult { IsValid = false, Message = $"This coupon is only valid for products in the '{coupon.ApplicableCategory?.Name ?? "specified"}' category." };
+                    return new CouponValidationResult
+                    {
+                        IsValid = false,
+                        Message = $"Coupon '{coupon.Code}' requires a minimum spend of {_shippingTaxService.FormatCurrency(coupon.MinimumSpend)} on eligible items (current eligible total: {_shippingTaxService.FormatCurrency(eligibleSubtotal)})."
+                    };
+                }
+                else
+                {
+                    return new CouponValidationResult
+                    {
+                        IsValid = false,
+                        Message = $"Coupon '{coupon.Code}' requires a minimum order subtotal of {_shippingTaxService.FormatCurrency(coupon.MinimumSpend)} (current subtotal: {_shippingTaxService.FormatCurrency(subtotal)})."
+                    };
                 }
             }
 
-            // Rule 7: Applicable Product Restriction
-            if (coupon.ApplicableProductId.HasValue && items != null && items.Any())
-            {
-                bool hasProductMatch = items.Any(i => i.ProductId == coupon.ApplicableProductId.Value);
-                if (!hasProductMatch)
-                {
-                    return new CouponValidationResult { IsValid = false, Message = $"This coupon is only valid for '{coupon.ApplicableProduct?.Title ?? "the specified product"}'." };
-                }
-            }
-
-            // Rule 8: Calculate Valid Discount
+            // Rule 7: Calculate Authoritative Discount (strictly non-negative and clamped to eligible subtotal)
             decimal discount = 0m;
             if (coupon.DiscountPercentage > 0)
             {
-                decimal percentageDiscount = subtotal * (decimal)(coupon.DiscountPercentage / 100.0);
+                decimal calculatedDiscount = eligibleSubtotal * (decimal)(coupon.DiscountPercentage / 100.0);
                 if (coupon.MaxDiscountAmount.HasValue && coupon.MaxDiscountAmount.Value > 0)
                 {
-                    percentageDiscount = Math.Min(percentageDiscount, coupon.MaxDiscountAmount.Value);
+                    calculatedDiscount = Math.Min(calculatedDiscount, coupon.MaxDiscountAmount.Value);
                 }
-                discount = percentageDiscount;
+                discount = calculatedDiscount;
             }
             else if (coupon.FixedDiscountAmount > 0)
             {
-                discount = coupon.FixedDiscountAmount;
+                discount = Math.Min(eligibleSubtotal, coupon.FixedDiscountAmount);
             }
 
-            // Discount can never exceed subtotal
-            discount = Math.Min(subtotal, Math.Max(0m, discount));
+            discount = Math.Min(eligibleSubtotal, Math.Max(0m, discount));
 
             return new CouponValidationResult
             {
                 IsValid = true,
                 Coupon = coupon,
                 CalculatedDiscount = discount,
-                Message = $"Coupon '{coupon.Code}' applied successfully!"
+                Message = coupon.FreeShipping && discount == 0m
+                    ? $"Coupon '{coupon.Code}' applied: Free shipping granted!"
+                    : $"Coupon '{coupon.Code}' applied successfully!"
             };
+        }
+
+        public Task<CouponValidationResult> ValidateCouponAsync(string couponCode, decimal subtotal, string? userId, List<CartItemData>? items)
+        {
+            return ValidateCouponAsync(couponCode, subtotal, userId, null, items);
         }
 
         public async Task<bool> RecordCouponRedemptionAsync(string couponCode)
@@ -339,6 +437,35 @@ namespace HamaraCommerce.Services
                 return true;
             }
             return false;
+        }
+
+        public async Task<bool> RestoreCouponRedemptionAsync(Order order)
+        {
+            if (order == null || string.IsNullOrWhiteSpace(order.CouponCode))
+            {
+                return false;
+            }
+
+            var normalizedCode = order.CouponCode.Trim().ToUpperInvariant();
+            var marker = $"[CouponRestored:{normalizedCode}]";
+            if (order.CustomerNotes != null && order.CustomerNotes.Contains(marker))
+            {
+                // Guarantee exact-once execution: already restored
+                return false;
+            }
+
+            var coupon = await _context.Coupons.FirstOrDefaultAsync(c => c.Code == normalizedCode);
+            if (coupon != null && coupon.UsageCount > 0)
+            {
+                coupon.UsageCount--;
+            }
+
+            order.CustomerNotes = string.IsNullOrEmpty(order.CustomerNotes)
+                ? marker
+                : $"{order.CustomerNotes} {marker}";
+
+            _logger.LogInformation("Restored redemption for coupon {Code} on order #{OrderNumber}. New usage count: {Count}", normalizedCode, order.OrderNumber, coupon?.UsageCount ?? 0);
+            return true;
         }
     }
 }

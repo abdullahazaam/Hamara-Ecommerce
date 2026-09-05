@@ -26,6 +26,7 @@ namespace HamaraCommerce.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IWebHostEnvironment _webHostEnvironment;
         private readonly IShippingTaxService _shippingTaxService;
+        private readonly IPricingService _pricingService;
         private readonly IEmailSender _emailSender;
         private readonly IEmailTemplateService _emailTemplateService;
         private readonly ILogger<AdminController> _logger;
@@ -35,6 +36,7 @@ namespace HamaraCommerce.Controllers
             UserManager<ApplicationUser> userManager,
             IWebHostEnvironment webHostEnvironment,
             IShippingTaxService shippingTaxService,
+            IPricingService pricingService,
             IEmailSender emailSender,
             IEmailTemplateService emailTemplateService,
             ILogger<AdminController> logger)
@@ -43,6 +45,7 @@ namespace HamaraCommerce.Controllers
             _userManager = userManager;
             _webHostEnvironment = webHostEnvironment;
             _shippingTaxService = shippingTaxService;
+            _pricingService = pricingService;
             _emailSender = emailSender;
             _emailTemplateService = emailTemplateService;
             _logger = logger;
@@ -220,6 +223,11 @@ namespace HamaraCommerce.Controllers
                 order.PaymentStatus = PaymentStatus.Paid;
             }
 
+            if ((status == OrderStatus.Cancelled || status == OrderStatus.Refunded) && (prevStatus != OrderStatus.Cancelled && prevStatus != OrderStatus.Refunded))
+            {
+                await _pricingService.RestoreCouponRedemptionAsync(order);
+            }
+
             await LogAuditAsync("OrderStatusUpdated", "Order", order.OrderNumber, $"Order status changed from {prevStatus} to {status}. Courier: {order.ShippingMethod}");
             await _context.SaveChangesAsync();
 
@@ -285,6 +293,7 @@ namespace HamaraCommerce.Controllers
 
             order.Status = OrderStatus.Cancelled;
             order.CustomerNotes = (order.CustomerNotes ?? "") + $" | Admin cancellation: {reason}";
+            await _pricingService.RestoreCouponRedemptionAsync(order);
 
             await LogAuditAsync("OrderCancelled", "Order", order.OrderNumber, $"Cancelled order #{order.OrderNumber}. Stock restored: {restoreInventory}. Reason: {reason}");
             await _context.SaveChangesAsync();

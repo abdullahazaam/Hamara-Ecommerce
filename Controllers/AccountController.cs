@@ -20,6 +20,7 @@ namespace HamaraCommerce.Controllers
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly ApplicationDbContext _context;
         private readonly ICartService _cartService;
+        private readonly IPricingService _pricingService;
         private readonly IEmailSender _emailSender;
         private readonly IEmailTemplateService _emailTemplateService;
         private readonly ILogger<AccountController> _logger;
@@ -29,6 +30,7 @@ namespace HamaraCommerce.Controllers
             SignInManager<ApplicationUser> signInManager,
             ApplicationDbContext context,
             ICartService cartService,
+            IPricingService pricingService,
             IEmailSender emailSender,
             IEmailTemplateService emailTemplateService,
             ILogger<AccountController> logger)
@@ -37,6 +39,7 @@ namespace HamaraCommerce.Controllers
             _signInManager = signInManager;
             _context = context;
             _cartService = cartService;
+            _pricingService = pricingService;
             _emailSender = emailSender;
             _emailTemplateService = emailTemplateService;
             _logger = logger;
@@ -201,6 +204,7 @@ namespace HamaraCommerce.Controllers
             }
 
             order.Status = OrderStatus.Cancelled;
+            await _pricingService.RestoreCouponRedemptionAsync(order);
             await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = $"Order #{order.OrderNumber} has been successfully cancelled and inventory has been restored.";
@@ -240,6 +244,7 @@ namespace HamaraCommerce.Controllers
 
             order.Status = OrderStatus.Refunded;
             order.CustomerNotes = (order.CustomerNotes ?? "") + $" | Return requested by customer on {DateTime.UtcNow:yyyy-MM-dd}: {model.Reason}";
+            await _pricingService.RestoreCouponRedemptionAsync(order);
             await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = $"Return request submitted for Order #{order.OrderNumber}. Our support team will contact you.";

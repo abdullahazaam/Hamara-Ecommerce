@@ -122,6 +122,30 @@ else
                         <button type="submit" class="btn btn-primary-custom w-100 rounded-pill py-2">Apply Code</button>
                     </div>
                 </form>
+                @if (Model.CouponIsValid && !string.IsNullOrEmpty(Model.AppliedCouponCode))
+                {
+                    <div class="d-flex align-items-center justify-content-between mt-3 p-2 rounded-3 bg-success-subtle border border-success-subtle">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="fa-solid fa-circle-check text-success"></i>
+                            <span class="small fw-semibold text-success">
+                                Active: <code>@Model.AppliedCouponCode</code>
+                                @(Model.CouponGrantsFreeShipping && Model.CouponDiscountAmount == 0 ? " (Free Shipping)" : "")
+                            </span>
+                        </div>
+                        <form asp-controller="Cart" asp-action="RemoveCoupon" method="post" class="d-inline mb-0">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill py-0 px-2" style="font-size:0.75rem;">
+                                <i class="fa-solid fa-xmark me-1"></i>Remove
+                            </button>
+                        </form>
+                    </div>
+                }
+                else if (!Model.CouponIsValid && !string.IsNullOrEmpty(Model.CouponValidationMessage))
+                {
+                    <div class="alert alert-warning py-2 px-3 small mt-3 rounded-3 mb-0" role="alert">
+                        <i class="fa-solid fa-circle-exclamation me-1"></i> @Model.CouponValidationMessage
+                    </div>
+                }
             </div>
         </div>
 
@@ -136,12 +160,22 @@ else
                     <strong style="color:var(--text-primary);">@ShippingTaxService.FormatCurrency(Model.SubTotal)</strong>
                 </div>
 
-                @if (Model.CouponDiscountAmount > 0)
+                @if (Model.CouponIsValid && !string.IsNullOrEmpty(Model.AppliedCouponCode))
                 {
-                    <div class="d-flex justify-content-between mb-2 small fw-bold" style="color:var(--status-success);">
-                        <span>Coupon Discount (@Model.AppliedCouponCode)</span>
-                        <span>-@ShippingTaxService.FormatCurrency(Model.CouponDiscountAmount)</span>
-                    </div>
+                    if (Model.CouponDiscountAmount > 0)
+                    {
+                        <div class="d-flex justify-content-between mb-2 small fw-bold" style="color:var(--status-success);">
+                            <span>Coupon Discount (@Model.AppliedCouponCode)</span>
+                            <span>-@ShippingTaxService.FormatCurrency(Model.CouponDiscountAmount)</span>
+                        </div>
+                    }
+                    else if (Model.CouponGrantsFreeShipping)
+                    {
+                        <div class="d-flex justify-content-between mb-2 small fw-bold" style="color:var(--status-success);">
+                            <span>Coupon (@Model.AppliedCouponCode)</span>
+                            <span>Free Shipping</span>
+                        </div>
+                    }
                 }
 
                 <div class="d-flex justify-content-between mb-2 small">
