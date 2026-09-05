@@ -141,15 +141,26 @@ namespace HamaraCommerce.Controllers
             CancellationToken cancellationToken = default)
         {
             // Honeypot spam bot check
+            bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
+                          Request.Headers["Accept"].ToString().Contains("application/json");
+
             if (!string.IsNullOrEmpty(honeypot))
             {
                 _logger.LogWarning("Spam bot detected via contact honeypot field from IP: {Ip}", HttpContext.Connection.RemoteIpAddress);
+                if (isAjax)
+                {
+                    return Json(new { success = true, message = "Thank you! Your inquiry has been received." });
+                }
                 TempData["SuccessMessage"] = "Thank you! Your inquiry has been received.";
                 return RedirectToAction(nameof(Contact));
             }
 
             if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(message))
             {
+                if (isAjax)
+                {
+                    return Json(new { success = false, message = "Please fill in all required fields (Name, Email, Subject, and Message)." });
+                }
                 TempData["ErrorMessage"] = "Please fill in all required fields (Name, Email, Subject, and Message).";
                 return RedirectToAction(nameof(Contact));
             }
@@ -177,6 +188,11 @@ namespace HamaraCommerce.Controllers
                 $"[Support Desk] New Inquiry: {subject}",
                 $"<p><strong>From:</strong> {System.Net.WebUtility.HtmlEncode(name)} ({System.Net.WebUtility.HtmlEncode(email)})</p><p><strong>Phone:</strong> {System.Net.WebUtility.HtmlEncode(phoneNumber ?? "N/A")}</p><p><strong>Subject:</strong> {System.Net.WebUtility.HtmlEncode(subject)}</p><p><strong>Message:</strong><br />{System.Net.WebUtility.HtmlEncode(message)}</p>",
                 cancellationToken: cancellationToken);
+
+            if (isAjax)
+            {
+                return Json(new { success = true, message = "Thank you for contacting Hamara Commerce! Our customer care team has received your message and will respond within 24 hours." });
+            }
 
             TempData["SuccessMessage"] = "Thank you for contacting Hamara Commerce! Our customer care team has received your message and will respond within 24 hours.";
             return RedirectToAction(nameof(Contact));

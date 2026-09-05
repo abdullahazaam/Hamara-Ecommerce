@@ -2544,3 +2544,110 @@ main {
     outline: 2px solid var(--brand-primary);
     outline-offset: 2px;
 }
+
+/* --------------------------------------------------------------------------
+   19. PROGRESSIVE ENHANCEMENT & ACCESSIBLE TOUCH
+   -------------------------------------------------------------------------- */
+html.no-js .reveal-on-scroll,
+html:not(.js-active) .reveal-on-scroll {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+}
+
+/* Touch discoverable quick add controls */
+@media (hover: none), (max-width: 991.98px) {
+    .product-card-quick-add {
+        opacity: 1 !important;
+        transform: translateY(0) !important;
+        pointer-events: auto !important;
+        position: relative !important;
+        bottom: auto !important;
+        left: auto !important;
+        right: auto !important;
+        padding: 0 1rem 0.75rem 1rem !important;
+    }
+}
+
+/* Search Autocomplete Dropdown */
+.search-autocomplete-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-default);
+    max-height: 420px;
+    overflow-y: auto;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+}
+[data-theme='dark'] .search-autocomplete-dropdown {
+    background: #111e2e;
+    border-color: rgba(255, 255, 255, 0.12);
+}
+.search-suggest-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 1rem;
+    text-decoration: none;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-subtle);
+    transition: background 0.15s ease;
+}
+.search-suggest-item:hover,
+.search-suggest-item.is-selected,
+.search-suggest-item:focus {
+    background: var(--bg-surface-raised);
+    color: var(--brand-primary);
+    outline: none;
+}
+.search-suggest-img {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+.search-suggest-footer {
+    display: block;
+    padding: 0.65rem 1rem;
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--brand-primary);
+    text-decoration: none;
+    background: var(--bg-surface);
+}
+.search-suggest-footer:hover {
+    background: var(--bg-surface-raised);
+}
+
+/* Sticky Purchase Bar for Desktop & Mobile */
+.sticky-purchase-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1030;
+    background: var(--bg-glass);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-top: 1px solid var(--border-default);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.12);
+    padding: 0.75rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+    transform: translateY(110%);
+    opacity: 0;
+    pointer-events: none;
+}
+.sticky-purchase-bar.is-visible {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+}
+

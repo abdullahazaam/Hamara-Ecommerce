@@ -221,9 +221,13 @@
     </section>
 }
 
-<!-- ================================================================
-     4. FLASH DEALS SECTION (Coral Glow & Countdown)
-     ================================================================ -->
+@{
+    var earliestFlashEnd = flashDeals
+        .Where(d => d.FlashDealEnd.HasValue && d.FlashDealEnd.Value > DateTime.UtcNow)
+        .OrderBy(d => d.FlashDealEnd)
+        .Select(d => d.FlashDealEnd)
+        .FirstOrDefault() ?? DateTime.UtcNow.AddHours(24);
+}
 @if (flashDeals.Any())
 {
     <section class="section-surface section-surface--flash reveal-on-scroll" aria-labelledby="flashDealsHeading">
@@ -233,8 +237,8 @@
                     <span class="badge-tag badge-flash" aria-hidden="true">
                         <i class="fa-solid fa-bolt"></i>Flash Deals
                     </span>
-                    <div id="flashCountdown" class="badge rounded-pill bg-dark text-warning border border-warning px-3 py-1 font-monospace small" data-hours="14" data-minutes="30" data-seconds="00">
-                        <i class="fa-regular fa-clock me-1"></i>Ends in: <span id="flashTimerDisplay">14h 30m 00s</span>
+                    <div id="flashCountdown" class="badge rounded-pill bg-dark text-warning border border-warning px-3 py-1 font-monospace small" data-end-time="@earliestFlashEnd.ToString("o")">
+                        <i class="fa-regular fa-clock me-1"></i>Ends in: <span id="flashTimerDisplay">Calculating...</span>
                     </div>
                 </div>
                 <h2 id="flashDealsHeading" class="section-title">Limited-Time Discounts</h2>

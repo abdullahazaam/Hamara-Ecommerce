@@ -69,25 +69,25 @@
             <div class="d-flex align-items-center gap-2 mb-3">
                 @await Html.PartialAsync("_RatingStars", (p.Rating, p.ReviewCount > 0 ? p.ReviewCount : (int?)null))
                 <span style="color:var(--text-muted); opacity:0.5;">|</span>
-                <span class="small font-monospace" style="color:var(--text-muted);">SKU: @p.SKU</span>
+                <span id="productSkuDisplay" class="small font-monospace" style="color:var(--text-muted);">SKU: @p.SKU</span>
             </div>
 
             <!-- Pricing Display Stage -->
             <div class="p-3.5 rounded-4 mb-4 d-flex align-items-baseline gap-3" 
                  style="background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle);">
-                <span class="display-6 font-heading fw-bold" style="color:var(--brand-primary);">@ShippingTaxService.FormatCurrency(p.Price)</span>
+                <span id="productPriceDisplay" class="display-6 font-heading fw-bold" style="color:var(--brand-primary);">@ShippingTaxService.FormatCurrency(p.Price)</span>
                 @if (p.OldPrice > p.Price)
                 {
-                    <span class="fs-5 text-decoration-line-through" style="color:var(--text-muted);">@ShippingTaxService.FormatCurrency(p.OldPrice)</span>
+                    <span id="productOldPriceDisplay" class="fs-5 text-decoration-line-through" style="color:var(--text-muted);">@ShippingTaxService.FormatCurrency(p.OldPrice)</span>
                     var savePct = (int)Math.Round(((p.OldPrice - p.Price) / p.OldPrice) * 100);
-                    <span class="badge badge-tag badge-discount">Save @savePct%</span>
+                    <span id="productSaveBadge" class="badge badge-tag badge-discount">Save @savePct%</span>
                 }
             </div>
 
             <p class="small mb-4" style="color:var(--text-secondary); line-height: 1.7;">@p.ShortDescription</p>
 
             <!-- Purchase Form -->
-            <form asp-controller="Cart" asp-action="AddToCart" method="post" class="mb-4">
+            <form asp-controller="Cart" asp-action="AddToCart" method="post" id="mainAddToCartForm" class="mb-4">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="productId" value="@p.Id" />
 
@@ -95,12 +95,27 @@
                 @if (p.Variants != null && p.Variants.Any())
                 {
                     <div class="mb-3">
-                        <label class="form-label small fw-bold" style="color:var(--text-muted);">Select Variant / Configuration:</label>
-                        <select name="variantId" class="form-select rounded-3">
-                            <option value="">Standard Edition</option>
+                        <label for="productVariantSelect" class="form-label small fw-bold" style="color:var(--text-muted);">Select Variant / Configuration:</label>
+                        <select id="productVariantSelect" name="variantId" class="form-select rounded-3">
+                            <option value=""
+                                    data-price="@p.Price"
+                                    data-price-formatted="@ShippingTaxService.FormatCurrency(p.Price)"
+                                    data-sku="@p.SKU"
+                                    data-stock="@p.Stock"
+                                    data-image="@p.MainImage">
+                                Standard Edition (@p.SKU)
+                            </option>
                             @foreach (var v in p.Variants.Where(vr => vr.IsActive))
                             {
-                                <option value="@v.Id">@v.Name @(v.PriceAdjustment != 0 ? $"({(v.PriceAdjustment > 0 ? "+" : "")}{ShippingTaxService.FormatCurrency(v.PriceAdjustment)})" : "")</option>
+                                var variantPrice = p.Price + v.PriceAdjustment;
+                                <option value="@v.Id"
+                                        data-price="@variantPrice"
+                                        data-price-formatted="@ShippingTaxService.FormatCurrency(variantPrice)"
+                                        data-sku="@v.SKU"
+                                        data-stock="@v.Stock"
+                                        data-name="@v.Name">
+                                    @v.Name @(v.PriceAdjustment != 0 ? $"({(v.PriceAdjustment > 0 ? "+" : "")}{ShippingTaxService.FormatCurrency(v.PriceAdjustment)})" : "") — Stock: @v.Stock
+                                </option>
                             }
                         </select>
                     </div>
@@ -112,30 +127,32 @@
                         <button type="button" data-step-minus aria-label="Decrease quantity">
                             <i class="fa-solid fa-minus small"></i>
                         </button>
-                        <input type="number" name="quantity" value="1" min="1" max="@(p.Stock > 0 ? p.Stock : 1)" />
+                        <input type="number" id="productQuantityInput" name="quantity" value="1" min="1" max="@(p.Stock > 0 ? p.Stock : 1)" />
                         <button type="button" data-step-plus aria-label="Increase quantity">
                             <i class="fa-solid fa-plus small"></i>
                         </button>
                     </div>
 
-                    @if (p.Stock > 10)
-                    {
-                        <span class="badge bg-success-subtle text-success border border-success rounded-pill px-3 py-1.5 small">
-                            <i class="fa-solid fa-circle-check me-1"></i>In Stock (@p.Stock available)
-                        </span>
-                    }
-                    else if (p.Stock > 0)
-                    {
-                        <span class="badge bg-warning-subtle text-warning border border-warning rounded-pill px-3 py-1.5 small">
-                            <i class="fa-solid fa-fire me-1"></i>Low Stock: Only @p.Stock left!
-                        </span>
-                    }
-                    else
-                    {
-                        <span class="badge bg-danger-subtle text-danger border border-danger rounded-pill px-3 py-1.5 small">
-                            <i class="fa-solid fa-ban me-1"></i>Currently Out of Stock
-                        </span>
-                    }
+                    <div id="productStockBadgeContainer">
+                        @if (p.Stock > 10)
+                        {
+                            <span class="badge bg-success-subtle text-success border border-success rounded-pill px-3 py-1.5 small">
+                                <i class="fa-solid fa-circle-check me-1"></i>In Stock (@p.Stock available)
+                            </span>
+                        }
+                        else if (p.Stock > 0)
+                        {
+                            <span class="badge bg-warning-subtle text-warning border border-warning rounded-pill px-3 py-1.5 small">
+                                <i class="fa-solid fa-fire me-1"></i>Low Stock: Only @p.Stock left!
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-danger-subtle text-danger border border-danger rounded-pill px-3 py-1.5 small">
+                                <i class="fa-solid fa-ban me-1"></i>Currently Out of Stock
+                            </span>
+                        }
+                    </div>
                 </div>
 
                 <!-- Action Buttons -->
@@ -412,21 +429,30 @@
     </section>
 }
 
-<!-- Sticky Purchase Bar -->
-<div id="stickyPurchaseBar" class="sticky-purchase-bar d-none d-md-flex">
-    <div class="d-flex align-items-center gap-3">
-        <img src="@p.MainImage" class="rounded-3 border" style="width: 48px; height: 48px; object-fit: cover; border-color:var(--border-default) !important;" alt="@p.Title" />
-        <div>
-            <strong class="d-block small text-truncate" style="max-width: 320px; color:var(--text-primary);">@p.Title</strong>
-            <span class="fw-bold small" style="color:var(--brand-primary);">@ShippingTaxService.FormatCurrency(p.Price)</span>
+<!-- Sticky / Mobile Purchase Bar -->
+<div id="stickyPurchaseBar" class="sticky-purchase-bar">
+    <div class="d-flex align-items-center gap-2 gap-sm-3">
+        <img id="stickyBarImage" src="@p.MainImage" class="rounded-3 border flex-shrink-0" style="width: 44px; height: 44px; object-fit: cover; border-color:var(--border-default) !important;" alt="@p.Title" />
+        <div class="d-flex flex-column" style="min-width: 0;">
+            <strong class="small text-truncate" style="max-width: 220px; color:var(--text-primary);">@p.Title</strong>
+            <span id="stickyBarPrice" class="fw-bold small" style="color:var(--brand-primary);">@ShippingTaxService.FormatCurrency(p.Price)</span>
         </div>
     </div>
-    <form asp-controller="Cart" asp-action="AddToCart" method="post" class="d-flex align-items-center gap-2">
+    <form asp-controller="Cart" asp-action="AddToCart" method="post" id="stickyAddToCartForm" class="d-flex align-items-center gap-2 ms-auto">
         @Html.AntiForgeryToken()
         <input type="hidden" name="productId" value="@p.Id" />
-        <input type="hidden" name="quantity" value="1" />
-        <button type="submit" class="btn btn-primary-custom btn-sm px-4 rounded-pill shadow-sm" @(p.Stock <= 0 ? "disabled" : "")>
-            <i class="fa-solid fa-bag-shopping me-1"></i>Add to Cart
+        <input type="hidden" id="stickyVariantId" name="variantId" value="" />
+        <div class="quantity-stepper d-none d-md-flex" style="transform: scale(0.9);">
+            <button type="button" data-step-minus aria-label="Decrease quantity">
+                <i class="fa-solid fa-minus small"></i>
+            </button>
+            <input type="number" id="stickyQuantityInput" name="quantity" value="1" min="1" max="@(p.Stock > 0 ? p.Stock : 1)" />
+            <button type="button" data-step-plus aria-label="Increase quantity">
+                <i class="fa-solid fa-plus small"></i>
+            </button>
+        </div>
+        <button type="submit" id="stickyAddToCartBtn" class="btn btn-primary-custom btn-sm px-3 px-sm-4 rounded-pill shadow-sm" @(p.Stock <= 0 ? "disabled" : "")>
+            <i class="fa-solid fa-bag-shopping me-1"></i><span>Add to Cart</span>
         </button>
     </form>
 </div>

@@ -19,6 +19,7 @@ namespace HamaraCommerce.Models
         public string? SortBy { get; set; } // "price_asc", "price_desc", "rating", "newest", "popular"
         public bool InStockOnly { get; set; }
         public bool OnSaleOnly { get; set; }
+        public bool FlashDealOnly { get; set; }
 
         public int CurrentPage { get; set; } = 1;
         public int PageSize { get; set; } = 12;

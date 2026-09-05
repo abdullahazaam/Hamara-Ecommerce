@@ -35,7 +35,7 @@ namespace HamaraCommerce.Controllers
         public async Task<IActionResult> Index(
             string? search, string? category, string? brand, 
             decimal? minPrice, decimal? maxPrice, double? minRating, 
-            string? sort, bool inStock = false, bool onSale = false, 
+            string? sort, bool inStock = false, bool onSale = false, bool flashDeal = false,
             int page = 1, CancellationToken cancellationToken = default)
         {
             var query = _context.Products
@@ -71,6 +71,7 @@ namespace HamaraCommerce.Controllers
             if (minRating.HasValue) query = query.Where(p => p.Rating >= minRating.Value);
             if (inStock) query = query.Where(p => p.Stock > 0);
             if (onSale) query = query.Where(p => p.OldPrice > p.Price);
+            if (flashDeal) query = query.Where(p => p.IsFlashDeal);
 
             query = sort switch
             {
@@ -84,16 +85,16 @@ namespace HamaraCommerce.Controllers
             };
 
             int pageSize = 12;
-            int totalItems = await query.CountAsync();
-            var products = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+            int totalItems = await query.CountAsync(cancellationToken);
+            var products = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
 
-            var categories = await _context.Categories.OrderBy(c => c.DisplayOrder).ToListAsync();
+            var categories = await _context.Categories.OrderBy(c => c.DisplayOrder).ToListAsync(cancellationToken);
             var brands = await _context.Products
                 .Where(p => p.Status == ProductStatus.Published && !string.IsNullOrEmpty(p.Brand))
                 .Select(p => p.Brand)
                 .Distinct()
                 .OrderBy(b => b)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             var viewModel = new ShopFilterViewModel
             {
@@ -108,6 +109,7 @@ namespace HamaraCommerce.Controllers
                 MinRating = minRating,
                 InStockOnly = inStock,
                 OnSaleOnly = onSale,
+                FlashDealOnly = flashDeal,
                 SortBy = sort,
                 CurrentPage = page,
                 PageSize = pageSize,

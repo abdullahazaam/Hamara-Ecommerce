@@ -46,6 +46,7 @@
                     <input type="hidden" name="maxPrice" value="@Model.MaxPrice" />
                     <input type="hidden" name="inStockOnly" value="@(Model.InStockOnly ? "true" : "")" />
                     <input type="hidden" name="onSaleOnly" value="@(Model.OnSaleOnly ? "true" : "")" />
+                    <input type="hidden" name="flashDeal" value="@(Model.FlashDealOnly ? "true" : "")" />
 
                     <label for="sortSelect" class="small fw-semibold text-nowrap d-none d-sm-inline" style="color:var(--text-muted);">Sort by:</label>
                     <select id="sortSelect" name="sortBy" class="form-select form-select-sm rounded-pill px-3" style="min-width: 160px;" onchange="document.getElementById('sortForm').submit();">
@@ -62,41 +63,48 @@
 </div>
 
 <!-- Active Filter Chips -->
-@if (!string.IsNullOrEmpty(Model.Category) || !string.IsNullOrEmpty(Model.SelectedBrand) || !string.IsNullOrEmpty(Model.SearchQuery) || Model.MinPrice.HasValue || Model.MaxPrice.HasValue || Model.InStockOnly || Model.OnSaleOnly)
+@if (!string.IsNullOrEmpty(Model.Category) || !string.IsNullOrEmpty(Model.SelectedBrand) || !string.IsNullOrEmpty(Model.SearchQuery) || Model.MinPrice.HasValue || Model.MaxPrice.HasValue || Model.InStockOnly || Model.OnSaleOnly || Model.FlashDealOnly)
 {
     <div class="d-flex flex-wrap align-items-center gap-2 mb-4 p-3 rounded-4" style="background:var(--bg-surface-elevated); border:1px solid var(--border-subtle);">
         <span class="small fw-bold text-uppercase" style="color:var(--text-muted); font-size:0.75rem; letter-spacing:0.05em;">Active Filters:</span>
         @if (!string.IsNullOrEmpty(Model.Category))
         {
-            <a asp-action="Index" asp-route-search="@Model.SearchQuery" asp-route-brand="@Model.SelectedBrand" asp-route-sortBy="@Model.SortBy" asp-route-minPrice="@Model.MinPrice" asp-route-maxPrice="@Model.MaxPrice"
+            <a asp-action="Index" asp-route-search="@Model.SearchQuery" asp-route-brand="@Model.SelectedBrand" asp-route-sortBy="@Model.SortBy" asp-route-minPrice="@Model.MinPrice" asp-route-maxPrice="@Model.MaxPrice" asp-route-inStockOnly="@Model.InStockOnly" asp-route-onSaleOnly="@Model.OnSaleOnly" asp-route-flashDeal="@(Model.FlashDealOnly ? "true" : null)"
                class="badge bg-primary-subtle text-primary border border-primary text-decoration-none rounded-pill py-1.5 px-3 small d-inline-flex align-items-center gap-1">
                 Category: @Model.Category <i class="fa-solid fa-xmark ms-1"></i>
             </a>
         }
         @if (!string.IsNullOrEmpty(Model.SelectedBrand))
         {
-            <a asp-action="Index" asp-route-category="@Model.Category" asp-route-search="@Model.SearchQuery" asp-route-sortBy="@Model.SortBy" asp-route-minPrice="@Model.MinPrice" asp-route-maxPrice="@Model.MaxPrice"
+            <a asp-action="Index" asp-route-category="@Model.Category" asp-route-search="@Model.SearchQuery" asp-route-sortBy="@Model.SortBy" asp-route-minPrice="@Model.MinPrice" asp-route-maxPrice="@Model.MaxPrice" asp-route-inStockOnly="@Model.InStockOnly" asp-route-onSaleOnly="@Model.OnSaleOnly" asp-route-flashDeal="@(Model.FlashDealOnly ? "true" : null)"
                class="badge bg-primary-subtle text-primary border border-primary text-decoration-none rounded-pill py-1.5 px-3 small d-inline-flex align-items-center gap-1">
                 Brand: @Model.SelectedBrand <i class="fa-solid fa-xmark ms-1"></i>
             </a>
         }
         @if (!string.IsNullOrEmpty(Model.SearchQuery))
         {
-            <a asp-action="Index" asp-route-category="@Model.Category" asp-route-brand="@Model.SelectedBrand" asp-route-sortBy="@Model.SortBy"
+            <a asp-action="Index" asp-route-category="@Model.Category" asp-route-brand="@Model.SelectedBrand" asp-route-sortBy="@Model.SortBy" asp-route-minPrice="@Model.MinPrice" asp-route-maxPrice="@Model.MaxPrice" asp-route-inStockOnly="@Model.InStockOnly" asp-route-onSaleOnly="@Model.OnSaleOnly" asp-route-flashDeal="@(Model.FlashDealOnly ? "true" : null)"
                class="badge bg-primary-subtle text-primary border border-primary text-decoration-none rounded-pill py-1.5 px-3 small d-inline-flex align-items-center gap-1">
                 Keyword: "@Model.SearchQuery" <i class="fa-solid fa-xmark ms-1"></i>
             </a>
         }
+        @if (Model.FlashDealOnly)
+        {
+            <a asp-action="Index" asp-route-category="@Model.Category" asp-route-search="@Model.SearchQuery" asp-route-brand="@Model.SelectedBrand" asp-route-sortBy="@Model.SortBy" asp-route-minPrice="@Model.MinPrice" asp-route-maxPrice="@Model.MaxPrice" asp-route-inStockOnly="@Model.InStockOnly" asp-route-onSaleOnly="@Model.OnSaleOnly"
+               class="badge bg-warning-subtle text-warning border border-warning text-decoration-none rounded-pill py-1.5 px-3 small d-inline-flex align-items-center gap-1">
+                <i class="fa-solid fa-bolt me-1"></i>Flash Deals Only <i class="fa-solid fa-xmark ms-1"></i>
+            </a>
+        }
         @if (Model.InStockOnly)
         {
-            <a asp-action="Index" asp-route-category="@Model.Category" asp-route-search="@Model.SearchQuery" asp-route-sortBy="@Model.SortBy"
+            <a asp-action="Index" asp-route-category="@Model.Category" asp-route-search="@Model.SearchQuery" asp-route-brand="@Model.SelectedBrand" asp-route-sortBy="@Model.SortBy" asp-route-minPrice="@Model.MinPrice" asp-route-maxPrice="@Model.MaxPrice" asp-route-onSaleOnly="@Model.OnSaleOnly" asp-route-flashDeal="@(Model.FlashDealOnly ? "true" : null)"
                class="badge bg-success-subtle text-success border border-success text-decoration-none rounded-pill py-1.5 px-3 small d-inline-flex align-items-center gap-1">
                 In Stock Only <i class="fa-solid fa-xmark ms-1"></i>
             </a>
         }
         @if (Model.OnSaleOnly)
         {
-            <a asp-action="Index" asp-route-category="@Model.Category" asp-route-search="@Model.SearchQuery" asp-route-sortBy="@Model.SortBy"
+            <a asp-action="Index" asp-route-category="@Model.Category" asp-route-search="@Model.SearchQuery" asp-route-brand="@Model.SelectedBrand" asp-route-sortBy="@Model.SortBy" asp-route-minPrice="@Model.MinPrice" asp-route-maxPrice="@Model.MaxPrice" asp-route-inStockOnly="@Model.InStockOnly" asp-route-flashDeal="@(Model.FlashDealOnly ? "true" : null)"
                class="badge bg-danger-subtle text-danger border border-danger text-decoration-none rounded-pill py-1.5 px-3 small d-inline-flex align-items-center gap-1">
                 On Sale <i class="fa-solid fa-xmark ms-1"></i>
             </a>
@@ -144,6 +152,27 @@
                     </div>
                 </div>
 
+                <!-- Brands Filter -->
+                @if (Model.Brands != null && Model.Brands.Any())
+                {
+                    <div class="mb-4">
+                        <label class="form-label small fw-bold text-uppercase" style="color:var(--text-muted); font-size: 0.725rem; letter-spacing:0.05em;">Brands</label>
+                        <div class="d-flex flex-column gap-2" style="max-height: 180px; overflow-y: auto;">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="brand" value="" id="brandAll" checked="@(string.IsNullOrEmpty(Model.SelectedBrand))" onchange="this.form.submit()" />
+                                <label class="form-check-label small fw-semibold" for="brandAll" style="color:var(--text-primary);">All Brands</label>
+                            </div>
+                            @foreach (var b in Model.Brands)
+                            {
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="brand" value="@b" id="brand_@b.Replace(" ", "_")" checked="@(Model.SelectedBrand == b)" onchange="this.form.submit()" />
+                                    <label class="form-check-label small" for="brand_@b.Replace(" ", "_")" style="color:var(--text-secondary);">@b</label>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
                 <!-- Price Range -->
                 <div class="mb-4">
                     <label class="form-label small fw-bold text-uppercase" style="color:var(--text-muted); font-size: 0.725rem; letter-spacing:0.05em;">Price Range (PKR)</label>
@@ -158,8 +187,12 @@
                     <button type="submit" class="btn btn-glass btn-sm w-100 rounded-pill py-1.5 font-heading fw-bold">Apply Price</button>
                 </div>
 
-                <!-- Stock & Discount Toggles -->
+                <!-- Stock, Deals & Flash Toggles -->
                 <div class="pt-2 border-top" style="border-color:var(--border-subtle) !important;">
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" name="flashDeal" value="true" id="flashDealSwitch" checked="@Model.FlashDealOnly" onchange="this.form.submit()" />
+                        <label class="form-check-label small fw-semibold" for="flashDealSwitch" style="color:var(--text-primary);"><i class="fa-solid fa-bolt text-warning me-1"></i>Flash Deals Only</label>
+                    </div>
                     <div class="form-check form-switch mb-2">
                         <input class="form-check-input" type="checkbox" name="inStockOnly" value="true" id="inStockSwitch" checked="@Model.InStockOnly" onchange="this.form.submit()" />
                         <label class="form-check-label small fw-semibold" for="inStockSwitch" style="color:var(--text-primary);">In Stock Only</label>
@@ -195,18 +228,48 @@
                 <nav aria-label="Catalog pagination" class="mt-5 d-flex justify-content-center">
                     <ul class="pagination">
                         <li class="page-item @(Model.CurrentPage <= 1 ? "disabled" : "")">
-                            <a class="page-link rounded-pill me-1" asp-action="Index" asp-route-page="@(Model.CurrentPage - 1)" asp-route-category="@Model.Category" asp-route-search="@Model.SearchQuery" asp-route-sortBy="@Model.SortBy" asp-route-minPrice="@Model.MinPrice" asp-route-maxPrice="@Model.MaxPrice" asp-route-inStockOnly="@Model.InStockOnly" asp-route-onSaleOnly="@Model.OnSaleOnly">
+                            <a class="page-link rounded-pill me-1" asp-action="Index"
+                               asp-route-page="@(Model.CurrentPage - 1)"
+                               asp-route-category="@Model.Category"
+                               asp-route-search="@Model.SearchQuery"
+                               asp-route-brand="@Model.SelectedBrand"
+                               asp-route-sortBy="@Model.SortBy"
+                               asp-route-minPrice="@Model.MinPrice"
+                               asp-route-maxPrice="@Model.MaxPrice"
+                               asp-route-inStockOnly="@(Model.InStockOnly ? "true" : null)"
+                               asp-route-onSaleOnly="@(Model.OnSaleOnly ? "true" : null)"
+                               asp-route-flashDeal="@(Model.FlashDealOnly ? "true" : null)">
                                 <i class="fa-solid fa-chevron-left me-1"></i>Prev
                             </a>
                         </li>
                         @for (int i = 1; i <= Model.TotalPages; i++)
                         {
                             <li class="page-item @(i == Model.CurrentPage ? "active" : "")">
-                                <a class="page-link rounded-pill mx-1" asp-action="Index" asp-route-page="@i" asp-route-category="@Model.Category" asp-route-search="@Model.SearchQuery" asp-route-sortBy="@Model.SortBy" asp-route-minPrice="@Model.MinPrice" asp-route-maxPrice="@Model.MaxPrice" asp-route-inStockOnly="@Model.InStockOnly" asp-route-onSaleOnly="@Model.OnSaleOnly">@i</a>
+                                <a class="page-link rounded-pill mx-1" asp-action="Index"
+                                   asp-route-page="@i"
+                                   asp-route-category="@Model.Category"
+                                   asp-route-search="@Model.SearchQuery"
+                                   asp-route-brand="@Model.SelectedBrand"
+                                   asp-route-sortBy="@Model.SortBy"
+                                   asp-route-minPrice="@Model.MinPrice"
+                                   asp-route-maxPrice="@Model.MaxPrice"
+                                   asp-route-inStockOnly="@(Model.InStockOnly ? "true" : null)"
+                                   asp-route-onSaleOnly="@(Model.OnSaleOnly ? "true" : null)"
+                                   asp-route-flashDeal="@(Model.FlashDealOnly ? "true" : null)">@i</a>
                             </li>
                         }
                         <li class="page-item @(Model.CurrentPage >= Model.TotalPages ? "disabled" : "")">
-                            <a class="page-link rounded-pill ms-1" asp-action="Index" asp-route-page="@(Model.CurrentPage + 1)" asp-route-category="@Model.Category" asp-route-search="@Model.SearchQuery" asp-route-sortBy="@Model.SortBy" asp-route-minPrice="@Model.MinPrice" asp-route-maxPrice="@Model.MaxPrice" asp-route-inStockOnly="@Model.InStockOnly" asp-route-onSaleOnly="@Model.OnSaleOnly">
+                            <a class="page-link rounded-pill ms-1" asp-action="Index"
+                               asp-route-page="@(Model.CurrentPage + 1)"
+                               asp-route-category="@Model.Category"
+                               asp-route-search="@Model.SearchQuery"
+                               asp-route-brand="@Model.SelectedBrand"
+                               asp-route-sortBy="@Model.SortBy"
+                               asp-route-minPrice="@Model.MinPrice"
+                               asp-route-maxPrice="@Model.MaxPrice"
+                               asp-route-inStockOnly="@(Model.InStockOnly ? "true" : null)"
+                               asp-route-onSaleOnly="@(Model.OnSaleOnly ? "true" : null)"
+                               asp-route-flashDeal="@(Model.FlashDealOnly ? "true" : null)">
                                 Next<i class="fa-solid fa-chevron-right ms-1"></i>
                             </a>
                         </li>
@@ -247,6 +310,26 @@
                 </div>
             </div>
 
+            @if (Model.Brands != null && Model.Brands.Any())
+            {
+                <div class="mb-4">
+                    <label class="form-label small fw-bold text-uppercase" style="color:var(--text-muted);">Brands</label>
+                    <div class="d-flex flex-column gap-2" style="max-height: 160px; overflow-y: auto;">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="brand" value="" id="mBrandAll" checked="@(string.IsNullOrEmpty(Model.SelectedBrand))" />
+                            <label class="form-check-label small fw-semibold" for="mBrandAll">All Brands</label>
+                        </div>
+                        @foreach (var b in Model.Brands)
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="brand" value="@b" id="mBrand_@b.Replace(" ", "_")" checked="@(Model.SelectedBrand == b)" />
+                                <label class="form-check-label small" for="mBrand_@b.Replace(" ", "_")">@b</label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
             <div class="mb-4">
                 <label class="form-label small fw-bold text-uppercase" style="color:var(--text-muted);">Price Range (PKR)</label>
                 <div class="row g-2 mb-2">
@@ -260,6 +343,10 @@
             </div>
 
             <div class="mb-4 pt-2 border-top" style="border-color:var(--border-subtle) !important;">
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" name="flashDeal" value="true" id="mFlashDealSwitch" checked="@Model.FlashDealOnly" />
+                    <label class="form-check-label small fw-semibold" for="mFlashDealSwitch"><i class="fa-solid fa-bolt text-warning me-1"></i>Flash Deals Only</label>
+                </div>
                 <div class="form-check form-switch mb-2">
                     <input class="form-check-input" type="checkbox" name="inStockOnly" value="true" id="mInStockSwitch" checked="@Model.InStockOnly" />
                     <label class="form-check-label small fw-semibold" for="mInStockSwitch">In Stock Only</label>

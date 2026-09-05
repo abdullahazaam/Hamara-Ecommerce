@@ -489,7 +489,6 @@ namespace HamaraCommerce.Controllers
             return View(model);
         }
 
-        [Authorize]
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ToggleWishlist(int productId)
@@ -497,7 +496,18 @@ namespace HamaraCommerce.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null)
             {
-                return Json(new { success = false, message = "Please sign in to manage your wishlist." });
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
+                    Request.Headers["Accept"].ToString().Contains("application/json"))
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        requiresAuth = true,
+                        message = "Please sign in to manage your wishlist."
+                    });
+                }
+                TempData["ErrorMessage"] = "Please sign in to manage your wishlist.";
+                return RedirectToAction("Login", "Account", new { returnUrl = Url.Action("Wishlist", "Account") });
             }
 
             var wishlist = (user.WishlistProductIds ?? new List<int>()).Distinct().ToList();
@@ -517,7 +527,8 @@ namespace HamaraCommerce.Controllers
             user.WishlistProductIds = wishlist;
             await _userManager.UpdateAsync(user);
 
-            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
+                Request.Headers["Accept"].ToString().Contains("application/json"))
             {
                 return Json(new
                 {

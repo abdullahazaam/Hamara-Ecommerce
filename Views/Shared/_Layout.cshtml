@@ -13,7 +13,7 @@
     var defaultTheme = (qTheme == "dark" || qTheme == "light") ? qTheme : "light";
 }
 <!DOCTYPE html>
-<html lang="en" data-theme="@defaultTheme">
+<html lang="en" data-theme="@defaultTheme" class="no-js">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -32,9 +32,10 @@
     <!-- Design System -->
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 
-    <!-- Prevent Theme Flash -->
+    <!-- Prevent Theme Flash & Enable JS styles -->
     <script>
         (function() {
+            document.documentElement.classList.replace('no-js', 'js-active');
             var urlParams = new URLSearchParams(window.location.search);
             var q = urlParams.get('theme');
             if (q === 'dark' || q === 'light') {
@@ -177,18 +178,21 @@
             </nav>
 
             <!-- Search Bar (md+) -->
-            <form asp-controller="Shop" asp-action="Index" method="get"
-                  class="header-search d-none d-md-flex" role="search" aria-label="Search products">
-                <i class="fa-solid fa-magnifying-glass header-search-icon" aria-hidden="true"></i>
-                <input type="text"
-                       id="headerSearchInput"
-                       name="search"
-                       class="header-search-input"
-                       placeholder="Search catalog..."
-                       aria-label="Search catalog"
-                       autocomplete="off" />
-                <span class="header-search-kbd d-none d-xl-flex" aria-hidden="true">Ctrl K</span>
-            </form>
+            <div class="position-relative d-none d-md-flex flex-grow-1 header-search-container" style="max-width: 460px;">
+                <form asp-controller="Shop" asp-action="Index" method="get"
+                      class="header-search w-100" role="search" aria-label="Search products" id="headerSearchForm">
+                    <i class="fa-solid fa-magnifying-glass header-search-icon" aria-hidden="true"></i>
+                    <input type="text"
+                           id="headerSearchInput"
+                           name="search"
+                           class="header-search-input"
+                           placeholder="Search catalog..."
+                           aria-label="Search catalog"
+                           autocomplete="off" />
+                    <span class="header-search-kbd d-none d-xl-flex" aria-hidden="true">Ctrl K</span>
+                </form>
+                <div id="headerSearchResults" class="search-autocomplete-dropdown shadow-lg rounded-4" style="display: none;" role="listbox" aria-label="Search suggestions"></div>
+            </div>
 
             <!-- Right Controls -->
             <div class="header-controls">
@@ -230,10 +234,7 @@
                    title="My Wishlist"
                    aria-label="My Wishlist, @wishlistCount items">
                     <i class="fa-regular fa-heart" aria-hidden="true"></i>
-                    @if (wishlistCount > 0)
-                    {
-                        <span class="header-badge" id="wishlistBadge" aria-hidden="true">@wishlistCount</span>
-                    }
+                    <span class="header-badge wishlist-count-badge @(wishlistCount == 0 ? "d-none" : "")" id="wishlistBadge" aria-hidden="true">@wishlistCount</span>
                 </a>
 
                 <!-- Cart (Desktop & Mobile) -->
@@ -320,8 +321,8 @@
         </div>
 
         <!-- Mobile search bar (collapsible under header on small screens) -->
-        <div class="mobile-search-bar d-md-none" id="mobileSearchBar" aria-label="Mobile product search">
-            <form asp-controller="Shop" asp-action="Index" method="get" role="search">
+        <div class="mobile-search-bar d-md-none position-relative" id="mobileSearchBar" aria-label="Mobile product search">
+            <form asp-controller="Shop" asp-action="Index" method="get" role="search" id="mobileSearchForm">
                 <div class="position-relative">
                     <i class="fa-solid fa-magnifying-glass header-search-icon" aria-hidden="true"></i>
                     <input type="text"
@@ -329,9 +330,11 @@
                            name="search"
                            class="header-search-input w-100"
                            placeholder="Search catalog..."
-                           aria-label="Search catalog" />
+                           aria-label="Search catalog"
+                           autocomplete="off" />
                 </div>
             </form>
+            <div id="mobileSearchResults" class="search-autocomplete-dropdown shadow-lg rounded-4" style="display: none;" role="listbox" aria-label="Search suggestions"></div>
         </div>
     </header>
 
