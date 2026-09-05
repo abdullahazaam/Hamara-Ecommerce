@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using HamaraCommerce.Data;
@@ -129,6 +130,7 @@ namespace HamaraCommerce.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [EnableRateLimiting("ContactPolicy")]
         public async Task<IActionResult> SubmitContact(
             [FromForm] string name,
             [FromForm] string email,

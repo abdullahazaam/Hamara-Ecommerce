@@ -768,32 +768,35 @@ namespace HamaraCommerce.Data
                     }
                 }
 
-                // Seed Demo Customer User
-                string customerEmail = "customer@hamaracommerce.pk";
-                demoCustomer = userManager.FindByEmailAsync(customerEmail).GetAwaiter().GetResult();
-                if (demoCustomer == null)
+                // Seed Demo Customer User (Development only)
+                if (isDevelopment)
                 {
-                    demoCustomer = new ApplicationUser
+                    string customerEmail = "customer@hamaracommerce.pk";
+                    demoCustomer = userManager.FindByEmailAsync(customerEmail).GetAwaiter().GetResult();
+                    if (demoCustomer == null)
                     {
-                        UserName = customerEmail,
-                        Email = customerEmail,
-                        FullName = "Usman Tariq",
-                        PhoneNumber = "+92 300 9876543",
-                        AvatarUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80",
-                        EmailConfirmed = true,
-                        IsActive = true,
-                        CreatedAt = DateTime.UtcNow.AddYears(-1),
-                        SavedAddresses = new List<Address>
+                        demoCustomer = new ApplicationUser
                         {
-                            new Address { Id = 1, Title = "Home Address", FullName = "Usman Tariq", StreetAddress = "House 14, Street 8, Sector Y, DHA Phase 3", City = "Lahore", State = "Punjab", ZipCode = "54792", IsDefault = true },
-                            new Address { Id = 2, Title = "Corporate Office", FullName = "Usman Tariq", StreetAddress = "Floor 5, Software Technology Park, Gulberg III", City = "Lahore", State = "Punjab", ZipCode = "54660", IsDefault = false }
-                        },
-                        WishlistProductIds = new List<int> { 1, 5, 9, 17, 33 }
-                    };
-                    var custRes = userManager.CreateAsync(demoCustomer, "Customer@123!").GetAwaiter().GetResult();
-                    if (custRes.Succeeded)
-                    {
-                        userManager.AddToRoleAsync(demoCustomer, "Customer").GetAwaiter().GetResult();
+                            UserName = customerEmail,
+                            Email = customerEmail,
+                            FullName = "Usman Tariq",
+                            PhoneNumber = "+92 300 9876543",
+                            AvatarUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80",
+                            EmailConfirmed = true,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow.AddYears(-1),
+                            SavedAddresses = new List<Address>
+                            {
+                                new Address { Id = 1, Title = "Home Address", FullName = "Usman Tariq", StreetAddress = "House 14, Street 8, Sector Y, DHA Phase 3", City = "Lahore", State = "Punjab", ZipCode = "54792", IsDefault = true },
+                                new Address { Id = 2, Title = "Corporate Office", FullName = "Usman Tariq", StreetAddress = "Floor 5, Software Technology Park, Gulberg III", City = "Lahore", State = "Punjab", ZipCode = "54660", IsDefault = false }
+                            },
+                            WishlistProductIds = new List<int> { 1, 5, 9, 17, 33 }
+                        };
+                        var custRes = userManager.CreateAsync(demoCustomer, "Customer@123!").GetAwaiter().GetResult();
+                        if (custRes.Succeeded)
+                        {
+                            userManager.AddToRoleAsync(demoCustomer, "Customer").GetAwaiter().GetResult();
+                        }
                     }
                 }
             }
@@ -908,6 +911,61 @@ namespace HamaraCommerce.Data
                 }
 
                 context.Orders.AddRange(sampleOrders);
+                context.SaveChanges();
+            }
+
+            // 8. BACKFILL HISTORICAL COUPON REDEMPTIONS (Safe migration from legacy CustomerNotes markers)
+            var ordersWithCoupons = context.Orders.Where(o => !string.IsNullOrEmpty(o.CouponCode)).ToList();
+            if (ordersWithCoupons.Any())
+            {
+                var existingRedemptions = context.CouponRedemptions.Select(r => new { r.OrderId, r.CouponCode }).ToList();
+                var existingSet = new HashSet<(int OrderId, string CouponCode)>(
+                    existingRedemptions.Select(r => (r.OrderId, r.CouponCode.ToUpperInvariant())));
+
+                var coupons = context.Coupons.ToDictionary(c => c.Code.ToUpperInvariant());
+
+                foreach (var order in ordersWithCoupons)
+                {
+                    var code = order.CouponCode!.Trim().ToUpperInvariant();
+                    if (existingSet.Contains((order.Id, code))) continue;
+                    if (!coupons.TryGetValue(code, out var coupon)) continue;
+
+                    bool wasRestored = false;
+                    string? restoreReason = null;
+                    DateTime? restoredAt = null;
+
+                    if (!string.IsNullOrEmpty(order.CustomerNotes) &&
+                        (order.CustomerNotes.Contains("[CouponRestored:") || order.CustomerNotes.Contains("[COUPON_RESTORED:")))
+                    {
+                        wasRestored = true;
+                        restoreReason = "Backfilled from historical CustomerNotes marker";
+                        restoredAt = order.OrderDate;
+
+                        order.CustomerNotes = System.Text.RegularExpressions.Regex.Replace(
+                            order.CustomerNotes, @"\[(CouponRestored|COUPON_RESTORED):[^\]]+\]", "").Trim();
+                    }
+                    else if (order.Status == OrderStatus.Cancelled || order.Status == OrderStatus.Refunded)
+                    {
+                        wasRestored = true;
+                        restoreReason = "Order previously cancelled/refunded";
+                        restoredAt = order.OrderDate;
+                    }
+
+                    context.CouponRedemptions.Add(new CouponRedemption
+                    {
+                        CouponId = coupon.Id,
+                        CouponCode = coupon.Code,
+                        OrderId = order.Id,
+                        UserId = order.UserId,
+                        CustomerEmail = order.CustomerEmail,
+                        DiscountAmount = order.DiscountAmount,
+                        RedeemedAt = order.OrderDate,
+                        IsRestored = wasRestored,
+                        RestoredAt = restoredAt,
+                        RestoreReason = restoreReason
+                    });
+                    existingSet.Add((order.Id, code));
+                }
                 context.SaveChanges();
             }
         }

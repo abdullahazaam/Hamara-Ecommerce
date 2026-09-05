@@ -171,7 +171,14 @@ namespace HamaraCommerce.Services
                         .FirstOrDefaultAsync();
                 }
 
-                var couponCheck = await ValidateCouponAsync(result.AppliedCouponCode, result.SubTotal, userId, userEmail, cartData.Items);
+                var activeItemData = activeItems.Select(i => new CartItemData 
+                { 
+                    ProductId = i.ProductId, 
+                    VariantId = i.VariantId, 
+                    Quantity = i.Quantity 
+                }).ToList();
+
+                var couponCheck = await ValidateCouponAsync(result.AppliedCouponCode, result.SubTotal, userId, userEmail, activeItemData);
                 if (couponCheck.IsValid && couponCheck.Coupon != null)
                 {
                     result.CouponIsValid = true;
@@ -272,28 +279,53 @@ namespace HamaraCommerce.Services
             }
 
             // Rule 4: Per-Customer Redemption Limit (Checked across non-cancelled and non-refunded orders)
-            // Explicit guest eligibility tracking using customerEmail prevents guest limit bypass
+            // Require explicit verified eligibility for limited coupons; entered email alone is insufficient.
             if (coupon.PerUserLimit > 0)
             {
-                var emailLower = customerEmail?.Trim().ToLowerInvariant();
-                var hasUser = !string.IsNullOrEmpty(userId);
-                var hasEmail = !string.IsNullOrEmpty(emailLower);
-
-                if (hasUser || hasEmail)
+                if (string.IsNullOrEmpty(userId))
                 {
-                    var priorRedemptions = await _context.Orders
-                        .Where(o => o.CouponCode == code && o.Status != OrderStatus.Cancelled && o.Status != OrderStatus.Refunded)
-                        .Where(o => (hasUser && o.UserId == userId) || (hasEmail && o.CustomerEmail.ToLower() == emailLower))
-                        .CountAsync();
-
-                    if (priorRedemptions >= coupon.PerUserLimit)
+                    return new CouponValidationResult
                     {
-                        return new CouponValidationResult
-                        {
-                            IsValid = false,
-                            Message = $"You have already redeemed coupon '{coupon.Code}' the maximum allowed times ({coupon.PerUserLimit} per customer)."
-                        };
-                    }
+                        IsValid = false,
+                        Message = $"Coupon '{coupon.Code}' has customer usage limits and requires an account with a verified email address. Entered email alone is not eligible. Please sign in to apply this coupon."
+                    };
+                }
+
+                var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+                if (user == null || !user.EmailConfirmed)
+                {
+                    return new CouponValidationResult
+                    {
+                        IsValid = false,
+                        Message = $"Coupon '{coupon.Code}' requires a verified email address. Please verify your email before applying this coupon."
+                    };
+                }
+
+                var verifiedEmail = user.Email?.Trim().ToLowerInvariant();
+
+                var redemptionsFromRecords = await _context.CouponRedemptions
+                    .Where(r => r.CouponCode == code && !r.IsRestored)
+                    .Where(r => r.UserId == userId || (verifiedEmail != null && r.CustomerEmail.ToLower() == verifiedEmail))
+                    .Select(r => r.OrderId)
+                    .Distinct()
+                    .ToListAsync();
+
+                var redemptionsFromOrders = await _context.Orders
+                    .Where(o => o.CouponCode == code && o.Status != OrderStatus.Cancelled && o.Status != OrderStatus.Refunded)
+                    .Where(o => o.UserId == userId || (verifiedEmail != null && o.CustomerEmail.ToLower() == verifiedEmail))
+                    .Select(o => o.Id)
+                    .Distinct()
+                    .ToListAsync();
+
+                int totalPriorOrders = redemptionsFromRecords.Union(redemptionsFromOrders).Distinct().Count();
+
+                if (totalPriorOrders >= coupon.PerUserLimit)
+                {
+                    return new CouponValidationResult
+                    {
+                        IsValid = false,
+                        Message = $"You have already redeemed coupon '{coupon.Code}' the maximum allowed times ({coupon.PerUserLimit} per customer)."
+                    };
                 }
             }
 
@@ -439,6 +471,36 @@ namespace HamaraCommerce.Services
             return false;
         }
 
+        public async Task<bool> RecordCouponRedemptionAsync(string couponCode, Order order)
+        {
+            if (string.IsNullOrWhiteSpace(couponCode) || order == null) return false;
+
+            var code = couponCode.Trim().ToUpperInvariant();
+            var coupon = await _context.Coupons.FirstOrDefaultAsync(c => c.Code == code);
+            if (coupon != null)
+            {
+                coupon.UsageCount++;
+
+                var redemption = new CouponRedemption
+                {
+                    CouponId = coupon.Id,
+                    CouponCode = coupon.Code,
+                    OrderId = order.Id,
+                    UserId = order.UserId,
+                    CustomerEmail = order.CustomerEmail,
+                    DiscountAmount = order.DiscountAmount,
+                    RedeemedAt = DateTime.UtcNow,
+                    IsRestored = false
+                };
+                _context.CouponRedemptions.Add(redemption);
+
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Recorded dedicated redemption record for coupon {Code} on order #{OrderNumber}. Total usages: {Count}/{Limit}", coupon.Code, order.OrderNumber, coupon.UsageCount, coupon.UsageLimit);
+                return true;
+            }
+            return false;
+        }
+
         public async Task<bool> RestoreCouponRedemptionAsync(Order order)
         {
             if (order == null || string.IsNullOrWhiteSpace(order.CouponCode))
@@ -447,25 +509,173 @@ namespace HamaraCommerce.Services
             }
 
             var normalizedCode = order.CouponCode.Trim().ToUpperInvariant();
-            var marker = $"[CouponRestored:{normalizedCode}]";
-            if (order.CustomerNotes != null && order.CustomerNotes.Contains(marker))
+
+            // 1. Relational database atomic restoration (ensures exact-once execution under concurrent calls)
+            if (_context.Database.IsRelational())
             {
-                // Guarantee exact-once execution: already restored
+                int affectedRedemptions = await _context.CouponRedemptions
+                    .Where(r => r.OrderId == order.Id && r.CouponCode == normalizedCode && !r.IsRestored)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(r => r.IsRestored, true)
+                        .SetProperty(r => r.RestoredAt, DateTime.UtcNow)
+                        .SetProperty(r => r.RestoreReason, $"Restored on order #{order.OrderNumber} cancellation/refund"));
+
+                if (affectedRedemptions > 0)
+                {
+                    await _context.Coupons
+                        .Where(c => c.Code == normalizedCode && c.UsageCount > 0)
+                        .ExecuteUpdateAsync(s => s.SetProperty(c => c.UsageCount, c => c.UsageCount - 1));
+
+                    _logger.LogInformation("Atomically restored coupon {Code} on order #{OrderNumber}", normalizedCode, order.OrderNumber);
+                    return true;
+                }
+
+                // If no row was updated, check if it was already restored
+                var alreadyRestored = await _context.CouponRedemptions
+                    .AnyAsync(r => r.OrderId == order.Id && r.CouponCode == normalizedCode && r.IsRestored);
+                if (alreadyRestored)
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                // In-memory provider fallback for unit tests
+                var redemption = await _context.CouponRedemptions
+                    .FirstOrDefaultAsync(r => r.OrderId == order.Id && r.CouponCode == normalizedCode);
+
+                if (redemption != null)
+                {
+                    if (redemption.IsRestored)
+                    {
+                        return false;
+                    }
+
+                    redemption.IsRestored = true;
+                    redemption.RestoredAt = DateTime.UtcNow;
+                    redemption.RestoreReason = $"Restored on order #{order.OrderNumber} cancellation/refund";
+
+                    var coupon = await _context.Coupons.FirstOrDefaultAsync(c => c.Code == normalizedCode);
+                    if (coupon != null && coupon.UsageCount > 0)
+                    {
+                        coupon.UsageCount--;
+                    }
+                    await _context.SaveChangesAsync();
+                    return true;
+                }
+            }
+
+            // Fallback for pre-migration historical orders:
+            var marker = $"[CouponRestored:{normalizedCode}]";
+            if (order.CustomerNotes != null && (order.CustomerNotes.Contains(marker) || order.CustomerNotes.Contains($"[COUPON_RESTORED:{normalizedCode}]")))
+            {
                 return false;
             }
 
-            var coupon = await _context.Coupons.FirstOrDefaultAsync(c => c.Code == normalizedCode);
-            if (coupon != null && coupon.UsageCount > 0)
+            var histCoupon = await _context.Coupons.FirstOrDefaultAsync(c => c.Code == normalizedCode);
+            if (histCoupon != null)
             {
-                coupon.UsageCount--;
+                var newRedemption = new CouponRedemption
+                {
+                    CouponId = histCoupon.Id,
+                    CouponCode = histCoupon.Code,
+                    OrderId = order.Id,
+                    UserId = order.UserId,
+                    CustomerEmail = order.CustomerEmail,
+                    DiscountAmount = order.DiscountAmount,
+                    RedeemedAt = order.OrderDate,
+                    IsRestored = true,
+                    RestoredAt = DateTime.UtcNow,
+                    RestoreReason = $"Historical restoration for order #{order.OrderNumber}"
+                };
+                _context.CouponRedemptions.Add(newRedemption);
+                if (histCoupon.UsageCount > 0)
+                {
+                    histCoupon.UsageCount--;
+                }
+                await _context.SaveChangesAsync();
+                return true;
             }
 
-            order.CustomerNotes = string.IsNullOrEmpty(order.CustomerNotes)
-                ? marker
-                : $"{order.CustomerNotes} {marker}";
+            return false;
+        }
 
-            _logger.LogInformation("Restored redemption for coupon {Code} on order #{OrderNumber}. New usage count: {Count}", normalizedCode, order.OrderNumber, coupon?.UsageCount ?? 0);
-            return true;
+        public async Task<int> BackfillHistoricalCouponRedemptionsAsync()
+        {
+            var ordersWithCoupons = await _context.Orders
+                .Where(o => !string.IsNullOrEmpty(o.CouponCode))
+                .ToListAsync();
+
+            var existingRedemptions = await _context.CouponRedemptions
+                .Select(r => new { r.OrderId, r.CouponCode })
+                .ToListAsync();
+
+            var existingSet = new HashSet<(int OrderId, string CouponCode)>(
+                existingRedemptions.Select(r => (r.OrderId, r.CouponCode.ToUpperInvariant())));
+
+            int backfilledCount = 0;
+            var coupons = await _context.Coupons.ToDictionaryAsync(c => c.Code.ToUpperInvariant());
+
+            foreach (var order in ordersWithCoupons)
+            {
+                var code = order.CouponCode!.Trim().ToUpperInvariant();
+                if (existingSet.Contains((order.Id, code)))
+                {
+                    continue;
+                }
+
+                if (!coupons.TryGetValue(code, out var coupon))
+                {
+                    continue;
+                }
+
+                bool wasRestored = false;
+                string? restoreReason = null;
+                DateTime? restoredAt = null;
+
+                if (!string.IsNullOrEmpty(order.CustomerNotes) &&
+                    (order.CustomerNotes.Contains("[CouponRestored:") || order.CustomerNotes.Contains("[COUPON_RESTORED:")))
+                {
+                    wasRestored = true;
+                    restoreReason = "Backfilled from historical CustomerNotes marker";
+                    restoredAt = order.OrderDate;
+
+                    order.CustomerNotes = System.Text.RegularExpressions.Regex.Replace(
+                        order.CustomerNotes, @"\[(CouponRestored|COUPON_RESTORED):[^\]]+\]", "").Trim();
+                }
+                else if (order.Status == OrderStatus.Cancelled || order.Status == OrderStatus.Refunded)
+                {
+                    wasRestored = true;
+                    restoreReason = "Order previously cancelled/refunded";
+                    restoredAt = order.OrderDate;
+                }
+
+                var redemption = new CouponRedemption
+                {
+                    CouponId = coupon.Id,
+                    CouponCode = coupon.Code,
+                    OrderId = order.Id,
+                    UserId = order.UserId,
+                    CustomerEmail = order.CustomerEmail,
+                    DiscountAmount = order.DiscountAmount,
+                    RedeemedAt = order.OrderDate,
+                    IsRestored = wasRestored,
+                    RestoredAt = restoredAt,
+                    RestoreReason = restoreReason
+                };
+
+                _context.CouponRedemptions.Add(redemption);
+                existingSet.Add((order.Id, code));
+                backfilledCount++;
+            }
+
+            if (backfilledCount > 0)
+            {
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Backfilled {Count} historical coupon redemptions from legacy orders.", backfilledCount);
+            }
+
+            return backfilledCount;
         }
     }
 }

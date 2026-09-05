@@ -4,6 +4,7 @@ using HamaraCommerce.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace HamaraCommerce.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260905144457_AddOrderPrivacyIdempotencyAndCouponRedemption")]
+    partial class AddOrderPrivacyIdempotencyAndCouponRedemption
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -243,21 +246,10 @@ namespace HamaraCommerce.Migrations
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("FailureReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("GuestAccessToken")
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
                     b.Property<string>("IdempotencyKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
-
-                    b.Property<DateTime?>("LockedAt")
-                        .HasColumnType("datetime2");
 
                     b.Property<int?>("OrderId")
                         .HasColumnType("int");
@@ -266,28 +258,10 @@ namespace HamaraCommerce.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<decimal?>("PaymentAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("PaymentProvider")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("PaymentReference")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<int?>("PaymentStatus")
-                        .HasColumnType("int");
-
                     b.Property<string>("RequestHash")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
 
                     b.Property<string>("UserId")
                         .HasMaxLength(450)
@@ -301,8 +275,6 @@ namespace HamaraCommerce.Migrations
 
                     b.HasIndex("IdempotencyKey")
                         .IsUnique();
-
-                    b.HasIndex("Status");
 
                     b.ToTable("CheckoutIdempotencyRecords", (string)null);
                 });

@@ -28,7 +28,7 @@ namespace HamaraCommerce.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> Index(string? trackingNumber, string? email)
+        public async Task<IActionResult> Index(string? trackingNumber, string? email, string? guestToken = null)
         {
             // Initial GET with no query parameters
             if (string.IsNullOrWhiteSpace(trackingNumber) && string.IsNullOrWhiteSpace(email))
@@ -39,10 +39,30 @@ namespace HamaraCommerce.Controllers
                     var user = await _userManager.GetUserAsync(User);
                     if (user != null)
                     {
+                        // Claim guest orders if email verified
+                        if (user.EmailConfirmed && !string.IsNullOrWhiteSpace(user.Email))
+                        {
+                            var normalizedEmail = user.Email.Trim().ToLower();
+                            var guestOrders = await _context.Orders
+                                .Where(o => o.UserId == null && o.CustomerEmail.ToLower() == normalizedEmail)
+                                .ToListAsync();
+
+                            if (guestOrders.Any())
+                            {
+                                foreach (var go in guestOrders)
+                                {
+                                    go.UserId = user.Id;
+                                    go.GuestAccessToken = null;
+                                    go.GuestAccessExpiry = null;
+                                }
+                                await _context.SaveChangesAsync();
+                            }
+                        }
+
                         var userOrder = await _context.Orders
                             .Include(o => o.Items)
                             .Include(o => o.Payments)
-                            .Where(o => o.UserId == user.Id || o.CustomerEmail == user.Email)
+                            .Where(o => o.UserId == user.Id)
                             .OrderByDescending(o => o.OrderDate)
                             .FirstOrDefaultAsync();
 
@@ -73,7 +93,7 @@ namespace HamaraCommerce.Controllers
 
             // Authentication context
             var currentUser = User.Identity?.IsAuthenticated == true ? await _userManager.GetUserAsync(User) : null;
-            bool isUserOwner = false;
+            bool isAuthorized = false;
 
             var order = await _context.Orders
                 .Include(o => o.Items)
@@ -82,23 +102,47 @@ namespace HamaraCommerce.Controllers
 
             if (order != null)
             {
-                // Check authorization:
-                // 1. Authenticated customer who owns the order
-                if (currentUser != null && (order.UserId == currentUser.Id || order.CustomerEmail.ToLower() == (currentUser.Email ?? "").ToLower() || User.IsInRole("Admin")))
+                // Check 1: Registered user order (strictly owned by UserId or Admin)
+                if (order.UserId != null)
                 {
-                    isUserOwner = true;
+                    if (User.IsInRole("Admin") || (currentUser != null && order.UserId == currentUser.Id))
+                    {
+                        isAuthorized = true;
+                    }
                 }
-                // 2. Guest tracking with exact matching email
-                else if (!string.IsNullOrEmpty(mail) && order.CustomerEmail.ToLower() == mail)
+                // Check 2: Guest order
+                else
                 {
-                    isUserOwner = true;
+                    // If logged in with verified email matching the order, claim order and allow access
+                    if (currentUser != null && currentUser.EmailConfirmed && string.Equals(order.CustomerEmail, currentUser.Email, StringComparison.OrdinalIgnoreCase))
+                    {
+                        order.UserId = currentUser.Id;
+                        order.GuestAccessToken = null;
+                        order.GuestAccessExpiry = null;
+                        await _context.SaveChangesAsync();
+                        isAuthorized = true;
+                    }
+                    else
+                    {
+                        // Anonymous access: MUST match billing email AND valid unexpired GuestAccessToken
+                        var sessionToken = HttpContext.Session.GetString($"GuestOrderToken_{order.OrderNumber}");
+                        var providedToken = !string.IsNullOrEmpty(guestToken) ? guestToken.Trim() : sessionToken;
+
+                        if (!string.IsNullOrEmpty(mail) && string.Equals(order.CustomerEmail, mail, StringComparison.OrdinalIgnoreCase) &&
+                            !string.IsNullOrEmpty(providedToken) && !string.IsNullOrEmpty(order.GuestAccessToken) &&
+                            string.Equals(order.GuestAccessToken, providedToken, StringComparison.Ordinal) &&
+                            (order.GuestAccessExpiry == null || order.GuestAccessExpiry.Value >= DateTime.UtcNow))
+                        {
+                            isAuthorized = true;
+                        }
+                    }
                 }
             }
 
-            if (!isUserOwner || order == null)
+            if (!isAuthorized || order == null)
             {
                 // Generic secure message: does not reveal whether the tracking number or email exists
-                ViewBag.NotFoundMessage = "No matching order found for the provided details. Please verify your tracking number and matching email address.";
+                ViewBag.NotFoundMessage = "No matching order found for the provided details. For guest orders, please use the tracking link sent to your email or sign in with your verified account.";
                 return View((Order?)null);
             }
 

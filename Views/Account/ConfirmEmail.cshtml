@@ -1,0 +1,51 @@
+﻿@{
+    ViewData["Title"] = "Email Verification";
+    var isError = ViewBag.ErrorMessage != null;
+}
+
+<div class="row justify-content-center py-5 reveal-on-scroll">
+    <div class="col-md-6 col-lg-5 col-xl-4 text-center">
+        <div class="card-glass rounded-4 p-4 p-md-5"
+             style="background:var(--bg-glass); backdrop-filter:blur(24px); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-xl);">
+            
+            @if (isError)
+            {
+                <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3 p-3"
+                     style="width: 72px; height: 72px; background: rgba(239, 68, 68, 0.15); color: #ef4444; box-shadow: 0 0 25px rgba(239, 68, 68, 0.25);">
+                    <i class="fa-solid fa-triangle-exclamation fa-2x"></i>
+                </div>
+                <h1 class="h4 font-heading fw-bold mb-2" style="color:var(--text-primary);">Verification Failed</h1>
+                <p class="small mb-4" style="color:var(--text-muted);">
+                    @ViewBag.ErrorMessage
+                </p>
+                <div class="d-flex flex-column gap-2">
+                    <a asp-action="ResendEmailConfirmation" class="btn btn-primary-custom py-2.5 rounded-pill">
+                        <i class="fa-solid fa-paper-plane me-1"></i>Request New Link
+                    </a>
+                    <a asp-action="Login" class="btn btn-glass py-2 rounded-pill">
+                        Return to Sign In
+                    </a>
+                </div>
+            }
+            else
+            {
+                <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3 p-3"
+                     style="width: 72px; height: 72px; background: rgba(16, 185, 129, 0.15); color: #10b981; box-shadow: 0 0 25px rgba(16, 185, 129, 0.25);">
+                    <i class="fa-solid fa-circle-check fa-2x"></i>
+                </div>
+                <h1 class="h4 font-heading fw-bold mb-2" style="color:var(--text-primary);">Email Verified!</h1>
+                <p class="small mb-4" style="color:var(--text-muted);">
+                    Thank you for verifying your email address. Your account is now fully active, and your previous order history has been linked.
+                </p>
+                <div class="d-flex flex-column gap-2">
+                    <a asp-action="Index" class="btn btn-primary-custom py-2.5 rounded-pill">
+                        <i class="fa-solid fa-user me-1"></i>Go to Account Dashboard
+                    </a>
+                    <a asp-controller="Shop" asp-action="Index" class="btn btn-glass py-2 rounded-pill">
+                        Start Shopping
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+</div>

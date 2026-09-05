@@ -4,8 +4,10 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using HamaraCommerce.Data;
@@ -14,6 +16,7 @@ using HamaraCommerce.Services;
 
 namespace HamaraCommerce.Controllers
 {
+    [EnableRateLimiting("AuthPolicy")]
     public class AccountController : Controller
     {
         private readonly UserManager<ApplicationUser> _userManager;
@@ -45,6 +48,31 @@ namespace HamaraCommerce.Controllers
             _logger = logger;
         }
 
+        private async Task ClaimGuestOrdersAsync(ApplicationUser user)
+        {
+            if (user == null || !user.EmailConfirmed || string.IsNullOrWhiteSpace(user.Email))
+            {
+                return;
+            }
+
+            var normalizedEmail = user.Email.Trim().ToLower();
+            var guestOrders = await _context.Orders
+                .Where(o => o.UserId == null && o.CustomerEmail.ToLower() == normalizedEmail)
+                .ToListAsync();
+
+            if (guestOrders.Any())
+            {
+                foreach (var order in guestOrders)
+                {
+                    order.UserId = user.Id;
+                    order.GuestAccessToken = null;
+                    order.GuestAccessExpiry = null;
+                }
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Claimed {Count} guest orders for verified user {UserId} ({Email})", guestOrders.Count, user.Id, user.Email);
+            }
+        }
+
         // ==========================================
         // 1. CUSTOMER DASHBOARD (AUTHENTICATED)
         // ==========================================
@@ -55,9 +83,14 @@ namespace HamaraCommerce.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Challenge();
 
+            if (user.EmailConfirmed)
+            {
+                await ClaimGuestOrdersAsync(user);
+            }
+
             var userOrders = await _context.Orders
                 .Include(o => o.Items)
-                .Where(o => o.UserId == user.Id || o.CustomerEmail == user.Email)
+                .Where(o => o.UserId == user.Id)
                 .OrderByDescending(o => o.OrderDate)
                 .ToListAsync();
 
@@ -89,10 +122,15 @@ namespace HamaraCommerce.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Challenge();
 
+            if (user.EmailConfirmed)
+            {
+                await ClaimGuestOrdersAsync(user);
+            }
+
             int pageSize = 6;
             var query = _context.Orders
                 .Include(o => o.Items)
-                .Where(o => o.UserId == user.Id || o.CustomerEmail == user.Email)
+                .Where(o => o.UserId == user.Id)
                 .OrderByDescending(o => o.OrderDate);
 
             int totalCount = await query.CountAsync();
@@ -125,6 +163,11 @@ namespace HamaraCommerce.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Challenge();
 
+            if (user.EmailConfirmed)
+            {
+                await ClaimGuestOrdersAsync(user);
+            }
+
             var order = await _context.Orders
                 .Include(o => o.Items)
                 .Include(o => o.Payments)
@@ -132,8 +175,8 @@ namespace HamaraCommerce.Controllers
 
             if (order == null) return NotFound();
 
-            // Strict privacy check: Must belong to current customer unless Admin
-            if (!User.IsInRole("Admin") && order.UserId != user.Id && order.CustomerEmail.ToLower() != (user.Email ?? "").ToLower())
+            // Strict privacy check: Must belong to current customer by UserId unless Admin
+            if (!User.IsInRole("Admin") && order.UserId != user.Id)
             {
                 _logger.LogWarning("Unauthorized attempt by User {UserId} to access Order {OrderNumber}", user.Id, order.OrderNumber);
                 return Forbid();
@@ -153,13 +196,18 @@ namespace HamaraCommerce.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Challenge();
 
+            if (user.EmailConfirmed)
+            {
+                await ClaimGuestOrdersAsync(user);
+            }
+
             var order = await _context.Orders
                 .Include(o => o.Items)
                 .FirstOrDefaultAsync(o => o.OrderNumber == model.OrderNumber.Trim());
 
             if (order == null) return NotFound();
 
-            if (!User.IsInRole("Admin") && order.UserId != user.Id && order.CustomerEmail.ToLower() != (user.Email ?? "").ToLower())
+            if (!User.IsInRole("Admin") && order.UserId != user.Id)
             {
                 return Forbid();
             }
@@ -222,10 +270,15 @@ namespace HamaraCommerce.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Challenge();
 
+            if (user.EmailConfirmed)
+            {
+                await ClaimGuestOrdersAsync(user);
+            }
+
             var order = await _context.Orders.FirstOrDefaultAsync(o => o.OrderNumber == model.OrderNumber.Trim());
             if (order == null) return NotFound();
 
-            if (!User.IsInRole("Admin") && order.UserId != user.Id && order.CustomerEmail.ToLower() != (user.Email ?? "").ToLower())
+            if (!User.IsInRole("Admin") && order.UserId != user.Id)
             {
                 return Forbid();
             }
@@ -254,14 +307,10 @@ namespace HamaraCommerce.Controllers
         // ==========================================
         // 6. CUSTOMER PRINTABLE INVOICE
         // ==========================================
-        [Authorize]
         [HttpGet]
-        public async Task<IActionResult> Invoice(string id)
+        public async Task<IActionResult> Invoice(string id, [FromQuery] string? guestToken = null)
         {
             if (string.IsNullOrWhiteSpace(id)) return NotFound();
-
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null) return Challenge();
 
             var order = await _context.Orders
                 .Include(o => o.Items)
@@ -270,12 +319,42 @@ namespace HamaraCommerce.Controllers
 
             if (order == null) return NotFound();
 
-            if (!User.IsInRole("Admin") && order.UserId != user.Id && order.CustomerEmail.ToLower() != (user.Email ?? "").ToLower())
+            // Check 1: Authenticated User (Admin or Owner)
+            if (User.Identity?.IsAuthenticated == true)
+            {
+                var user = await _userManager.GetUserAsync(User);
+                if (user != null && user.EmailConfirmed)
+                {
+                    await ClaimGuestOrdersAsync(user);
+                }
+
+                if (User.IsInRole("Admin") || (user != null && order.UserId == user.Id))
+                {
+                    return View(order);
+                }
+            }
+
+            // Check 2: Anonymous / Guest Access via GuestAccessToken
+            if (order.UserId == null)
+            {
+                var sessionToken = HttpContext.Session.GetString($"GuestOrderToken_{order.OrderNumber}");
+                var providedToken = !string.IsNullOrEmpty(guestToken) ? guestToken.Trim() : sessionToken;
+
+                if (!string.IsNullOrEmpty(providedToken) &&
+                    !string.IsNullOrEmpty(order.GuestAccessToken) &&
+                    string.Equals(order.GuestAccessToken, providedToken, StringComparison.Ordinal) &&
+                    (order.GuestAccessExpiry == null || order.GuestAccessExpiry.Value >= DateTime.UtcNow))
+                {
+                    return View(order);
+                }
+            }
+
+            if (User.Identity?.IsAuthenticated == true)
             {
                 return Forbid();
             }
 
-            return View(order);
+            return Challenge();
         }
 
         // ==========================================
@@ -568,11 +647,20 @@ namespace HamaraCommerce.Controllers
                         return View(model);
                     }
 
+                    if (!user.EmailConfirmed)
+                    {
+                        ViewBag.ShowResendConfirmation = true;
+                        ViewBag.UnconfirmedEmail = user.Email;
+                        ModelState.AddModelError(string.Empty, "Your email address has not been verified. Please verify your email before signing in.");
+                        return View(model);
+                    }
+
                     var result = await _signInManager.PasswordSignInAsync(user.UserName!, model.Password, model.RememberMe, lockoutOnFailure: true);
 
                     if (result.Succeeded)
                     {
                         _logger.LogInformation("User {Email} logged in successfully.", model.Email);
+                        await ClaimGuestOrdersAsync(user);
                         await _cartService.MergeGuestCartAsync(user.Id);
 
                         if (string.IsNullOrEmpty(returnUrl) || returnUrl == "/" || returnUrl.Equals(Url.Action("Index", "Home"), StringComparison.OrdinalIgnoreCase))
@@ -633,7 +721,8 @@ namespace HamaraCommerce.Controllers
                     FullName = model.FullName,
                     PhoneNumber = model.PhoneNumber,
                     CreatedAt = DateTime.UtcNow,
-                    IsActive = true
+                    IsActive = true,
+                    EmailConfirmed = false
                 };
 
                 var result = await _userManager.CreateAsync(user, model.Password);
@@ -642,24 +731,22 @@ namespace HamaraCommerce.Controllers
                     await _userManager.AddToRoleAsync(user, "Customer");
                     _logger.LogInformation("User {Email} created a new customer account.", model.Email);
 
-                    await _signInManager.SignInAsync(user, isPersistent: false);
-                    await _cartService.MergeGuestCartAsync(user.Id);
-
-                    // Send Account Welcome / Verification Email
+                    // Send Account Verification Email (do NOT auto sign in unverified user)
                     try
                     {
                         var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-                        var callbackUrl = Url.Action("ConfirmEmail", "Account", new { userId = user.Id, code = token }, protocol: Request.Scheme) ?? $"{Request.Scheme}://{Request.Host}/Account";
+                        var callbackUrl = Url.Action("ConfirmEmail", "Account", new { userId = user.Id, code = token }, protocol: Request.Scheme) 
+                                          ?? $"{Request.Scheme}://{Request.Host}/Account/ConfirmEmail?userId={user.Id}&code={Uri.EscapeDataString(token)}";
                         var emailBody = _emailTemplateService.GenerateAccountVerificationEmail(user.FullName, callbackUrl);
-                        _ = _emailSender.SendEmailAsync(user.Email!, "Welcome to Hamara Commerce - Account Verification", emailBody);
+                        _ = _emailSender.SendEmailAsync(user.Email!, "Verify Your Email - Hamara Commerce", emailBody);
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to dispatch welcome email to {Email}", user.Email);
+                        _logger.LogWarning(ex, "Failed to dispatch verification email to {Email}", user.Email);
                     }
 
-                    TempData["SuccessMessage"] = $"Welcome to Hamara Commerce, {user.FullName}! Your account is ready.";
-                    return RedirectToLocal(returnUrl);
+                    TempData["SuccessMessage"] = "Account registered successfully! A confirmation link has been sent to your email. Please verify your email before logging in.";
+                    return RedirectToAction(nameof(Login));
                 }
 
                 foreach (var error in result.Errors)
@@ -750,6 +837,75 @@ namespace HamaraCommerce.Controllers
         public IActionResult ResetPasswordConfirmation()
         {
             return View();
+        }
+
+        // ==========================================
+        // 12. EMAIL CONFIRMATION & RESEND
+        // ==========================================
+        [HttpGet]
+        public async Task<IActionResult> ConfirmEmail(string userId, string code)
+        {
+            if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(code))
+            {
+                return RedirectToAction("Index", "Home");
+            }
+
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+            {
+                return NotFound($"Unable to load user with ID '{userId}'.");
+            }
+
+            var result = await _userManager.ConfirmEmailAsync(user, code);
+            if (!result.Succeeded)
+            {
+                ViewBag.ErrorMessage = "Error confirming your email. The link may have expired or is invalid.";
+                return View("ConfirmEmail");
+            }
+
+            // Email confirmed! Claim prior guest orders placed with this email
+            await ClaimGuestOrdersAsync(user);
+
+            // Auto-sign-in upon verified confirmation
+            await _signInManager.SignInAsync(user, isPersistent: false);
+            await _cartService.MergeGuestCartAsync(user.Id);
+
+            TempData["SuccessMessage"] = "Your email has been verified! Welcome to Hamara Commerce.";
+            return View("ConfirmEmail");
+        }
+
+        [HttpGet]
+        public IActionResult ResendEmailConfirmation(string? email = null)
+        {
+            return View(new ResendEmailConfirmationViewModel { Email = email ?? string.Empty });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ResendEmailConfirmation(ResendEmailConfirmationViewModel model)
+        {
+            if (!ModelState.IsValid) return View(model);
+
+            var user = await _userManager.FindByEmailAsync(model.Email.Trim());
+            if (user != null && !user.EmailConfirmed && user.IsActive)
+            {
+                try
+                {
+                    var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                    var callbackUrl = Url.Action("ConfirmEmail", "Account", new { userId = user.Id, code = token }, protocol: Request.Scheme)
+                                      ?? $"{Request.Scheme}://{Request.Host}/Account/ConfirmEmail?userId={user.Id}&code={Uri.EscapeDataString(token)}";
+                    var emailBody = _emailTemplateService.GenerateAccountVerificationEmail(user.FullName, callbackUrl);
+                    _ = _emailSender.SendEmailAsync(user.Email!, "Verify Your Email - Hamara Commerce", emailBody);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to send email verification to {Email}", user.Email);
+                }
+            }
+
+            // Always display confirmation to prevent email enumeration
+            TempData["SuccessMessage"] = "If an account with that email exists, a verification link has been sent. Please check your inbox.";
+            return RedirectToAction(nameof(Login));
         }
 
         [HttpPost]

@@ -20,6 +20,57 @@ namespace HamaraCommerce.Services
 
         public bool IsDevelopmentSandboxAvailable => _env.IsDevelopment();
 
+        public System.Collections.Generic.IEnumerable<PaymentMethodOption> GetAvailablePaymentMethods()
+        {
+            var methods = new System.Collections.Generic.List<PaymentMethodOption>
+            {
+                new PaymentMethodOption
+                {
+                    Id = "CashOnDelivery",
+                    Name = "Cash on Delivery (COD)",
+                    Description = "Pay in cash safely upon package arrival at your doorstep.",
+                    IconClass = "fa-solid fa-money-bill-wave text-success",
+                    BadgeText = "Recommended",
+                    IsTestOnly = false,
+                    RequiresCardInputs = false
+                }
+            };
+
+            if (_env.IsDevelopment())
+            {
+                methods.Add(new PaymentMethodOption
+                {
+                    Id = "SandboxCard",
+                    Name = "Sandbox Test Card",
+                    Description = "Simulated bank card processing for development and automated testing.",
+                    IconClass = "fa-solid fa-vial-circle-check text-info",
+                    BadgeText = "Dev / Test Only",
+                    IsTestOnly = true,
+                    RequiresCardInputs = true
+                });
+            }
+
+            return methods;
+        }
+
+        public bool IsMethodSupported(string paymentMethod)
+        {
+            if (string.IsNullOrWhiteSpace(paymentMethod)) return false;
+            var normalized = paymentMethod.Trim();
+            if (string.Equals(normalized, "CashOnDelivery", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "COD", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+            if (_env.IsDevelopment() && (
+                string.Equals(normalized, "SandboxCard", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "CreditCard", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+            return false;
+        }
+
         public async Task<PaymentProcessingResult> ProcessPaymentAsync(PaymentProcessingRequest request)
         {
             await Task.Delay(100); // Simulate network latency

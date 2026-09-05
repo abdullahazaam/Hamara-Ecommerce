@@ -26,6 +26,16 @@
                     <div asp-validation-summary="ModelOnly" class="alert alert-danger small rounded-3 mb-3"></div>
                 }
 
+                @if (ViewBag.ShowResendConfirmation == true)
+                {
+                    <div class="alert alert-warning small rounded-3 mb-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                        <span>Email not verified?</span>
+                        <a asp-action="ResendEmailConfirmation" asp-route-email="@ViewBag.UnconfirmedEmail" class="btn btn-sm btn-outline-dark rounded-pill px-3 fw-bold">
+                            <i class="fa-solid fa-paper-plane me-1"></i>Resend Link
+                        </a>
+                    </div>
+                }
+
                 <div class="mb-3">
                     <label asp-for="Email" class="form-label small fw-bold" style="color:var(--text-muted);">Email Address</label>
                     <div class="input-group">
@@ -56,9 +66,13 @@
                     <i class="fa-solid fa-arrow-right-to-bracket me-1"></i>Sign In
                 </button>
 
-                <div class="text-center small" style="color:var(--text-muted);">
+                <div class="text-center small mb-2" style="color:var(--text-muted);">
                     Don't have an account yet? 
                     <a asp-action="Register" asp-route-returnUrl="@ViewData["ReturnUrl"]" class="fw-bold text-decoration-none" style="color:var(--brand-primary);">Create Free Account</a>
+                </div>
+
+                <div class="text-center text-xs" style="color:var(--text-muted);">
+                    Need help verifying? <a asp-action="ResendEmailConfirmation" class="text-decoration-none" style="color:var(--text-secondary);">Resend verification email</a>
                 </div>
             </form>
         </div>

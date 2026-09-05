@@ -74,5 +74,9 @@ namespace HamaraCommerce.Models
         
         public string? CouponCode { get; set; }
         public string? CustomerNotes { get; set; }
+        
+        // Secure, order-scoped expiring token for anonymous guest confirmation, tracking & invoices
+        public string? GuestAccessToken { get; set; }
+        public DateTime? GuestAccessExpiry { get; set; }
     }
 }

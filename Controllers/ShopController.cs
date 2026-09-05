@@ -324,7 +324,7 @@ namespace HamaraCommerce.Controllers
 
             // Real Verified Purchase verification in database
             var hasPurchased = await _context.Orders
-                .AnyAsync(o => (o.UserId == user.Id || o.CustomerEmail.ToLower() == (user.Email ?? "").ToLower()) &&
+                .AnyAsync(o => (o.UserId == user.Id || (user.EmailConfirmed && o.UserId == null && o.CustomerEmail.ToLower() == (user.Email ?? "").ToLower())) &&
                                o.Items.Any(i => i.ProductId == productId) &&
                                o.Status != OrderStatus.Cancelled);
 

@@ -2,6 +2,7 @@ using System;
 using System.Data;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -56,6 +57,15 @@ namespace HamaraCommerce.Controllers
         [HttpGet]
         public async Task<IActionResult> Index()
         {
+            var user = User.Identity?.IsAuthenticated == true ? await _userManager.GetUserAsync(User) : null;
+
+            // Enforce EnableGuestCheckout
+            var storeSettings = _shippingTaxService.GetStoreSettings();
+            if (!storeSettings.EnableGuestCheckout && user == null)
+            {
+                TempData["ErrorMessage"] = "Guest checkout is disabled. Please log in or create an account to proceed.";
+                return RedirectToAction("Login", "Account", new { returnUrl = "/Checkout" });
+            }
             var cart = await _cartService.GetCartViewModelAsync();
             if (!cart.Items.Any() || cart.SubTotal <= 0)
             {
@@ -69,7 +79,6 @@ namespace HamaraCommerce.Controllers
                 return RedirectToAction("Index", "Cart");
             }
 
-            var user = User.Identity?.IsAuthenticated == true ? await _userManager.GetUserAsync(User) : null;
             var defaultAddr = user?.SavedAddresses.FirstOrDefault(a => a.IsDefault) ?? user?.SavedAddresses.FirstOrDefault();
 
             // Generate fresh anti-duplicate Idempotency Token
@@ -136,23 +145,202 @@ namespace HamaraCommerce.Controllers
         public async Task<IActionResult> ProcessOrder(CheckoutFormViewModel model)
         {
             var user = User.Identity?.IsAuthenticated == true ? await _userManager.GetUserAsync(User) : null;
+
+            // 0. Enforce EnableGuestCheckout
+            var storeSettings = _shippingTaxService.GetStoreSettings();
+            if (!storeSettings.EnableGuestCheckout && user == null)
+            {
+                TempData["ErrorMessage"] = "Guest checkout is disabled. Please log in or create an account to proceed.";
+                return RedirectToAction("Login", "Account", new { returnUrl = "/Checkout" });
+            }
+
             var rawCart = await _cartService.GetRawCartDataAsync();
             var cart = await _pricingService.CalculateCartAsync(rawCart, user?.Id, model.ShippingMethod);
             model.Cart = cart;
             model.IsDevelopmentSandboxEnabled = _paymentGateway.IsDevelopmentSandboxAvailable;
 
-            // 1. Idempotency Check
-            var storedToken = HttpContext.Session.GetString(IdempotencySessionKey);
-            if (string.IsNullOrEmpty(storedToken) || storedToken != model.IdempotencyToken)
+            // 0.1 Validate Payment Method Support
+            if (!_paymentGateway.IsMethodSupported(model.PaymentMethod))
             {
-                _logger.LogWarning("Duplicate or invalid checkout submission detected with token: {Token}", model.IdempotencyToken);
-                TempData["ErrorMessage"] = "Duplicate or expired submission detected. Please review your cart and try again.";
-                return RedirectToAction("Index", "Cart");
+                ModelState.AddModelError(nameof(model.PaymentMethod), $"The payment method '{model.PaymentMethod}' is not currently available. Please select Cash on Delivery.");
+            }
+
+            // 1. Idempotency Check with Database Persistence, State Machine & Owner Binding
+            if (string.IsNullOrWhiteSpace(model.IdempotencyToken))
+            {
+                model.IdempotencyToken = Guid.NewGuid().ToString("N");
+                HttpContext.Session.SetString(IdempotencySessionKey, model.IdempotencyToken);
+            }
+
+            var emailLower = model.CustomerEmail?.Trim().ToLowerInvariant() ?? string.Empty;
+            string requestHash = ComputeRequestHash(model, cart);
+
+            var existingRecord = await _context.CheckoutIdempotencyRecords
+                .FirstOrDefaultAsync(r => r.IdempotencyKey == model.IdempotencyToken);
+
+            bool isPaymentRecovered = false;
+
+            if (existingRecord != null)
+            {
+                // Expiry Check
+                if (existingRecord.ExpiresAt < DateTime.UtcNow)
+                {
+                    _logger.LogWarning("Checkout idempotency token expired: {Token}", model.IdempotencyToken);
+                    ModelState.AddModelError(string.Empty, "This checkout session has expired. Please return to your cart and start a fresh checkout.");
+                    Response.StatusCode = StatusCodes.Status400BadRequest;
+                    return View("Index", model);
+                }
+
+                // Verify Owner Binding
+                bool ownerValid = true;
+                if (user != null)
+                {
+                    if (!string.IsNullOrEmpty(existingRecord.UserId) && existingRecord.UserId != user.Id)
+                    {
+                        ownerValid = false;
+                    }
+                    else if (string.IsNullOrEmpty(existingRecord.UserId) && !string.Equals(existingRecord.CustomerEmail, emailLower, StringComparison.OrdinalIgnoreCase))
+                    {
+                        ownerValid = false;
+                    }
+                }
+                else
+                {
+                    if (!string.IsNullOrEmpty(existingRecord.UserId))
+                    {
+                        ownerValid = false;
+                    }
+                    else if (!string.Equals(existingRecord.CustomerEmail, emailLower, StringComparison.OrdinalIgnoreCase))
+                    {
+                        ownerValid = false;
+                    }
+                }
+
+                if (!ownerValid)
+                {
+                    _logger.LogWarning("Checkout idempotency owner mismatch for token {Token}", model.IdempotencyToken);
+                    TempData["ErrorMessage"] = "Invalid checkout session owner. Please review your cart and try again.";
+                    return RedirectToAction("Index", "Cart");
+                }
+
+                // Canonical Request Hash Matching: reject changed payloads immediately
+                if (!string.Equals(existingRecord.RequestHash, requestHash, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning("Checkout idempotency hash mismatch for token {Token}", model.IdempotencyToken);
+                    ModelState.AddModelError(string.Empty, "Idempotency key reused with different request parameters. Please return to your cart and submit a fresh order.");
+                    Response.StatusCode = StatusCodes.Status400BadRequest;
+                    return View("Index", model);
+                }
+
+                // Status Evaluation
+                if (existingRecord.Status == IdempotencyStatus.Completed && existingRecord.OrderId.HasValue && !string.IsNullOrEmpty(existingRecord.OrderNumber))
+                {
+                    _logger.LogInformation("Returning existing order {OrderNumber} for completed idempotent replay", existingRecord.OrderNumber);
+
+                    if (!string.IsNullOrEmpty(existingRecord.GuestAccessToken))
+                    {
+                        HttpContext.Session.SetString($"GuestOrderToken_{existingRecord.OrderNumber}", existingRecord.GuestAccessToken);
+                    }
+
+                    return RedirectToAction(nameof(OrderConfirmation), new
+                    {
+                        orderNumber = existingRecord.OrderNumber,
+                        guestToken = existingRecord.GuestAccessToken
+                    });
+                }
+
+                if (existingRecord.Status == IdempotencyStatus.Processing)
+                {
+                    // Check lock timeout (2 minutes)
+                    if (existingRecord.LockedAt != null && DateTime.UtcNow - existingRecord.LockedAt.Value < TimeSpan.FromMinutes(2))
+                    {
+                        _logger.LogWarning("Checkout submission already in progress for token {Token}", model.IdempotencyToken);
+                        Response.StatusCode = StatusCodes.Status409Conflict;
+                        TempData["ErrorMessage"] = "A checkout submission is already being processed for this order. Please wait a moment.";
+                        return RedirectToAction("Index", "Cart");
+                    }
+                    else
+                    {
+                        existingRecord.LockedAt = DateTime.UtcNow;
+                        await _context.SaveChangesAsync();
+                    }
+                }
+                else if (existingRecord.Status == IdempotencyStatus.PaymentCompleted ||
+                         (existingRecord.Status == IdempotencyStatus.RecoveryRequired && !string.IsNullOrEmpty(existingRecord.PaymentReference)))
+                {
+                    // Safe Recovery Mode: payment already charged; proceed to finalize order without re-charging
+                    isPaymentRecovered = true;
+                    existingRecord.Status = IdempotencyStatus.Processing;
+                    existingRecord.LockedAt = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
+                }
+                else if (existingRecord.Status == IdempotencyStatus.Failed)
+                {
+                    existingRecord.Status = IdempotencyStatus.Processing;
+                    existingRecord.LockedAt = DateTime.UtcNow;
+                    existingRecord.FailureReason = null;
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            // Atomic Insert for new record
+            CheckoutIdempotencyRecord currentRecord;
+            if (existingRecord != null)
+            {
+                currentRecord = existingRecord;
+            }
+            else
+            {
+                var newRecord = new CheckoutIdempotencyRecord
+                {
+                    IdempotencyKey = model.IdempotencyToken,
+                    UserId = user?.Id,
+                    CustomerEmail = emailLower,
+                    RequestHash = requestHash,
+                    Status = IdempotencyStatus.Processing,
+                    LockedAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow,
+                    ExpiresAt = DateTime.UtcNow.AddHours(24)
+                };
+
+                _context.CheckoutIdempotencyRecords.Add(newRecord);
+                try
+                {
+                    await _context.SaveChangesAsync();
+                    currentRecord = newRecord;
+                }
+                catch (DbUpdateException)
+                {
+                    // Concurrency race: another thread just inserted this key
+                    existingRecord = await _context.CheckoutIdempotencyRecords.AsNoTracking()
+                        .FirstOrDefaultAsync(r => r.IdempotencyKey == model.IdempotencyToken);
+
+                    if (existingRecord?.Status == IdempotencyStatus.Completed && existingRecord.OrderNumber != null)
+                    {
+                        if (!string.IsNullOrEmpty(existingRecord.GuestAccessToken))
+                        {
+                            HttpContext.Session.SetString($"GuestOrderToken_{existingRecord.OrderNumber}", existingRecord.GuestAccessToken);
+                        }
+                        return RedirectToAction(nameof(OrderConfirmation), new
+                        {
+                            orderNumber = existingRecord.OrderNumber,
+                            guestToken = existingRecord.GuestAccessToken
+                        });
+                    }
+
+                    Response.StatusCode = StatusCodes.Status409Conflict;
+                    TempData["ErrorMessage"] = "A checkout submission is already being processed for this order. Please wait a moment.";
+                    return RedirectToAction("Index", "Cart");
+                }
             }
 
             // 2. Cart Validation
             if (!cart.Items.Any() || cart.SubTotal <= 0)
             {
+                currentRecord.Status = IdempotencyStatus.Failed;
+                currentRecord.FailureReason = "Cart empty";
+                await _context.SaveChangesAsync();
+
                 ModelState.AddModelError(string.Empty, "Your cart is empty or has no available items.");
                 return View("Index", model);
             }
@@ -160,12 +348,15 @@ namespace HamaraCommerce.Controllers
             var validItems = cart.Items.Where(i => i.IsAvailable && i.Quantity > 0).ToList();
             if (!validItems.Any())
             {
+                currentRecord.Status = IdempotencyStatus.Failed;
+                currentRecord.FailureReason = "All items out of stock";
+                await _context.SaveChangesAsync();
+
                 ModelState.AddModelError(string.Empty, "All items in your cart are currently out of stock.");
                 return View("Index", model);
             }
 
             // 3. Price-Change Revalidation
-            // If the customer saw an old total and prices/taxes/delivery changed in between, require review
             if (model.ExpectedGrandTotal.HasValue && Math.Abs(cart.GrandTotal - model.ExpectedGrandTotal.Value) > 0.01m)
             {
                 _logger.LogWarning("Checkout price mismatch detected. Expected: {Expected}, Actual: {Actual}",
@@ -174,10 +365,17 @@ namespace HamaraCommerce.Controllers
                 model.PriceChangeWarning = $"Your order total has changed from {_shippingTaxService.FormatCurrency(model.ExpectedGrandTotal.Value)} to {cart.FormattedGrandTotal} due to updated prices, taxes, or delivery fees. Please review the updated total and submit again to confirm.";
                 model.ExpectedGrandTotal = cart.GrandTotal;
 
+                currentRecord.Status = IdempotencyStatus.Failed;
+                currentRecord.FailureReason = "Price change revalidation";
+                await _context.SaveChangesAsync();
+
                 // Refresh idempotency token so resubmission succeeds smoothly
                 var refreshedToken = Guid.NewGuid().ToString("N");
                 HttpContext.Session.SetString(IdempotencySessionKey, refreshedToken);
                 model.IdempotencyToken = refreshedToken;
+
+                ModelState.Remove(nameof(model.IdempotencyToken));
+                ModelState.Remove(nameof(model.ExpectedGrandTotal));
 
                 ModelState.AddModelError(string.Empty, model.PriceChangeWarning);
                 return View("Index", model);
@@ -190,27 +388,107 @@ namespace HamaraCommerce.Controllers
             if (!isShippingValid)
             {
                 ModelState.AddModelError(nameof(model.ShippingMethod), "Please select a valid shipping delivery option.");
-                return View("Index", model);
             }
 
-            // 5. Model State Validation
+            // 5. Limited Coupon Verified Eligibility Validation
+            if (cart.CouponIsValid && !string.IsNullOrEmpty(cart.AppliedCouponCode))
+            {
+                var couponCheck = await _context.Coupons.AsNoTracking().FirstOrDefaultAsync(c => c.Code == cart.AppliedCouponCode);
+                if (couponCheck != null && couponCheck.PerUserLimit > 0)
+                {
+                    if (user == null || !user.EmailConfirmed)
+                    {
+                        currentRecord.Status = IdempotencyStatus.Failed;
+                        currentRecord.FailureReason = "Limited coupon requires account with verified email";
+                        await _context.SaveChangesAsync();
+
+                        ModelState.AddModelError(string.Empty, $"Coupon '{couponCheck.Code}' has customer usage limits and requires an account with a verified email address. Entered email alone is not eligible.");
+                        return View("Index", model);
+                    }
+                }
+            }
+
+            // 6. Model State Validation
             if (!ModelState.IsValid)
             {
+                currentRecord.Status = IdempotencyStatus.Failed;
+                currentRecord.FailureReason = "Validation errors";
+                await _context.SaveChangesAsync();
+
+                HttpContext.Session.SetString(IdempotencySessionKey, model.IdempotencyToken);
+                ModelState.Remove(nameof(model.IdempotencyToken));
                 return View("Index", model);
             }
 
-            // Generate Cryptographically Strong Public Order Reference
+            // Authoritative Order Reference & Financials
             var publicOrderNumber = GenerateSecureOrderNumber();
             var trackingNumber = $"TRK-{RandomNumberGenerator.GetInt32(10000000, 99999999)}";
 
-            // Authoritative Financials (using unified PricingService calculation)
             decimal subtotal = cart.SubTotal;
             decimal couponDiscount = cart.CouponDiscountAmount;
             decimal taxAmount = cart.EstimatedTax;
             decimal totalAmount = cart.GrandTotal;
 
             // =========================================================================
-            // ATOMIC DATABASE TRANSACTION WITH CONCURRENCY & STOCK VERIFICATION
+            // 7. EXTERNAL PAYMENT GATEWAY (OUTSIDE RETRYABLE DATABASE TRANSACTION)
+            // =========================================================================
+            PaymentProcessingResult paymentResult;
+
+            if (isPaymentRecovered && !string.IsNullOrEmpty(currentRecord.PaymentReference))
+            {
+                _logger.LogInformation("Checkout recovering previously authorized payment {Ref} for idempotency token {Token}",
+                    currentRecord.PaymentReference, currentRecord.IdempotencyKey);
+
+                paymentResult = new PaymentProcessingResult
+                {
+                    Success = true,
+                    Provider = currentRecord.PaymentProvider ?? "AuthoritativeGateway",
+                    ProviderReference = currentRecord.PaymentReference,
+                    Status = currentRecord.PaymentStatus ?? PaymentStatus.Pending,
+                    ProcessedAt = currentRecord.CreatedAt
+                };
+            }
+            else
+            {
+                var paymentRequest = new PaymentProcessingRequest
+                {
+                    OrderNumber = publicOrderNumber,
+                    Amount = totalAmount,
+                    Currency = _shippingTaxService.CurrencyCode,
+                    CustomerName = model.CustomerName,
+                    CustomerEmail = model.CustomerEmail,
+                    PaymentMethod = model.PaymentMethod,
+                    CardholderName = model.SandboxCardholderName,
+                    CardNumber = model.SandboxCardNumber,
+                    ExpiryDate = model.SandboxExpiry,
+                    Cvc = model.SandboxCvc,
+                    SimulateFailure = model.SimulatePaymentFailure
+                };
+
+                paymentResult = await _paymentGateway.ProcessPaymentAsync(paymentRequest);
+
+                if (!paymentResult.Success)
+                {
+                    currentRecord.Status = IdempotencyStatus.Failed;
+                    currentRecord.FailureReason = paymentResult.FailureReason;
+                    currentRecord.PaymentStatus = paymentResult.Status;
+                    await _context.SaveChangesAsync();
+
+                    ModelState.AddModelError(string.Empty, paymentResult.FailureReason ?? "Payment authorization failed. Please try a different payment method.");
+                    return View("Index", model);
+                }
+
+                // DURABLE PAYMENT STATE TRANSITION: Record payment success immediately before starting database transaction
+                currentRecord.Status = IdempotencyStatus.PaymentCompleted;
+                currentRecord.PaymentProvider = paymentResult.Provider;
+                currentRecord.PaymentReference = paymentResult.ProviderReference;
+                currentRecord.PaymentAmount = totalAmount;
+                currentRecord.PaymentStatus = paymentResult.Status;
+                await _context.SaveChangesAsync();
+            }
+
+            // =========================================================================
+            // 8. ATOMIC DATABASE TRANSACTION WITH CONCURRENCY & STOCK RESERVATION
             // =========================================================================
             var executionStrategy = _context.Database.CreateExecutionStrategy();
             string? transactionError = null;
@@ -221,7 +499,7 @@ namespace HamaraCommerce.Controllers
                 using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
                 try
                 {
-                    // Step A: Concurrency Lock & Live Stock Verification
+                    // Step A: Live Stock Verification & Concurrency Row Lock
                     foreach (var item in validItems)
                     {
                         var prod = await _context.Products
@@ -256,43 +534,52 @@ namespace HamaraCommerce.Controllers
                         }
                     }
 
-                    // Step B: Revalidate Coupon
+                    // Step B: Atomically Revalidate Coupon Limits & Verified Customer Eligibility
+                    Coupon? couponEntity = null;
                     if (cart.CouponIsValid && !string.IsNullOrEmpty(cart.AppliedCouponCode))
                     {
-                        var couponValidation = await _pricingService.ValidateCouponAsync(cart.AppliedCouponCode, subtotal, user?.Id, model.CustomerEmail, rawCart.Items);
-                        if (!couponValidation.IsValid)
+                        couponEntity = await _context.Coupons.FirstOrDefaultAsync(c => c.Code == cart.AppliedCouponCode);
+                        if (couponEntity != null)
                         {
-                            transactionError = $"Coupon error: {couponValidation.Message}";
-                            await transaction.RollbackAsync();
-                            return;
+                            var now = DateTime.UtcNow;
+                            if (!couponEntity.IsActive || now < couponEntity.StartDate || now > couponEntity.ExpiryDate || (couponEntity.UsageLimit > 0 && couponEntity.UsageCount >= couponEntity.UsageLimit))
+                            {
+                                transactionError = $"Coupon '{couponEntity.Code}' is no longer valid or its global usage limit has been reached.";
+                                await transaction.RollbackAsync();
+                                return;
+                            }
+
+                            if (couponEntity.PerUserLimit > 0)
+                            {
+                                if (user == null || !user.EmailConfirmed)
+                                {
+                                    transactionError = $"Coupon '{couponEntity.Code}' requires an account with a verified email address. Entered email alone is not eligible.";
+                                    await transaction.RollbackAsync();
+                                    return;
+                                }
+
+                                var verifiedEmail = user.Email?.Trim().ToLowerInvariant();
+
+                                var priorRedemptionsCount = await _context.CouponRedemptions
+                                    .Where(r => r.CouponCode == couponEntity.Code && !r.IsRestored)
+                                    .Where(r => r.UserId == user.Id || (verifiedEmail != null && r.CustomerEmail.ToLower() == verifiedEmail))
+                                    .Select(r => r.OrderId)
+                                    .Distinct()
+                                    .CountAsync();
+
+                                if (priorRedemptionsCount >= couponEntity.PerUserLimit)
+                                {
+                                    transactionError = $"You have already redeemed coupon '{couponEntity.Code}' the maximum allowed times ({couponEntity.PerUserLimit} per customer).";
+                                    await transaction.RollbackAsync();
+                                    return;
+                                }
+                            }
+
+                            couponEntity.UsageCount++;
                         }
                     }
 
-                    // Step C: Process Payment via Payment Gateway
-                    var paymentRequest = new PaymentProcessingRequest
-                    {
-                        OrderNumber = publicOrderNumber,
-                        Amount = totalAmount,
-                        Currency = _shippingTaxService.CurrencyCode,
-                        CustomerName = model.CustomerName,
-                        CustomerEmail = model.CustomerEmail,
-                        PaymentMethod = model.PaymentMethod,
-                        CardholderName = model.SandboxCardholderName,
-                        CardNumber = model.SandboxCardNumber,
-                        ExpiryDate = model.SandboxExpiry,
-                        Cvc = model.SandboxCvc,
-                        SimulateFailure = model.SimulatePaymentFailure
-                    };
-
-                    var paymentResult = await _paymentGateway.ProcessPaymentAsync(paymentRequest);
-                    if (!paymentResult.Success)
-                    {
-                        transactionError = paymentResult.FailureReason ?? "Payment authorization failed. Please try a different payment method.";
-                        await transaction.RollbackAsync();
-                        return;
-                    }
-
-                    // Step D: Create Order & OrderItems Snapshot
+                    // Step C: Create Order Entity
                     var order = new Order
                     {
                         OrderNumber = publicOrderNumber,
@@ -340,9 +627,16 @@ namespace HamaraCommerce.Controllers
                         }).ToList()
                     };
 
+                    // For guest orders: generate secure, expiring order-scoped guest token
+                    if (user == null)
+                    {
+                        order.GuestAccessToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+                        order.GuestAccessExpiry = DateTime.UtcNow.AddDays(30);
+                    }
+
                     _context.Orders.Add(order);
 
-                    // Step E: Deduct Stock & Create Inventory Movements
+                    // Step D: Deduct Stock & Record Inventory Movements
                     foreach (var item in validItems)
                     {
                         var prod = await _context.Products.Include(p => p.Variants).FirstAsync(p => p.Id == item.ProductId);
@@ -369,44 +663,23 @@ namespace HamaraCommerce.Controllers
                         });
                     }
 
-                    // Step F: Atomically Reserve/Record Coupon Usage
-                    if (cart.CouponIsValid && !string.IsNullOrEmpty(cart.AppliedCouponCode))
+                    // Step E: Create Dedicated Concurrency-Safe CouponRedemption Record
+                    if (couponEntity != null)
                     {
-                        var coupon = await _context.Coupons.FirstOrDefaultAsync(c => c.Code == cart.AppliedCouponCode);
-                        if (coupon != null)
+                        _context.CouponRedemptions.Add(new CouponRedemption
                         {
-                            var now = DateTime.UtcNow;
-                            if (!coupon.IsActive || now < coupon.StartDate || now > coupon.ExpiryDate || (coupon.UsageLimit > 0 && coupon.UsageCount >= coupon.UsageLimit))
-                            {
-                                transactionError = $"Coupon '{coupon.Code}' is no longer valid or its global usage limit has been reached.";
-                                await transaction.RollbackAsync();
-                                return;
-                            }
-
-                            if (coupon.PerUserLimit > 0)
-                            {
-                                var emailLower = model.CustomerEmail?.Trim().ToLowerInvariant();
-                                var hasUser = !string.IsNullOrEmpty(user?.Id);
-                                var hasEmail = !string.IsNullOrEmpty(emailLower);
-
-                                var priorRedemptions = await _context.Orders
-                                    .Where(o => o.CouponCode == coupon.Code && o.Status != OrderStatus.Cancelled && o.Status != OrderStatus.Refunded)
-                                    .Where(o => (hasUser && o.UserId == user!.Id) || (hasEmail && o.CustomerEmail.ToLower() == emailLower))
-                                    .CountAsync();
-
-                                if (priorRedemptions >= coupon.PerUserLimit)
-                                {
-                                    transactionError = $"You have already redeemed coupon '{coupon.Code}' the maximum allowed times ({coupon.PerUserLimit} per customer).";
-                                    await transaction.RollbackAsync();
-                                    return;
-                                }
-                            }
-
-                            coupon.UsageCount++;
-                        }
+                            CouponId = couponEntity.Id,
+                            CouponCode = couponEntity.Code,
+                            Order = order,
+                            UserId = user?.Id,
+                            CustomerEmail = model.CustomerEmail.Trim(),
+                            DiscountAmount = couponDiscount,
+                            RedeemedAt = DateTime.UtcNow,
+                            IsRestored = false
+                        });
                     }
 
-                    // Step G: Record Payment Transaction
+                    // Step F: Record Payment Transaction
                     var paymentTxn = new PaymentTransaction
                     {
                         Order = order,
@@ -426,32 +699,58 @@ namespace HamaraCommerce.Controllers
 
                     _context.PaymentTransactions.Add(paymentTxn);
 
-                    // Step H: Commit Atomic Transaction
+                    // Step G: Bind Order to Idempotency Record
+                    currentRecord.OrderNumber = order.OrderNumber;
+                    currentRecord.GuestAccessToken = order.GuestAccessToken;
+                    currentRecord.Status = IdempotencyStatus.Completed;
                     await _context.SaveChangesAsync();
-                    await transaction.CommitAsync();
 
+                    currentRecord.OrderId = order.Id;
+                    await _context.SaveChangesAsync();
+
+                    await transaction.CommitAsync();
                     createdOrder = order;
-                    _logger.LogInformation("Order {OrderNumber} successfully created in atomic transaction. Amount: {Total} {Currency}", 
+
+                    _logger.LogInformation("Order {OrderNumber} successfully created in atomic transaction. Amount: {Total} {Currency}",
                         order.OrderNumber, totalAmount, order.Currency);
                 }
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
                     _logger.LogError(ex, "Transaction aborted and rolled back during checkout process.");
-                    transactionError = "An unexpected error occurred while placing your order. No charges were made and no stock was modified. Please try again.";
+                    transactionError = "An unexpected error occurred while placing your order. No stock was modified. Please try again.";
                 }
             });
 
-            // If transaction failed, return to view with friendly error
             if (transactionError != null || createdOrder == null)
             {
-                ModelState.AddModelError(string.Empty, transactionError ?? "Order processing failed. Please try again.");
+                // Payment succeeded on gateway, but order finalization failed -> mark RecoveryRequired
+                _context.ChangeTracker.Clear();
+                var recordToUpdate = await _context.CheckoutIdempotencyRecords
+                    .FirstOrDefaultAsync(r => r.IdempotencyKey == model.IdempotencyToken);
+
+                if (recordToUpdate != null)
+                {
+                    recordToUpdate.Status = IdempotencyStatus.RecoveryRequired;
+                    recordToUpdate.FailureReason = transactionError ?? "Order finalization failed after payment.";
+                    await _context.SaveChangesAsync();
+                }
+
+                _logger.LogError("CRITICAL: Payment {PaymentRef} succeeded for order {OrderNumber} but DB transaction failed: {Error}",
+                    currentRecord.PaymentReference, publicOrderNumber, transactionError);
+
+                ModelState.AddModelError(string.Empty, $"Payment authorization succeeded (Ref: {currentRecord.PaymentReference}), but order finalization encountered a temporary issue: {transactionError}. Please submit again to finalize your order without being re-charged.");
                 return View("Index", model);
             }
 
             // Post-Transaction Success Actions
             await _cartService.ClearCartAsync();
             HttpContext.Session.Remove(IdempotencySessionKey);
+
+            if (!string.IsNullOrEmpty(createdOrder.GuestAccessToken))
+            {
+                HttpContext.Session.SetString($"GuestOrderToken_{createdOrder.OrderNumber}", createdOrder.GuestAccessToken);
+            }
 
             // Dispatch Order Confirmation Email Notification
             try
@@ -468,14 +767,14 @@ namespace HamaraCommerce.Controllers
             }
 
             // Post/Redirect/Get pattern
-            return RedirectToAction(nameof(OrderConfirmation), new { orderNumber = createdOrder.OrderNumber });
+            return RedirectToAction(nameof(OrderConfirmation), new { orderNumber = createdOrder.OrderNumber, guestToken = createdOrder.GuestAccessToken });
         }
 
         // ==========================================
         // 3. ORDER CONFIRMATION (GET by public OrderNumber)
         // ==========================================
         [HttpGet]
-        public async Task<IActionResult> OrderConfirmation(string orderNumber)
+        public async Task<IActionResult> OrderConfirmation(string orderNumber, string? guestToken = null)
         {
             if (string.IsNullOrWhiteSpace(orderNumber))
             {
@@ -493,21 +792,82 @@ namespace HamaraCommerce.Controllers
             }
 
             // Secure customer order ownership check
-            if (User.Identity?.IsAuthenticated == true && !User.IsInRole("Admin"))
+            var currentUser = User.Identity?.IsAuthenticated == true ? await _userManager.GetUserAsync(User) : null;
+            bool isAuthorized = false;
+
+            if (User.IsInRole("Admin"))
             {
-                var user = await _userManager.GetUserAsync(User);
-                if (user != null && !string.IsNullOrEmpty(order.UserId) && order.UserId != user.Id && order.CustomerEmail != user.Email)
+                isAuthorized = true;
+            }
+            else if (!string.IsNullOrEmpty(order.UserId))
+            {
+                // Registered order: MUST belong to currentUser.Id
+                if (currentUser != null && order.UserId == currentUser.Id)
                 {
-                    return RedirectToAction("AccessDenied", "Account");
+                    isAuthorized = true;
+                }
+            }
+            else
+            {
+                // Guest order: requires valid guest token (from query or session) or verified customer claim
+                var sessionToken = HttpContext.Session.GetString($"GuestOrderToken_{order.OrderNumber}");
+                var tokenToCheck = !string.IsNullOrEmpty(guestToken) ? guestToken : sessionToken;
+
+                bool hasValidToken = !string.IsNullOrEmpty(tokenToCheck) &&
+                                     order.GuestAccessToken == tokenToCheck &&
+                                     (order.GuestAccessExpiry == null || order.GuestAccessExpiry > DateTime.UtcNow);
+
+                if (hasValidToken)
+                {
+                    isAuthorized = true;
+                }
+                else if (currentUser != null && currentUser.EmailConfirmed && order.CustomerEmail.Equals(currentUser.Email, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Verified customer claiming their guest order
+                    order.UserId = currentUser.Id;
+                    await _context.SaveChangesAsync();
+                    isAuthorized = true;
                 }
             }
 
+            if (!isAuthorized)
+            {
+                _logger.LogWarning("Unauthorized access attempt to OrderConfirmation for Order #{OrderNumber}", order.OrderNumber);
+                return RedirectToAction("AccessDenied", "Account");
+            }
+
+            ViewBag.GuestToken = order.GuestAccessToken;
             return View(order);
+        }
+
+        private static string ComputeRequestHash(CheckoutFormViewModel model, ShoppingCartViewModel cart)
+        {
+            var sb = new StringBuilder();
+            sb.Append("EMAIL:").Append(model.CustomerEmail?.Trim().ToLowerInvariant()).Append(';');
+            sb.Append("NAME:").Append(model.CustomerName?.Trim().ToLowerInvariant()).Append(';');
+            sb.Append("ADDR:").Append(model.StreetAddress?.Trim().ToLowerInvariant()).Append(';');
+            sb.Append("CITY:").Append(model.City?.Trim().ToLowerInvariant()).Append(';');
+            sb.Append("STATE:").Append(model.State?.Trim().ToLowerInvariant()).Append(';');
+            sb.Append("ZIP:").Append(model.PostalCode?.Trim().ToLowerInvariant()).Append(';');
+            sb.Append("COUNTRY:").Append(model.Country?.Trim().ToLowerInvariant()).Append(';');
+            sb.Append("SHIP:").Append(model.ShippingMethod?.Trim().ToLowerInvariant()).Append(';');
+            sb.Append("PAY:").Append(model.PaymentMethod?.Trim().ToLowerInvariant()).Append(';');
+            sb.Append("EXP_TOTAL:").Append(model.ExpectedGrandTotal?.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)).Append(';');
+            sb.Append("TOTAL:").Append(cart.GrandTotal.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)).Append(';');
+            sb.Append("COUPON:").Append(cart.AppliedCouponCode?.Trim().ToUpperInvariant()).Append(';');
+            sb.Append("ITEMS:[");
+            foreach (var item in cart.Items.OrderBy(i => i.ProductId).ThenBy(i => i.VariantId ?? 0))
+            {
+                sb.Append($"{item.ProductId}:{item.VariantId}:{item.Quantity}:{item.UnitPrice:F2};");
+            }
+            sb.Append(']');
+
+            byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString()));
+            return Convert.ToHexString(hash);
         }
 
         private static string GenerateSecureOrderNumber()
         {
-            // Cryptographically strong random alphanumeric order reference: e.g. HC-PK-892184920
             byte[] bytes = new byte[5];
             RandomNumberGenerator.Fill(bytes);
             uint num = BitConverter.ToUInt32(bytes, 0) % 900000000 + 100000000;

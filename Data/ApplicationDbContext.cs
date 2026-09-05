@@ -29,6 +29,8 @@ namespace HamaraCommerce.Data
         public DbSet<StoreSetting> StoreSettings { get; set; }
         public DbSet<ContactMessage> ContactMessages { get; set; }
         public DbSet<NewsletterSubscription> NewsletterSubscriptions { get; set; }
+        public DbSet<CheckoutIdempotencyRecord> CheckoutIdempotencyRecords { get; set; }
+        public DbSet<CouponRedemption> CouponRedemptions { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -309,6 +311,7 @@ namespace HamaraCommerce.Data
                 entity.Property(o => o.PaymentMethod).HasMaxLength(100);
                 entity.Property(o => o.CouponCode).HasMaxLength(50);
                 entity.Property(o => o.CustomerNotes).HasMaxLength(1000);
+                entity.Property(o => o.GuestAccessToken).HasMaxLength(64);
 
                 // Decimal Precision
                 entity.Property(o => o.Subtotal).HasPrecision(18, 2);
@@ -321,6 +324,7 @@ namespace HamaraCommerce.Data
                 entity.HasIndex(o => o.OrderNumber).IsUnique();
                 entity.HasIndex(o => o.TrackingNumber).IsUnique();
                 entity.HasIndex(o => o.CustomerEmail);
+                entity.HasIndex(o => o.GuestAccessToken);
                 entity.HasIndex(o => o.OrderDate);
                 entity.HasIndex(o => o.Status);
                 entity.HasIndex(o => o.PaymentStatus);
@@ -505,6 +509,62 @@ namespace HamaraCommerce.Data
                 entity.HasIndex(n => n.UnsubscribeToken).IsUnique();
                 entity.HasIndex(n => n.IsActive);
                 entity.HasIndex(n => n.SubscribedAt);
+            });
+
+            // ==========================================
+            // CHECKOUT IDEMPOTENCY RECORD CONFIGURATION
+            // ==========================================
+            modelBuilder.Entity<CheckoutIdempotencyRecord>(entity =>
+            {
+                entity.ToTable("CheckoutIdempotencyRecords");
+                entity.HasKey(r => r.Id);
+
+                entity.Property(r => r.IdempotencyKey).IsRequired().HasMaxLength(64);
+                entity.Property(r => r.UserId).HasMaxLength(450);
+                entity.Property(r => r.CustomerEmail).IsRequired().HasMaxLength(150);
+                entity.Property(r => r.RequestHash).IsRequired().HasMaxLength(128);
+                entity.Property(r => r.OrderNumber).HasMaxLength(50);
+                entity.Property(r => r.GuestAccessToken).HasMaxLength(64);
+                entity.Property(r => r.PaymentProvider).HasMaxLength(50);
+                entity.Property(r => r.PaymentReference).HasMaxLength(100);
+                entity.Property(r => r.PaymentAmount).HasPrecision(18, 2);
+                entity.Property(r => r.FailureReason).HasMaxLength(500);
+
+                entity.HasIndex(r => r.IdempotencyKey).IsUnique();
+                entity.HasIndex(r => r.CreatedAt);
+                entity.HasIndex(r => r.CustomerEmail);
+                entity.HasIndex(r => r.Status);
+            });
+
+            // ==========================================
+            // COUPON REDEMPTION CONFIGURATION
+            // ==========================================
+            modelBuilder.Entity<CouponRedemption>(entity =>
+            {
+                entity.ToTable("CouponRedemptions");
+                entity.HasKey(r => r.Id);
+
+                entity.Property(r => r.CouponCode).IsRequired().HasMaxLength(50);
+                entity.Property(r => r.UserId).HasMaxLength(450);
+                entity.Property(r => r.CustomerEmail).IsRequired().HasMaxLength(150);
+                entity.Property(r => r.DiscountAmount).HasPrecision(18, 2);
+                entity.Property(r => r.RestoreReason).HasMaxLength(250);
+
+                entity.HasIndex(r => r.CouponCode);
+                entity.HasIndex(r => r.OrderId);
+                entity.HasIndex(r => r.UserId);
+                entity.HasIndex(r => r.CustomerEmail);
+                entity.HasIndex(r => r.IsRestored);
+
+                entity.HasOne(r => r.Coupon)
+                    .WithMany()
+                    .HasForeignKey(r => r.CouponId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(r => r.Order)
+                    .WithMany()
+                    .HasForeignKey(r => r.OrderId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }

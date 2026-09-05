@@ -33,9 +33,22 @@ namespace HamaraCommerce.Services
         public DateTime ProcessedAt { get; set; } = DateTime.UtcNow;
     }
 
+    public class PaymentMethodOption
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string IconClass { get; set; } = string.Empty;
+        public string? BadgeText { get; set; }
+        public bool IsTestOnly { get; set; } = false;
+        public bool RequiresCardInputs { get; set; } = false;
+    }
+
     public interface IPaymentGateway
     {
         bool IsDevelopmentSandboxAvailable { get; }
+        System.Collections.Generic.IEnumerable<PaymentMethodOption> GetAvailablePaymentMethods();
+        bool IsMethodSupported(string paymentMethod);
         Task<PaymentProcessingResult> ProcessPaymentAsync(PaymentProcessingRequest request);
     }
 }

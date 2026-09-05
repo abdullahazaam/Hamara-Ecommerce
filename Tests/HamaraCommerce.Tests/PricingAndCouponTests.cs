@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using HamaraCommerce.Data;
 using HamaraCommerce.Models;
@@ -502,7 +504,7 @@ namespace HamaraCommerce.Tests
         }
 
         [Fact]
-        public async Task ValidateCouponAsync_GuestOrder_EnforcesPerCustomerLimit()
+        public async Task ValidateCouponAsync_LimitedCoupon_RequiresExplicitVerifiedEligibility()
         {
             // Arrange
             using var context = TestDbContextFactory.CreateInMemoryDbContext();
@@ -516,13 +518,45 @@ namespace HamaraCommerce.Tests
             };
             context.Coupons.Add(coupon);
 
-            // Seed existing non-cancelled order by guest user
+            // Seed verified and unverified users
+            var verifiedUser = new ApplicationUser
+            {
+                Id = "user-verified-01",
+                UserName = "verified@example.com",
+                Email = "verified@example.com",
+                EmailConfirmed = true
+            };
+            var unverifiedUser = new ApplicationUser
+            {
+                Id = "user-unverified-02",
+                UserName = "unverified@example.com",
+                Email = "unverified@example.com",
+                EmailConfirmed = false
+            };
+            context.Users.AddRange(verifiedUser, unverifiedUser);
+            await context.SaveChangesAsync();
+
+            var (pricingService, _) = CreatePricingServices(context);
+
+            // Act 1: Guest entering email alone is rejected (entered email alone is insufficient)
+            var resultGuest = await pricingService.ValidateCouponAsync(
+                "ONCEONLY", 10000m, userId: null, customerEmail: "guest@example.com", items: null);
+
+            // Act 2: Unverified registered customer is rejected
+            var resultUnverified = await pricingService.ValidateCouponAsync(
+                "ONCEONLY", 10000m, userId: "user-unverified-02", customerEmail: "unverified@example.com", items: null);
+
+            // Act 3: Verified customer is allowed on first use
+            var resultVerified = await pricingService.ValidateCouponAsync(
+                "ONCEONLY", 10000m, userId: "user-verified-01", customerEmail: "verified@example.com", items: null);
+
+            // Seed existing order for verified user
             var pastOrder = new Order
             {
                 Id = 1,
                 OrderNumber = "HC-PK-10001",
-                CustomerEmail = "guest.shopper@example.com",
-                UserId = null,
+                CustomerEmail = "verified@example.com",
+                UserId = "user-verified-01",
                 CouponCode = "ONCEONLY",
                 Status = OrderStatus.Confirmed,
                 Subtotal = 10000m,
@@ -531,22 +565,22 @@ namespace HamaraCommerce.Tests
             context.Orders.Add(pastOrder);
             await context.SaveChangesAsync();
 
-            var (pricingService, _) = CreatePricingServices(context);
-
-            // Act 1: Same guest email tries to reuse coupon
-            var resultBlocked = await pricingService.ValidateCouponAsync(
-                "ONCEONLY", 10000m, userId: null, customerEmail: "guest.shopper@example.com", items: null);
-
-            // Act 2: Different guest email uses the coupon
-            var resultAllowed = await pricingService.ValidateCouponAsync(
-                "ONCEONLY", 10000m, userId: null, customerEmail: "different.shopper@example.com", items: null);
+            // Act 4: Verified customer is rejected after reaching per-user limit
+            var resultVerifiedSecond = await pricingService.ValidateCouponAsync(
+                "ONCEONLY", 10000m, userId: "user-verified-01", customerEmail: "verified@example.com", items: null);
 
             // Assert
-            Assert.False(resultBlocked.IsValid);
-            Assert.Contains("maximum allowed times", resultBlocked.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.False(resultGuest.IsValid);
+            Assert.Contains("verified email", resultGuest.Message, StringComparison.OrdinalIgnoreCase);
 
-            Assert.True(resultAllowed.IsValid);
-            Assert.Equal(1500m, resultAllowed.CalculatedDiscount);
+            Assert.False(resultUnverified.IsValid);
+            Assert.Contains("verified email", resultUnverified.Message, StringComparison.OrdinalIgnoreCase);
+
+            Assert.True(resultVerified.IsValid);
+            Assert.Equal(1500m, resultVerified.CalculatedDiscount);
+
+            Assert.False(resultVerifiedSecond.IsValid);
+            Assert.Contains("maximum allowed times", resultVerifiedSecond.Message, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]
@@ -611,7 +645,9 @@ namespace HamaraCommerce.Tests
             // Assert 1: UsageCount decremented to 2
             Assert.True(firstRestored);
             Assert.Equal(2, coupon.UsageCount);
-            Assert.Contains("[CouponRestored:RESTOREME]", order.CustomerNotes);
+            var redemption = await context.CouponRedemptions.FirstOrDefaultAsync(r => r.OrderId == order.Id && r.CouponCode == "RESTOREME");
+            Assert.NotNull(redemption);
+            Assert.True(redemption.IsRestored);
 
             // Act 2: Second cancellation call on same order (idempotent)
             bool secondRestored = await pricingService.RestoreCouponRedemptionAsync(order);

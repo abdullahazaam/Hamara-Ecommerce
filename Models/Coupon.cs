@@ -18,7 +18,7 @@ namespace HamaraCommerce.Models
         
         public int UsageCount { get; set; } = 0;
         public int UsageLimit { get; set; } = 500;
-        public int PerUserLimit { get; set; } = 1;
+        public int PerUserLimit { get; set; } = 0;
         
         public int? ApplicableCategoryId { get; set; }
         public Category? ApplicableCategory { get; set; }

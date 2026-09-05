@@ -92,8 +92,11 @@
 
             <!-- Action Buttons -->
             <div class="d-flex flex-wrap gap-2 justify-content-center">
-                <a asp-controller="OrderTracking" asp-action="Index" asp-route-trackingNumber="@Model.TrackingNumber" asp-route-email="@Model.CustomerEmail" class="btn btn-primary-custom px-4 rounded-pill">
+                <a asp-controller="OrderTracking" asp-action="Index" asp-route-trackingNumber="@Model.TrackingNumber" asp-route-email="@Model.CustomerEmail" asp-route-guestToken="@Model.GuestAccessToken" class="btn btn-primary-custom px-4 rounded-pill">
                     <i class="fa-solid fa-location-dot me-1"></i>Track Shipment
+                </a>
+                <a asp-controller="Account" asp-action="Invoice" asp-route-id="@Model.OrderNumber" asp-route-guestToken="@Model.GuestAccessToken" class="btn btn-outline-secondary px-4 rounded-pill" target="_blank">
+                    <i class="fa-solid fa-print me-1"></i>Print Invoice
                 </a>
                 <a asp-controller="Shop" asp-action="Index" class="btn btn-glass px-4 rounded-pill">
                     <i class="fa-solid fa-bag-shopping me-1"></i>Continue Shopping

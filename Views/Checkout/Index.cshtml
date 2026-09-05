@@ -1,8 +1,10 @@
 @model HamaraCommerce.Models.CheckoutFormViewModel
 @inject HamaraCommerce.Services.IShippingTaxService ShippingTaxService
+@inject HamaraCommerce.Services.IPaymentGateway PaymentGateway
 @{
     ViewData["Title"] = "Secure Checkout";
     var shippingOptions = ShippingTaxService.GetAvailableShippingMethods(Model.Cart.SubTotal, Model.Cart.CouponGrantsFreeShipping);
+    var paymentMethods = PaymentGateway.GetAvailablePaymentMethods();
 }
 
 <!-- Breadcrumbs -->
@@ -146,47 +148,61 @@
                 </div>
 
                 <div class="d-flex flex-column gap-2.5">
-                    <div class="p-3 rounded-3 border" style="background:var(--bg-surface-elevated); border-color:var(--border-default) !important;">
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" asp-for="PaymentMethod" value="CashOnDelivery" id="payCOD" checked />
-                            <label class="form-check-label w-100 d-flex justify-content-between align-items-center ms-2" for="payCOD">
-                                <div>
-                                    <strong class="d-block small" style="color:var(--text-primary);">
-                                        <i class="fa-solid fa-money-bill-wave text-success me-2"></i>Cash on Delivery (COD)
-                                    </strong>
-                                    <span class="small" style="color:var(--text-muted);">Pay in cash safely upon package arrival at your doorstep.</span>
-                                </div>
-                            </label>
-                        </div>
-                    </div>
+                    @foreach (var method in paymentMethods)
+                    {
+                        var isChecked = Model.PaymentMethod == method.Id || (string.IsNullOrEmpty(Model.PaymentMethod) && method.Id == "CashOnDelivery");
+                        <div class="p-3 rounded-3 border" style="background:var(--bg-surface-elevated); border-color:var(--border-default) !important;">
+                            <div class="form-check">
+                                <input class="form-check-input payment-method-radio" type="radio" asp-for="PaymentMethod" value="@method.Id" id="pay_@method.Id" checked="@isChecked" data-requires-card="@method.RequiresCardInputs" />
+                                <label class="form-check-label w-100 d-flex justify-content-between align-items-center ms-2" for="pay_@method.Id">
+                                    <div>
+                                        <strong class="d-block small" style="color:var(--text-primary);">
+                                            <i class="@method.IconClass me-2"></i>@method.Name
+                                            @if (!string.IsNullOrEmpty(method.BadgeText))
+                                            {
+                                                <span class="badge @(method.IsTestOnly ? "bg-warning text-dark" : "bg-success-subtle text-success") ms-2 small">@method.BadgeText</span>
+                                            }
+                                        </strong>
+                                        <span class="small" style="color:var(--text-muted);">@method.Description</span>
+                                    </div>
+                                </label>
+                            </div>
 
-                    <div class="p-3 rounded-3 border" style="background:var(--bg-surface-elevated); border-color:var(--border-default) !important;">
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" asp-for="PaymentMethod" value="OnlineCard" id="payCard" />
-                            <label class="form-check-label w-100 d-flex justify-content-between align-items-center ms-2" for="payCard">
-                                <div>
-                                    <strong class="d-block small" style="color:var(--text-primary);">
-                                        <i class="fa-solid fa-credit-card text-primary me-2"></i>Debit / Credit Card (Online Payment)
-                                    </strong>
-                                    <span class="small" style="color:var(--text-muted);">Visa, Mastercard, or UnionPay processed securely.</span>
+                            @if (method.RequiresCardInputs)
+                            {
+                                <div id="cardInputsContainer" class="mt-3 pt-3 border-top @(isChecked ? "" : "d-none")" style="border-color:var(--border-subtle) !important;">
+                                    <div class="alert alert-info py-2 px-3 small rounded-3 mb-3">
+                                        <i class="fa-solid fa-circle-info me-1"></i>
+                                        <strong>Sandbox Environment:</strong> Enter any test card or end number with <code>0000</code> to simulate bank decline.
+                                    </div>
+                                    <div class="row g-2">
+                                        <div class="col-md-7">
+                                            <label asp-for="SandboxCardNumber" class="form-label small fw-bold" style="color:var(--text-muted);">Test Card Number</label>
+                                            <input asp-for="SandboxCardNumber" class="form-control form-control-sm rounded-3" placeholder="4242 4242 4242 4242" />
+                                        </div>
+                                        <div class="col-md-5">
+                                            <label asp-for="SandboxCardholderName" class="form-label small fw-bold" style="color:var(--text-muted);">Cardholder Name</label>
+                                            <input asp-for="SandboxCardholderName" class="form-control form-control-sm rounded-3" placeholder="e.g. John Doe" />
+                                        </div>
+                                        <div class="col-6 col-md-4">
+                                            <label asp-for="SandboxExpiry" class="form-label small fw-bold" style="color:var(--text-muted);">Expiry (MM/YY)</label>
+                                            <input asp-for="SandboxExpiry" class="form-control form-control-sm rounded-3" placeholder="12/28" />
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            <label asp-for="SandboxCvc" class="form-label small fw-bold" style="color:var(--text-muted);">CVC</label>
+                                            <input asp-for="SandboxCvc" class="form-control form-control-sm rounded-3" placeholder="123" />
+                                        </div>
+                                        <div class="col-md-5 d-flex align-items-end">
+                                            <div class="form-check mb-1">
+                                                <input asp-for="SimulatePaymentFailure" class="form-check-input" />
+                                                <label asp-for="SimulatePaymentFailure" class="form-check-label small text-danger fw-semibold">Simulate Bank Decline</label>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            </label>
+                            }
                         </div>
-                    </div>
-
-                    <div class="p-3 rounded-3 border" style="background:var(--bg-surface-elevated); border-color:var(--border-default) !important;">
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" asp-for="PaymentMethod" value="BankTransfer" id="payBank" />
-                            <label class="form-check-label w-100 d-flex justify-content-between align-items-center ms-2" for="payBank">
-                                <div>
-                                    <strong class="d-block small" style="color:var(--text-primary);">
-                                        <i class="fa-solid fa-building-columns text-secondary me-2"></i>Direct Bank Transfer / Raast
-                                    </strong>
-                                    <span class="small" style="color:var(--text-muted);">Instant zero-fee transfer via Raast ID or IBAN.</span>
-                                </div>
-                            </label>
-                        </div>
-                    </div>
+                    }
                 </div>
             </div>
 
@@ -225,16 +241,13 @@
                     <strong style="color:var(--text-primary);" id="summarySubtotal">@ShippingTaxService.FormatCurrency(Model.Cart.SubTotal)</strong>
                 </div>
 
-                @if (Model.Cart.CouponDiscountAmount > 0)
-                {
-                    <div class="d-flex justify-content-between mb-2 small fw-bold" style="color:var(--status-success);" id="summaryDiscountRow">
-                        <span>Discount (@Model.Cart.AppliedCouponCode)</span>
-                        <span id="summaryDiscount">-@ShippingTaxService.FormatCurrency(Model.Cart.CouponDiscountAmount)</span>
-                    </div>
-                }
+                <div class="d-flex justify-content-between mb-2 small fw-bold @(Model.Cart.CouponDiscountAmount > 0 ? "" : "d-none")" style="color:var(--status-success);" id="summaryDiscountRow">
+                    <span>Discount @(!string.IsNullOrEmpty(Model.Cart.AppliedCouponCode) ? $"({Model.Cart.AppliedCouponCode})" : "")</span>
+                    <span id="summaryDiscount">-@ShippingTaxService.FormatCurrency(Model.Cart.CouponDiscountAmount)</span>
+                </div>
 
                 <div class="d-flex justify-content-between mb-2 small">
-                    <span style="color:var(--text-muted);">GST Tax (@Model.Cart.TaxRatePercent%)</span>
+                    <span style="color:var(--text-muted);" id="summaryTaxLabel">GST Tax (@Model.Cart.TaxRatePercent%)</span>
                     <strong style="color:var(--text-primary);" id="summaryTax">@ShippingTaxService.FormatCurrency(Model.Cart.EstimatedTax)</strong>
                 </div>
 
@@ -242,6 +255,14 @@
                     <span style="color:var(--text-muted);">Shipping</span>
                     <strong style="color:var(--text-primary);" id="summaryShipping">@(Model.Cart.EffectiveShippingFee == 0 ? "FREE" : ShippingTaxService.FormatCurrency(Model.Cart.EffectiveShippingFee))</strong>
                 </div>
+
+                @if (Model.Cart.TotalSavings > 0)
+                {
+                    <div class="d-flex justify-content-between mb-2 text-xs fw-semibold text-success" id="summarySavingsRow">
+                        <span>Total Savings</span>
+                        <span id="summarySavings">@ShippingTaxService.FormatCurrency(Model.Cart.TotalSavings)</span>
+                    </div>
+                }
 
                 <hr style="border-color:var(--border-subtle) !important;" />
 
@@ -267,32 +288,86 @@
     <script>
         document.addEventListener("DOMContentLoaded", function () {
             const shipRadios = document.querySelectorAll('input[name="ShippingMethod"]');
+            const paymentRadios = document.querySelectorAll('.payment-method-radio');
+            const cardInputsContainer = document.getElementById('cardInputsContainer');
+
+            const summarySubtotal = document.getElementById('summarySubtotal');
+            const summaryDiscountRow = document.getElementById('summaryDiscountRow');
+            const summaryDiscount = document.getElementById('summaryDiscount');
             const summaryTax = document.getElementById('summaryTax');
             const summaryShipping = document.getElementById('summaryShipping');
             const summaryGrandTotal = document.getElementById('summaryGrandTotal');
+            const summarySavingsRow = document.getElementById('summarySavingsRow');
+            const summarySavings = document.getElementById('summarySavings');
             const hiddenExpectedTotal = document.getElementById('hiddenExpectedGrandTotal');
 
+            // Toggle card inputs when payment method changes
+            paymentRadios.forEach(radio => {
+                radio.addEventListener('change', function () {
+                    if (cardInputsContainer) {
+                        if (this.checked && this.dataset.requiresCard === 'True') {
+                            cardInputsContainer.classList.remove('d-none');
+                        } else {
+                            cardInputsContainer.classList.add('d-none');
+                        }
+                    }
+                });
+            });
+
+            // Recalculate with AbortController to prevent stale responses
+            let recalculateAbortController = null;
+
             async function updateTotals(method) {
+                if (recalculateAbortController) {
+                    recalculateAbortController.abort();
+                }
+                recalculateAbortController = new AbortController();
+                const signal = recalculateAbortController.signal;
+
                 try {
+                    const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
                     const resp = await fetch('/Checkout/Recalculate', {
                         method: 'POST',
+                        signal: signal,
                         headers: {
                             'Content-Type': 'application/json',
-                            'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value || ''
+                            'RequestVerificationToken': token
                         },
                         body: JSON.stringify({ shippingMethod: method })
                     });
                     if (resp.ok) {
                         const data = await resp.json();
-                        if (summaryTax) summaryTax.textContent = data.tax;
-                        if (summaryShipping) summaryShipping.textContent = data.shipping;
-                        if (summaryGrandTotal) summaryGrandTotal.textContent = data.grandTotal;
+                        if (summarySubtotal && data.subtotal) summarySubtotal.textContent = data.subtotal;
+                        if (summaryTax && data.tax) summaryTax.textContent = data.tax;
+                        if (summaryShipping && data.shipping) summaryShipping.textContent = data.shipping;
+                        if (summaryGrandTotal && data.grandTotal) summaryGrandTotal.textContent = data.grandTotal;
+
                         if (hiddenExpectedTotal && data.grandTotalValue !== undefined) {
                             hiddenExpectedTotal.value = data.grandTotalValue;
                         }
+
+                        if (summaryDiscount && data.discount) {
+                            summaryDiscount.textContent = '-' + data.discount;
+                            if (summaryDiscountRow) {
+                                summaryDiscountRow.classList.toggle('d-none', data.discountValue <= 0);
+                            }
+                        }
+
+                        if (summarySavings && data.totalSavings) {
+                            summarySavings.textContent = data.totalSavings;
+                        }
+                    } else {
+                        if (typeof window.showToast === 'function') {
+                            window.showToast("Could not update shipping totals. Please try again.", "warning");
+                        }
                     }
                 } catch (e) {
-                    console.error("Failed to recalculate checkout totals:", e);
+                    if (e.name !== 'AbortError') {
+                        console.error("Failed to recalculate checkout totals:", e);
+                        if (typeof window.showToast === 'function') {
+                            window.showToast("Network error updating delivery options.", "warning");
+                        }
+                    }
                 }
             }
 
