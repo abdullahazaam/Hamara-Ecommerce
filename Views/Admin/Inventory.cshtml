@@ -1,0 +1,302 @@
+@model List<HamaraCommerce.Models.Product>
+@{
+    ViewData["Title"] = "Admin Inventory & Stock Control";
+    var recentMovements = ViewBag.RecentMovements as List<HamaraCommerce.Models.InventoryMovement> ?? new();
+    var categories = ViewBag.Categories as List<HamaraCommerce.Models.Category> ?? new();
+}
+
+<div class="admin-wrapper">
+    <div class="admin-sidebar">
+        <div class="brand-title fs-5 mb-4 text-center">
+            <i class="fa-solid fa-gauge-high text-primary me-2"></i>Hamara<span>Admin</span>
+        </div>
+        <nav class="d-flex flex-column gap-1">
+            <a asp-controller="Admin" asp-action="Index" class="admin-menu-link">
+                <i class="fa-solid fa-chart-pie me-2"></i>Dashboard
+            </a>
+            <a asp-controller="Admin" asp-action="Products" class="admin-menu-link">
+                <i class="fa-solid fa-box-open me-2"></i>Products
+            </a>
+            <a asp-controller="Admin" asp-action="Categories" class="admin-menu-link">
+                <i class="fa-solid fa-tags me-2"></i>Categories
+            </a>
+            <a asp-controller="Admin" asp-action="Orders" class="admin-menu-link">
+                <i class="fa-solid fa-cart-flatbed me-2"></i>Orders
+            </a>
+            <a asp-controller="Admin" asp-action="Customers" class="admin-menu-link">
+                <i class="fa-solid fa-users me-2"></i>Customers
+            </a>
+            <a asp-controller="Admin" asp-action="Coupons" class="admin-menu-link">
+                <i class="fa-solid fa-ticket me-2"></i>Coupons
+            </a>
+            <a asp-controller="Admin" asp-action="Inventory" class="admin-menu-link active">
+                <i class="fa-solid fa-warehouse me-2"></i>Inventory
+            </a>
+        </nav>
+    </div>
+
+    <div class="admin-content">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="h3 font-heading fw-bold mb-1">Inventory & Stock Movement History</h2>
+                <p class="text-muted mb-0">Track real-time inventory levels, restocks, adjustments & order deductions</p>
+            </div>
+        </div>
+
+        <!-- FILTER & SUMMARY -->
+        <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+            <form asp-controller="Admin" asp-action="Inventory" method="get" class="row g-3">
+                <div class="col-md-6">
+                    <input type="text" name="search" value="@ViewBag.CurrentSearch" class="form-control rounded-3" placeholder="Search by SKU, Product name, Brand..." />
+                </div>
+                <div class="col-md-4">
+                    <select name="categoryId" class="form-select rounded-3">
+                        <option value="">All Categories</option>
+                        @foreach (var c in categories)
+                        {
+                            <option value="@c.Id" selected="@(ViewBag.CurrentCategory == c.Id)">@c.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-navy-custom w-100 rounded-3">
+                        <i class="fa-solid fa-filter me-1"></i>Filter
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- PRODUCTS INVENTORY TABLE -->
+        <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+            <h5 class="fw-bold font-heading mb-3"><i class="fa-solid fa-boxes-stacked text-primary me-2"></i>Current Stock Levels</h5>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="bg-light">
+                        <tr>
+                            <th>Product</th>
+                            <th>SKU</th>
+                            <th>Variants Stock</th>
+                            <th>Main Stock</th>
+                            <th class="text-end">Quick Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in Model)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center gap-3">
+                                        <img src="@p.MainImage" class="rounded-3 border" style="width:40px; height:40px; object-fit:cover;" alt="@p.Title" />
+                                        <div>
+                                            <div class="fw-bold text-dark text-truncate" style="max-width:280px;">@p.Title</div>
+                                            <span class="small text-muted">@p.CategoryName | @p.Brand</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="font-monospace small">@p.SKU</td>
+                                <td>
+                                    @if (p.Variants.Any())
+                                    {
+                                        <div class="d-flex flex-wrap gap-1">
+                                            @foreach (var v in p.Variants)
+                                            {
+                                                <span class="badge bg-secondary-subtle text-secondary small border">
+                                                    @v.Name: <strong>@v.Stock</strong>
+                                                </span>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">Standard (No variants)</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (p.Stock > 20)
+                                    {
+                                        <span class="badge bg-success rounded-pill px-3 py-1">@p.Stock in stock</span>
+                                    }
+                                    else if (p.Stock > 0)
+                                    {
+                                        <span class="badge bg-warning text-dark rounded-pill px-3 py-1">@p.Stock Low</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger rounded-pill px-3 py-1">Out of Stock</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    <button class="btn btn-outline-primary btn-sm rounded-pill px-3 btn-adjust-stock"
+                                            data-product-id="@p.Id"
+                                            data-product-title="@p.Title"
+                                            data-current-stock="@p.Stock"
+                                            data-variants='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(p.Variants.Select(v => new { id = v.Id, name = v.Name, stock = v.Stock })))'>
+                                        <i class="fa-solid fa-sliders me-1"></i>Adjust Stock
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- RECENT INVENTORY MOVEMENTS AUDIT LOG -->
+        <div class="card border-0 shadow-sm rounded-4 p-4">
+            <h5 class="fw-bold font-heading mb-3"><i class="fa-solid fa-clock-rotate-left text-info me-2"></i>Recent Inventory Movement Log</h5>
+            @if (!recentMovements.Any())
+            {
+                <p class="text-muted small mb-0">No stock movements recorded yet.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle small">
+                        <thead class="bg-light">
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Product / Variant</th>
+                                <th>Type</th>
+                                <th>Change</th>
+                                <th>Stock Before ➔ After</th>
+                                <th>Reason</th>
+                                <th>User</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var m in recentMovements)
+                            {
+                                <tr>
+                                    <td>@m.CreatedAt.ToString("MMM dd, yyyy HH:mm")</td>
+                                    <td>
+                                        <strong>@(m.Product?.Title ?? $"Product #{m.ProductId}")</strong>
+                                        @if (m.Variant != null)
+                                        {
+                                            <span class="badge bg-secondary-subtle text-secondary ms-1">@m.Variant.Name</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @{
+                                            var typeBadge = m.MovementType switch
+                                            {
+                                                HamaraCommerce.Models.InventoryMovementType.PurchaseRestock => "bg-success-subtle text-success border border-success",
+                                                HamaraCommerce.Models.InventoryMovementType.OrderDeduction => "bg-primary-subtle text-primary border border-primary",
+                                                HamaraCommerce.Models.InventoryMovementType.OrderCancellationRestoration => "bg-info-subtle text-info border border-info",
+                                                HamaraCommerce.Models.InventoryMovementType.DamageWriteOff => "bg-danger-subtle text-danger border border-danger",
+                                                _ => "bg-light text-dark border"
+                                            };
+                                        }
+                                        <span class="badge @typeBadge rounded-pill">@m.MovementType</span>
+                                    </td>
+                                    <td>
+                                        @if (m.QuantityChange > 0)
+                                        {
+                                            <span class="fw-bold text-success">+@m.QuantityChange</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="fw-bold text-danger">@m.QuantityChange</span>
+                                        }
+                                    </td>
+                                    <td>@m.OldStock ➔ <strong>@m.NewStock</strong></td>
+                                    <td>@m.Reason</td>
+                                    <td class="text-muted">@(m.AdminUserName ?? "System Automation")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- ADJUST STOCK MODAL -->
+<div class="modal fade" id="adjustStockModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-xl rounded-4">
+            <div class="modal-header border-0">
+                <h5 class="modal-title font-heading fw-bold">Adjust Inventory Stock</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-controller="Admin" asp-action="AdjustStock" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="ProductId" id="modalProductId" />
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Target Product</label>
+                        <input type="text" id="modalProductTitle" class="form-control" readonly />
+                    </div>
+
+                    <div class="mb-3" id="modalVariantContainer" style="display:none;">
+                        <label class="form-label small fw-semibold text-muted">Select Variant (Optional)</label>
+                        <select name="VariantId" id="modalVariantSelect" class="form-select">
+                            <option value="">-- Apply to Base Product Stock --</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Adjustment Action / Type</label>
+                        <select name="MovementType" class="form-select" required>
+                            <option value="ManualAdjustment">Manual Adjustment (Inventory Audit)</option>
+                            <option value="PurchaseRestock">Purchase Restock (New Stock Arrival)</option>
+                            <option value="DamageWriteOff">Damage / Defective Write-Off</option>
+                            <option value="ReturnRestoration">Customer Return Restoration</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Quantity Change (Use + for additions, - for reductions)</label>
+                        <input type="number" name="QuantityChange" id="modalQuantityChange" class="form-control" placeholder="e.g. 50 or -10" required />
+                        <div class="form-text small" id="stockPreviewText">Current stock: <strong id="modalCurrentStock">0</strong></div>
+                    </div>
+
+                    <div class="mb-0">
+                        <label class="form-label small fw-semibold text-muted">Audit Reason / Note</label>
+                        <input type="text" name="Reason" class="form-control" placeholder="e.g. Restocked batch #458 or Annual inventory recount" required />
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-glass" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom px-4">Save Adjustment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.querySelectorAll('.btn-adjust-stock').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const prodId = this.dataset.productId;
+                const prodTitle = this.dataset.productTitle;
+                const currStock = this.dataset.currentStock;
+                const variants = JSON.parse(this.dataset.variants || '[]');
+
+                document.getElementById('modalProductId').value = prodId;
+                document.getElementById('modalProductTitle').value = prodTitle;
+                document.getElementById('modalCurrentStock').innerText = currStock;
+                document.getElementById('modalQuantityChange').value = '';
+
+                const vContainer = document.getElementById('modalVariantContainer');
+                const vSelect = document.getElementById('modalVariantSelect');
+                vSelect.innerHTML = '<option value="">-- Apply to Base Product Stock --</option>';
+
+                if (variants.length > 0) {
+                    variants.forEach(v => {
+                        const opt = document.createElement('option');
+                        opt.value = v.id;
+                        opt.innerText = `${v.name} (Current: ${v.stock})`;
+                        vSelect.appendChild(opt);
+                    });
+                    vContainer.style.display = 'block';
+                } else {
+                    vContainer.style.display = 'none';
+                }
+
+                new bootstrap.Modal(document.getElementById('adjustStockModal')).show();
+            });
+        });
+    </script>
+}

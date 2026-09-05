@@ -1,0 +1,17 @@
+@model (string Icon, string Title, string Description, string ActionUrl, string ActionText)
+
+<div class="text-center py-5 px-3 my-4" role="status" aria-live="polite">
+    <div class="d-inline-flex align-items-center justify-content-center rounded-4 mb-4"
+         style="width:80px;height:80px;background:var(--brand-primary-subtle);color:var(--brand-primary);"
+         aria-hidden="true">
+        <i class="@Model.Icon" style="font-size:2rem;"></i>
+    </div>
+    <h3 class="font-heading fw-bold mb-2" style="font-size:1.25rem;">@Model.Title</h3>
+    <p class="mb-4 mx-auto" style="color:var(--text-muted);max-width:400px;font-size:0.9375rem;">@Model.Description</p>
+    @if (!string.IsNullOrEmpty(Model.ActionUrl) && !string.IsNullOrEmpty(Model.ActionText))
+    {
+        <a href="@Model.ActionUrl" class="btn btn-primary-custom px-4 rounded-pill">
+            @Model.ActionText
+        </a>
+    }
+</div>

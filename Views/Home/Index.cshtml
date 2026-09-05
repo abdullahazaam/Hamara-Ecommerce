@@ -1,0 +1,364 @@
+@{
+    ViewData["Title"] = "Discover Quality & Genuine Products";
+    var categories = ViewBag.Categories as List<HamaraCommerce.Models.Category> ?? new();
+    var featuredProducts = ViewBag.FeaturedProducts as List<HamaraCommerce.Models.Product> ?? new();
+    var trendingProducts = ViewBag.TrendingProducts as List<HamaraCommerce.Models.Product> ?? new();
+    var newArrivals = ViewBag.NewArrivals as List<HamaraCommerce.Models.Product> ?? new();
+    var bestSellers = ViewBag.BestSellers as List<HamaraCommerce.Models.Product> ?? new();
+    var flashDeals = ViewBag.FlashDeals as List<HamaraCommerce.Models.Product> ?? new();
+
+    // Select dynamic hero product and secondary product from real database data
+    var heroProduct = flashDeals.FirstOrDefault() ?? featuredProducts.FirstOrDefault() ?? trendingProducts.FirstOrDefault();
+    var secondaryProduct = featuredProducts.Skip(1).FirstOrDefault() ?? trendingProducts.Skip(1).FirstOrDefault() ?? bestSellers.FirstOrDefault();
+    string heroImg = !string.IsNullOrEmpty(heroProduct?.MainImage) 
+        ? heroProduct.MainImage 
+        : "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80";
+    string heroTitle = heroProduct?.Title ?? "Wireless Noise-Cancelling Headphones";
+    decimal heroPrice = heroProduct?.Price ?? 14999;
+    string heroSlug = heroProduct?.Slug ?? heroProduct?.Id.ToString() ?? "";
+}
+
+<!-- ================================================================
+     1. HIGH-IMPACT 3D HERO SECTION
+     ================================================================ -->
+<section class="hero-section reveal-on-scroll" aria-labelledby="heroHeading">
+    <div class="row align-items-center g-4 g-lg-5 position-relative" style="z-index:2;">
+        <!-- Left: Headline & CTAs -->
+        <div class="col-lg-6" style="min-width:0;">
+            <div class="hero-trust-badge">
+                <span>🇵🇰</span>
+                Pakistan's Verified 3D Commerce Platform
+            </div>
+
+            <h1 id="heroHeading" class="hero-heading">
+                Elevate Your Lifestyle with<br>
+                <span class="text-sapphire">Genuine Products</span>
+            </h1>
+
+            <p class="hero-lead">
+                Shop thousands of premium electronics, fashion collections, and daily essentials with verified official warranties, express same-day dispatch, and nationwide cash on delivery.
+            </p>
+
+            <div class="d-flex flex-wrap gap-3 mb-4">
+                <a asp-controller="Shop" asp-action="Index"
+                   class="btn btn-primary-custom px-4 py-2.5 rounded-pill shadow-sm">
+                    <i class="fa-solid fa-bag-shopping"></i>
+                    <span>Explore Catalog</span>
+                    <i class="fa-solid fa-arrow-right cta-arrow ms-1"></i>
+                </a>
+                <a asp-controller="Shop" asp-action="Index" asp-route-flashDeal="true"
+                   class="btn btn-hero-secondary px-4 py-2.5 rounded-pill">
+                    <i class="fa-solid fa-bolt text-warning me-1"></i>
+                    <span>Flash Deals</span>
+                </a>
+            </div>
+
+            <!-- Trust micro-stats -->
+            <div class="d-flex flex-wrap gap-3">
+                <div class="hero-stat-badge">
+                    <div class="hero-stat-num hero-stat-num--blue">50K+</div>
+                    <div class="hero-stat-label">Happy<br>Customers</div>
+                </div>
+                <div class="hero-stat-badge">
+                    <div class="hero-stat-num hero-stat-num--green">100%</div>
+                    <div class="hero-stat-label">Verified<br>Authentic</div>
+                </div>
+                <div class="hero-stat-badge d-none d-sm-inline-flex">
+                    <div class="hero-stat-num hero-stat-num--gold">4.9★</div>
+                    <div class="hero-stat-label">Average<br>Store Rating</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Layered 3D Product Showcase with Parallax -->
+        <div class="col-lg-6">
+            <div class="hero-3d-stage" data-tilt="hero">
+                <!-- Glare overlay -->
+                <div class="tilt-glare" aria-hidden="true"></div>
+
+                <!-- Decorative concentric rotating rings -->
+                <div class="hero-rings hero-rings--outer" aria-hidden="true"></div>
+                <div class="hero-rings hero-rings--inner" aria-hidden="true"></div>
+
+                <!-- Spotlight glow -->
+                <div class="hero-spotlight" aria-hidden="true"></div>
+
+                <!-- Floating commerce particle icons -->
+                <div class="hero-particle hero-particle--1" aria-hidden="true" data-tilt-z="badge">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <div class="hero-particle hero-particle--2" aria-hidden="true" data-tilt-z="badge">
+                    <i class="fa-solid fa-sparkles"></i>
+                </div>
+
+                <!-- 3D Composition with Image & Badges -->
+                <div class="hero-3d-composition">
+                    <!-- Secondary Product Backdrop (Layered Z-Depth) -->
+                    @if (secondaryProduct != null && secondaryProduct.Id != heroProduct?.Id)
+                    {
+                        <div class="hero-backdrop-stage" aria-hidden="true">
+                            <img src="@(secondaryProduct.MainImage ?? heroImg)" alt="" class="hero-backdrop-img" />
+                            <div class="hero-backdrop-pill">
+                                <span class="text-xs fw-bold hero-backdrop-title">@(secondaryProduct.Title?.Length > 16 ? secondaryProduct.Title.Substring(0, 14) + "..." : secondaryProduct.Title)</span>
+                                <span class="text-xs hero-backdrop-price">Rs. @secondaryProduct.Price.ToString("N0")</span>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Main Product Image Stage -->
+                    <a href="@(!string.IsNullOrEmpty(heroSlug) ? $"/Shop/Details/{heroSlug}" : "/Shop")" class="hero-img-container text-decoration-none" data-tilt-z="stage">
+                        <img src="@heroImg"
+                             alt="@heroTitle"
+                             class="hero-img-main"
+                             width="320"
+                             height="320" />
+                    </a>
+
+                    <!-- Soft Floor Shadow -->
+                    <div class="hero-floor-shadow" aria-hidden="true"></div>
+
+                    <!-- Floating Glass Badges -->
+                    <div class="hero-floating-badge hero-badge--price" data-tilt-z="badge">
+                        <div class="text-xs text-uppercase fw-bold badge-subtitle-blue">Featured Deal</div>
+                        <div class="fw-extrabold font-heading hero-badge-value">Rs. @heroPrice.ToString("N0")</div>
+                    </div>
+
+                    <div class="hero-floating-badge hero-badge--delivery" data-tilt-z="badge">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="fa-solid fa-bolt text-warning"></i>
+                            <div>
+                                <div class="text-xs text-uppercase fw-bold badge-subtitle-green">Same-Day Dispatch</div>
+                                <div class="text-xs hero-badge-muted">Lahore, Karachi, Islamabad</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="hero-floating-badge hero-badge--rating" data-tilt-z="badge">
+                        <i class="fa-solid fa-star text-warning"></i>
+                        <span class="fw-bold hero-badge-value">4.9</span>
+                        <span class="text-xs hero-badge-muted">(1.2k+ reviews)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ================================================================
+     2. TRUST & VALUE PROPOSITION CARDS (3D Capsules)
+     ================================================================ -->
+<section class="row g-3 mb-5" aria-label="Shopping guarantees">
+    <div class="col-md-3 col-6 reveal-on-scroll reveal-delay-1">
+        <div class="value-prop-card value-prop-card--shipping glass-card p-3" data-tilt="subtle">
+            <div class="value-prop-icon" aria-hidden="true">
+                <i class="fa-solid fa-truck-fast"></i>
+            </div>
+            <h2 class="fs-6 fw-bold mb-1">Free Shipping</h2>
+            <p class="text-xs mb-0" style="color:var(--text-muted);">Nationwide on orders over Rs. 5,000</p>
+        </div>
+    </div>
+    <div class="col-md-3 col-6 reveal-on-scroll reveal-delay-2">
+        <div class="value-prop-card value-prop-card--cod glass-card p-3" data-tilt="subtle">
+            <div class="value-prop-icon" aria-hidden="true">
+                <i class="fa-solid fa-money-bill-wave"></i>
+            </div>
+            <h2 class="fs-6 fw-bold mb-1">Cash on Delivery</h2>
+            <p class="text-xs mb-0" style="color:var(--text-muted);">Pay securely right at your doorstep</p>
+        </div>
+    </div>
+    <div class="col-md-3 col-6 reveal-on-scroll reveal-delay-3">
+        <div class="value-prop-card value-prop-card--returns glass-card p-3" data-tilt="subtle">
+            <div class="value-prop-icon" aria-hidden="true">
+                <i class="fa-solid fa-arrows-rotate"></i>
+            </div>
+            <h2 class="fs-6 fw-bold mb-1">30-Day Returns</h2>
+            <p class="text-xs mb-0" style="color:var(--text-muted);">Hassle-free money-back guarantee</p>
+        </div>
+    </div>
+    <div class="col-md-3 col-6 reveal-on-scroll reveal-delay-4">
+        <div class="value-prop-card value-prop-card--support glass-card p-3" data-tilt="subtle">
+            <div class="value-prop-icon" aria-hidden="true">
+                <i class="fa-solid fa-headset"></i>
+            </div>
+            <h2 class="fs-6 fw-bold mb-1">24/7 Live Support</h2>
+            <p class="text-xs mb-0" style="color:var(--text-muted);">Dedicated customer assistance anytime</p>
+        </div>
+    </div>
+</section>
+
+<!-- ================================================================
+     3. INTERACTIVE CATEGORY CARDS
+     ================================================================ -->
+@if (categories.Any())
+{
+    <section class="mb-5 reveal-on-scroll" aria-labelledby="categoriesHeading">
+        <div class="section-header-row">
+            <div>
+                <span class="section-eyebrow bg-primary-subtle text-primary border border-primary">Explore Departments</span>
+                <h2 id="categoriesHeading" class="section-title">Shop by Category</h2>
+                <p class="section-subtitle">Curated collections across Pakistan's most in-demand essentials</p>
+            </div>
+            <a asp-controller="Shop" asp-action="Index" class="btn btn-glass btn-sm rounded-pill px-3">
+                View All Categories <i class="fa-solid fa-arrow-right ms-1"></i>
+            </a>
+        </div>
+
+        <div class="row g-3">
+            @foreach (var (cat, idx) in categories.Take(6).Select((c, i) => (c, i)))
+            {
+                <div class="col-lg-2 col-md-4 col-6 reveal-on-scroll" style="transition-delay: @(idx * 70)ms">
+                    <a asp-controller="Shop" asp-action="Index" asp-route-category="@cat.Slug"
+                       class="category-card glass-card" data-tilt="subtle">
+                        <div class="category-card-icon" aria-hidden="true">
+                            <i class="fa-solid @(string.IsNullOrEmpty(cat.Icon) ? "fa-box" : (cat.Icon.StartsWith("fa-") ? cat.Icon : $"fa-{cat.Icon}"))"></i>
+                        </div>
+                        <span class="category-card-name">@cat.Name</span>
+                        <span class="category-card-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+                    </a>
+                </div>
+            }
+        </div>
+    </section>
+}
+
+<!-- ================================================================
+     4. FLASH DEALS SECTION (Coral Glow & Countdown)
+     ================================================================ -->
+@if (flashDeals.Any())
+{
+    <section class="section-surface section-surface--flash reveal-on-scroll" aria-labelledby="flashDealsHeading">
+        <div class="section-header-row">
+            <div>
+                <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                    <span class="badge-tag badge-flash" aria-hidden="true">
+                        <i class="fa-solid fa-bolt"></i>Flash Deals
+                    </span>
+                    <div id="flashCountdown" class="badge rounded-pill bg-dark text-warning border border-warning px-3 py-1 font-monospace small" data-hours="14" data-minutes="30" data-seconds="00">
+                        <i class="fa-regular fa-clock me-1"></i>Ends in: <span id="flashTimerDisplay">14h 30m 00s</span>
+                    </div>
+                </div>
+                <h2 id="flashDealsHeading" class="section-title">Limited-Time Discounts</h2>
+                <p class="section-subtitle">Special promo prices on hot trending electronics &amp; lifestyle gadgets</p>
+            </div>
+            <a asp-controller="Shop" asp-action="Index" asp-route-flashDeal="true"
+               class="btn btn-danger-custom btn-sm rounded-pill px-3">
+                See All Flash Deals <i class="fa-solid fa-arrow-right ms-1"></i>
+            </a>
+        </div>
+
+        <div class="row g-3">
+            @foreach (var (product, idx) in flashDeals.Take(4).Select((p, i) => (p, i)))
+            {
+                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 80)ms">
+                    @await Html.PartialAsync("_ProductCard", product)
+                </div>
+            }
+        </div>
+    </section>
+}
+
+<!-- ================================================================
+     5. TRENDING & FEATURED PRODUCTS (Sapphire/Violet Surface)
+     ================================================================ -->
+@if (featuredProducts.Any())
+{
+    <section class="section-surface section-surface--trending reveal-on-scroll" aria-labelledby="featuredHeading">
+        <div class="section-header-row">
+            <div>
+                <span class="section-eyebrow bg-primary-subtle text-primary border border-primary">Customer Favorites</span>
+                <h2 id="featuredHeading" class="section-title">Trending &amp; Featured</h2>
+                <p class="section-subtitle">Top-rated best products customers are buying this week</p>
+            </div>
+            <a asp-controller="Shop" asp-action="Index" class="btn btn-primary-custom btn-sm rounded-pill px-3">
+                Explore Catalog <i class="fa-solid fa-arrow-right ms-1"></i>
+            </a>
+        </div>
+
+        <div class="row g-3">
+            @foreach (var (product, idx) in featuredProducts.Take(8).Select((p, i) => (p, i)))
+            {
+                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 70)ms">
+                    @await Html.PartialAsync("_ProductCard", product)
+                </div>
+            }
+        </div>
+    </section>
+}
+
+<!-- ================================================================
+     6. NEW ARRIVALS (Emerald Surface)
+     ================================================================ -->
+@if (newArrivals.Any())
+{
+    <section class="section-surface section-surface--arrivals reveal-on-scroll" aria-labelledby="newArrivalsHeading">
+        <div class="section-header-row">
+            <div>
+                <span class="section-eyebrow bg-success-subtle text-success border border-success">Just Dropped</span>
+                <h2 id="newArrivalsHeading" class="section-title">New Arrivals</h2>
+                <p class="section-subtitle">The freshest gadget releases and lifestyle additions to our catalog</p>
+            </div>
+            <a asp-controller="Shop" asp-action="Index" asp-route-sort="newest" class="btn btn-glass btn-sm rounded-pill px-3">
+                View All New <i class="fa-solid fa-arrow-right ms-1"></i>
+            </a>
+        </div>
+
+        <div class="row g-3">
+            @foreach (var (product, idx) in newArrivals.Take(4).Select((p, i) => (p, i)))
+            {
+                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 80)ms">
+                    @await Html.PartialAsync("_ProductCard", product)
+                </div>
+            }
+        </div>
+    </section>
+}
+
+<!-- ================================================================
+     7. BEST SELLERS (Gold Surface)
+     ================================================================ -->
+@if (bestSellers.Any())
+{
+    <section class="section-surface section-surface--bestsellers reveal-on-scroll" aria-labelledby="bestSellersHeading">
+        <div class="section-header-row">
+            <div>
+                <span class="section-eyebrow bg-warning-subtle text-warning border border-warning">Top Verified Purchases</span>
+                <h2 id="bestSellersHeading" class="section-title">Best Sellers</h2>
+                <p class="section-subtitle">Most trusted, frequently reordered products across all major categories</p>
+            </div>
+            <a asp-controller="Shop" asp-action="Index" class="btn btn-glass btn-sm rounded-pill px-3">
+                View All Best Sellers <i class="fa-solid fa-arrow-right ms-1"></i>
+            </a>
+        </div>
+
+        <div class="row g-3">
+            @foreach (var (product, idx) in bestSellers.Take(4).Select((p, i) => (p, i)))
+            {
+                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 80)ms">
+                    @await Html.PartialAsync("_ProductCard", product)
+                </div>
+            }
+        </div>
+    </section>
+}
+
+<!-- ================================================================
+     8. TRUST CTA BANNER
+     ================================================================ -->
+<section class="reveal-on-scroll mb-2">
+    <div class="card-glass p-4 p-md-5 text-center rounded-4 border-0"
+         style="background:linear-gradient(135deg,rgba(37,99,235,0.12),rgba(124,58,237,0.08));border:1px solid var(--border-default) !important;">
+        <div class="row align-items-center g-4">
+            <div class="col-md-8 text-md-start">
+                <h2 class="h3 fw-bold mb-2">Ready to Experience Premium 3D Commerce?</h2>
+                <p class="mb-0" style="color:var(--text-muted);font-size:1rem;">
+                    Join 50,000+ satisfied customers enjoying 100% genuine products, same-day dispatch, and 24/7 dedicated support.
+                </p>
+            </div>
+            <div class="col-md-4 text-md-end">
+                <a asp-controller="Shop" asp-action="Index" class="btn btn-primary-custom px-5 py-2.5 rounded-pill fs-6">
+                    <i class="fa-solid fa-bag-shopping me-2"></i>Start Shopping
+                </a>
+            </div>
+        </div>
+    </div>
+</section>

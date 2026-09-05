@@ -1,0 +1,68 @@
+@{
+    ViewData["Title"] = "About Us — Hamara Commerce";
+}
+
+<!-- Breadcrumbs -->
+<nav aria-label="breadcrumb" class="mb-4 reveal-on-scroll">
+    <ol class="breadcrumb small mb-0">
+        <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">Home</a></li>
+        <li class="breadcrumb-item active fw-bold" style="color:var(--brand-primary);" aria-current="page">About Us</li>
+    </ol>
+</nav>
+
+<div class="row justify-content-center py-2 reveal-on-scroll">
+    <div class="col-lg-10">
+        <!-- Hero Card -->
+        <div class="card-glass rounded-4 p-4 p-md-5 text-center mb-5 position-relative overflow-hidden" 
+             style="background:var(--bg-glass); backdrop-filter:blur(24px); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-lg);">
+            
+            <div class="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill mb-3"
+                 style="background: rgba(37,99,235,0.12); border: 1px solid rgba(37,99,235,0.25);">
+                <i class="fa-solid fa-gem text-xs" style="color:var(--brand-primary);"></i>
+                <span class="text-xs fw-bold font-monospace" style="color:var(--brand-primary);">Authentic • Transparent • Nationwide</span>
+            </div>
+
+            <h1 class="display-6 font-heading fw-bold mb-3" style="color:var(--text-primary); letter-spacing:-0.02em;">Empowering Modern Commerce Across Pakistan</h1>
+            <p class="small mx-auto" style="max-width: 620px; color:var(--text-muted); line-height:1.7;">
+                Hamara Commerce is Pakistan's premier e-commerce platform dedicated to genuine consumer electronics, premium lifestyle collections, and verified daily essentials with uncompromising quality.
+            </p>
+        </div>
+
+        <!-- Mission & Values -->
+        <div class="row g-4 mb-5">
+            <div class="col-md-4">
+                <div class="card-glass rounded-4 p-4 h-100 text-center"
+                     style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+                    <div class="rounded-circle d-inline-flex mx-auto mb-3 p-3" 
+                         style="width: 60px; height: 60px; background: rgba(37,99,235,0.12); color: #60a5fa; align-items: center; justify-content: center;">
+                        <i class="fa-solid fa-award fs-3"></i>
+                    </div>
+                    <h2 class="h5 font-heading fw-bold mb-2" style="color:var(--text-primary);">100% Genuine Brands</h2>
+                    <p class="small mb-0" style="color:var(--text-muted); line-height:1.6;">Every product in our catalog is directly sourced from authorized brand distributors with valid warranty verification.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card-glass rounded-4 p-4 h-100 text-center"
+                     style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+                    <div class="rounded-circle d-inline-flex mx-auto mb-3 p-3" 
+                         style="width: 60px; height: 60px; background: rgba(16,185,129,0.12); color: #10b981; align-items: center; justify-content: center;">
+                        <i class="fa-solid fa-shield-halved fs-3"></i>
+                    </div>
+                    <h2 class="h5 font-heading fw-bold mb-2" style="color:var(--text-primary);">Safe &amp; Honest Delivery</h2>
+                    <p class="small mb-0" style="color:var(--text-muted); line-height:1.6;">We believe in transparent pricing with zero surprise surcharges, express nationwide delivery, and real cash on delivery.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card-glass rounded-4 p-4 h-100 text-center"
+                     style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+                    <div class="rounded-circle d-inline-flex mx-auto mb-3 p-3" 
+                         style="width: 60px; height: 60px; background: rgba(6,182,212,0.12); color: #06b6d4; align-items: center; justify-content: center;">
+                        <i class="fa-solid fa-heart-circle-check fs-3"></i>
+                    </div>
+                    <h2 class="h5 font-heading fw-bold mb-2" style="color:var(--text-primary);">Customer-First Support</h2>
+                    <p class="small mb-0" style="color:var(--text-muted); line-height:1.6;">Our dedicated support team operates 24/7 to guarantee rapid dispute resolution, live order tracking, and hassle-free returns.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

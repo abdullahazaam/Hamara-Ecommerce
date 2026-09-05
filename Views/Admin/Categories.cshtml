@@ -1,0 +1,95 @@
+@model List<HamaraCommerce.Models.Category>
+@{
+    ViewData["Title"] = "Admin Category Management";
+}
+
+<div class="admin-wrapper">
+    <div class="admin-sidebar">
+        <div class="brand-title fs-5 mb-4 text-center">
+            <i class="fa-solid fa-gauge-high text-primary me-2"></i>Hamara<span>Admin</span>
+        </div>
+        <nav class="d-flex flex-column gap-1">
+            <a asp-controller="Admin" asp-action="Index" class="admin-menu-link">
+                <i class="fa-solid fa-chart-pie me-2"></i>Dashboard
+            </a>
+            <a asp-controller="Admin" asp-action="Products" class="admin-menu-link">
+                <i class="fa-solid fa-box-open me-2"></i>Products
+            </a>
+            <a asp-controller="Admin" asp-action="Categories" class="admin-menu-link active">
+                <i class="fa-solid fa-tags me-2"></i>Categories
+            </a>
+            <a asp-controller="Admin" asp-action="Orders" class="admin-menu-link">
+                <i class="fa-solid fa-cart-flatbed me-2"></i>Orders
+            </a>
+            <a asp-controller="Admin" asp-action="Customers" class="admin-menu-link">
+                <i class="fa-solid fa-users me-2"></i>Customers
+            </a>
+            <a asp-controller="Admin" asp-action="Coupons" class="admin-menu-link">
+                <i class="fa-solid fa-ticket me-2"></i>Coupons
+            </a>
+            <a asp-controller="Admin" asp-action="Inventory" class="admin-menu-link">
+                <i class="fa-solid fa-warehouse me-2"></i>Inventory
+            </a>
+        </nav>
+    </div>
+
+    <div class="admin-content">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="h3 font-heading fw-bold mb-1">Category Management</h2>
+                <p class="text-muted mb-0">Total @Model.Count categories active</p>
+            </div>
+            <button class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addCatModal">
+                <i class="fa-solid fa-plus me-1"></i>Add Category
+            </button>
+        </div>
+
+        <div class="card border-0 shadow-sm rounded-4 p-4">
+            <div class="row g-3">
+                @foreach (var c in Model)
+                {
+                    <div class="col-md-4 col-sm-6">
+                        <div class="p-3 border rounded-3 bg-light d-flex align-items-center gap-3">
+                            <div class="fs-2 text-primary"><i class="fa-solid @c.Icon"></i></div>
+                            <div>
+                                <h6 class="fw-bold text-dark mb-0">@c.Name</h6>
+                                <span class="small text-muted">@c.Description</span>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ADD CATEGORY MODAL -->
+<div class="modal fade" id="addCatModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4 border-0">
+            <div class="modal-header border-0 bg-primary text-white">
+                <h5 class="modal-title font-heading fw-bold">Add New Category</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-controller="Admin" asp-action="SaveCategory" method="post">
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Category Name</label>
+                        <input type="text" name="Name" class="form-control" placeholder="e.g. Smart Home" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">FontAwesome Icon Class</label>
+                        <input type="text" name="Icon" class="form-control" placeholder="fa-house-laptop" value="fa-box" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Description</label>
+                        <input type="text" name="Description" class="form-control" placeholder="Short summary..." />
+                    </div>
+                </div>
+                <div class="modal-footer border-0 p-4 pt-0">
+                    <button type="submit" class="btn btn-primary-custom w-100">Create Category</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

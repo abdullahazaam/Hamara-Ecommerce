@@ -1,0 +1,295 @@
+@model HamaraCommerce.Models.ProductFormViewModel
+@{
+    ViewData["Title"] = "Add New Product";
+    Layout = "_AdminLayout";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <a asp-controller="Admin" asp-action="Products" class="text-muted small text-decoration-none">
+            <i class="fa-solid fa-arrow-left me-1"></i>Back to Products
+        </a>
+        <h2 class="h3 font-heading fw-bold mb-0 mt-1">Create New Product</h2>
+    </div>
+</div>
+
+        <form asp-controller="Admin" asp-action="AddProduct" method="post" enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger rounded-3 small py-2 mb-4" role="alert"></div>
+
+            <div class="row g-4">
+                <!-- MAIN FORM (LEFT 8 COLS) -->
+                <div class="col-lg-8">
+                    <!-- BASIC DETAILS -->
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <h5 class="fw-bold font-heading mb-3"><i class="fa-solid fa-circle-info text-primary me-2"></i>Basic Information</h5>
+                        <div class="mb-3">
+                            <label asp-for="Title" class="form-label small fw-semibold text-muted"></label>
+                            <input asp-for="Title" class="form-control" placeholder="e.g. Sony WH-1000XM5 Wireless Headphones" id="productTitleInput" autofocus />
+                            <span asp-validation-for="Title" class="text-danger small"></span>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="Brand" class="form-label small fw-semibold text-muted"></label>
+                                <input asp-for="Brand" class="form-control" placeholder="e.g. Sony, Apple, Nike" />
+                                <span asp-validation-for="Brand" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="CategoryId" class="form-label small fw-semibold text-muted"></label>
+                                <select asp-for="CategoryId" class="form-select">
+                                    <option value="">-- Select Category --</option>
+                                    @foreach (var cat in Model.AvailableCategories)
+                                    {
+                                        <option value="@cat.Id">@cat.Name</option>
+                                    }
+                                </select>
+                                <span asp-validation-for="CategoryId" class="text-danger small"></span>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="SKU" class="form-label small fw-semibold text-muted"></label>
+                                <input asp-for="SKU" class="form-control font-monospace" placeholder="e.g. HC-SNY-1000" />
+                                <span asp-validation-for="SKU" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Slug" class="form-label small fw-semibold text-muted"></label>
+                                <input asp-for="Slug" class="form-control font-monospace" placeholder="e.g. sony-wh-1000xm5" id="productSlugInput" />
+                                <span asp-validation-for="Slug" class="text-danger small"></span>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="ShortDescription" class="form-label small fw-semibold text-muted"></label>
+                            <textarea asp-for="ShortDescription" class="form-control" rows="2" placeholder="Brief summary displayed on cards and search results..."></textarea>
+                            <span asp-validation-for="ShortDescription" class="text-danger small"></span>
+                        </div>
+
+                        <div class="mb-0">
+                            <label asp-for="FullDescription" class="form-label small fw-semibold text-muted"></label>
+                            <textarea asp-for="FullDescription" class="form-control" rows="5" placeholder="Detailed product story, features, benefits and overview..."></textarea>
+                            <span asp-validation-for="FullDescription" class="text-danger small"></span>
+                        </div>
+                    </div>
+
+                    <!-- PRICING & INVENTORY -->
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <h5 class="fw-bold font-heading mb-3"><i class="fa-solid fa-dollar-sign text-success me-2"></i>Pricing & Inventory</h5>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <label asp-for="Price" class="form-label small fw-semibold text-muted"></label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light">$</span>
+                                    <input asp-for="Price" class="form-control" type="number" step="0.01" />
+                                </div>
+                                <span asp-validation-for="Price" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label asp-for="OldPrice" class="form-label small fw-semibold text-muted"></label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light">$</span>
+                                    <input asp-for="OldPrice" class="form-control" type="number" step="0.01" />
+                                </div>
+                                <span asp-validation-for="OldPrice" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label asp-for="CostPrice" class="form-label small fw-semibold text-muted"></label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light">$</span>
+                                    <input asp-for="CostPrice" class="form-control" type="number" step="0.01" />
+                                </div>
+                                <span asp-validation-for="CostPrice" class="text-danger small"></span>
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label asp-for="Stock" class="form-label small fw-semibold text-muted"></label>
+                                <input asp-for="Stock" class="form-control" type="number" />
+                                <span asp-validation-for="Stock" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Status" class="form-label small fw-semibold text-muted"></label>
+                                <select asp-for="Status" class="form-select">
+                                    <option value="Published">Published (Live in Store)</option>
+                                    <option value="Draft">Draft (Hidden)</option>
+                                    <option value="Archived">Archived (Retired)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- IMAGE UPLOADS -->
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <h5 class="fw-bold font-heading mb-3"><i class="fa-regular fa-image text-info me-2"></i>Product Media & Gallery</h5>
+                        <div class="mb-3">
+                            <label asp-for="MainImageFile" class="form-label small fw-semibold text-muted"></label>
+                            <input asp-for="MainImageFile" class="form-control" type="file" accept=".jpg,.jpeg,.png,.webp,.gif" />
+                            <div class="form-text small">Accepted formats: JPG, PNG, WEBP, GIF. Max size 5 MB.</div>
+                            <span asp-validation-for="MainImageFile" class="text-danger small"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold text-muted">Or External Main Image URL</label>
+                            <input asp-for="ExistingMainImage" class="form-control" placeholder="https://..." />
+                        </div>
+
+                        <div class="mb-0">
+                            <label asp-for="AdditionalImageFiles" class="form-label small fw-semibold text-muted"></label>
+                            <input asp-for="AdditionalImageFiles" class="form-control" type="file" multiple accept=".jpg,.jpeg,.png,.webp,.gif" />
+                            <div class="form-text small">Select multiple gallery images for product showcase.</div>
+                        </div>
+                    </div>
+
+                    <!-- VARIANTS BUILDER -->
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="fw-bold font-heading mb-0"><i class="fa-solid fa-layer-group text-warning me-2"></i>Product Variants (Optional)</h5>
+                            <button type="button" class="btn btn-outline-primary btn-sm rounded-pill" id="btnAddVariant">
+                                <i class="fa-solid fa-plus me-1"></i>Add Variant
+                            </button>
+                        </div>
+                        <p class="text-muted small">Configure options like Color, Size, Storage with custom SKU and stock.</p>
+
+                        <div id="variantsContainer" class="d-flex flex-column gap-3">
+                            <!-- Variants added dynamically via JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SIDEBAR ATTRIBUTES (RIGHT 4 COLS) -->
+                <div class="col-lg-4">
+                    <!-- PROMOTIONAL FLAGS -->
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <h5 class="fw-bold font-heading mb-3"><i class="fa-solid fa-bullhorn text-danger me-2"></i>Badges & Promotions</h5>
+                        <div class="form-check form-switch mb-2">
+                            <input asp-for="IsFeatured" class="form-check-input" />
+                            <label asp-for="IsFeatured" class="form-check-label small fw-semibold">Featured Product</label>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input asp-for="IsTrending" class="form-check-input" />
+                            <label asp-for="IsTrending" class="form-check-label small fw-semibold">Trending Now</label>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input asp-for="IsNewArrival" class="form-check-input" />
+                            <label asp-for="IsNewArrival" class="form-check-label small fw-semibold">New Arrival</label>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input asp-for="IsBestSeller" class="form-check-input" />
+                            <label asp-for="IsBestSeller" class="form-check-label small fw-semibold">Best Seller</label>
+                        </div>
+                        <div class="form-check form-switch mb-3">
+                            <input asp-for="IsFlashDeal" class="form-check-input" />
+                            <label asp-for="IsFlashDeal" class="form-check-label small fw-semibold">Flash Deal Promo</label>
+                        </div>
+
+                        <div>
+                            <label asp-for="FlashDealEnd" class="form-label small fw-semibold text-muted">Flash Deal End Time</label>
+                            <input asp-for="FlashDealEnd" class="form-control" type="datetime-local" />
+                        </div>
+                    </div>
+
+                    <!-- SHIPPING & LOGISTICS -->
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <h5 class="fw-bold font-heading mb-3"><i class="fa-solid fa-truck-fast text-secondary me-2"></i>Shipping & Specs</h5>
+                        <div class="mb-3">
+                            <label asp-for="WeightKg" class="form-label small fw-semibold text-muted"></label>
+                            <input asp-for="WeightKg" class="form-control" type="number" step="0.01" />
+                        </div>
+                        <div class="mb-3">
+                            <label asp-for="Dimensions" class="form-label small fw-semibold text-muted"></label>
+                            <input asp-for="Dimensions" class="form-control" placeholder="15 x 10 x 5 cm" />
+                        </div>
+                        <div class="mb-3">
+                            <label asp-for="DeliveryEstimate" class="form-label small fw-semibold text-muted"></label>
+                            <input asp-for="DeliveryEstimate" class="form-control" />
+                        </div>
+                        <div class="mb-3">
+                            <label asp-for="Warranty" class="form-label small fw-semibold text-muted"></label>
+                            <input asp-for="Warranty" class="form-control" />
+                        </div>
+                        <div class="mb-0">
+                            <label asp-for="ReturnPolicy" class="form-label small fw-semibold text-muted"></label>
+                            <input asp-for="ReturnPolicy" class="form-control" />
+                        </div>
+                    </div>
+
+                    <!-- ACTIONS -->
+                    <div class="card border-0 shadow-sm rounded-4 p-4">
+                        <button type="submit" class="btn btn-primary-custom w-100 py-2.5 fw-bold rounded-3 mb-2">
+                            <i class="fa-solid fa-check me-2"></i>Publish Product
+                        </button>
+                        <a asp-controller="Admin" asp-action="Products" class="btn btn-glass w-100 py-2 rounded-3 text-center">
+                            Cancel
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        // Auto-generate slug from title
+        document.getElementById('productTitleInput')?.addEventListener('input', function(e) {
+            const slugInput = document.getElementById('productSlugInput');
+            if (slugInput && (!slugInput.value || slugInput.dataset.manual !== 'true')) {
+                slugInput.value = e.target.value.toLowerCase().trim()
+                    .replace(/[^a-z0-9\s-]/g, '')
+                    .replace(/\s+/g, '-')
+                    .replace(/-+/g, '-');
+            }
+        });
+
+        document.getElementById('productSlugInput')?.addEventListener('input', function() {
+            this.dataset.manual = 'true';
+        });
+
+        // Add Variant logic
+        let variantIndex = 0;
+        document.getElementById('btnAddVariant')?.addEventListener('click', function() {
+            const container = document.getElementById('variantsContainer');
+            const skuVal = document.querySelector('[name="SKU"]')?.value || 'HC-VAR';
+            const card = document.createElement('div');
+            card.className = 'p-3 border rounded-3 bg-light position-relative';
+            card.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <strong class="small text-primary">Variant #${variantIndex + 1}</strong>
+                    <button type="button" class="btn btn-link text-danger p-0 small text-decoration-none" onclick="this.closest('.border').remove()">
+                        <i class="fa-solid fa-xmark me-1"></i>Remove
+                    </button>
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="small text-muted">Name (e.g. Space Gray / 256GB)</label>
+                        <input type="text" name="Variants[${variantIndex}].Name" class="form-control form-control-sm" required />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="small text-muted">Variant SKU</label>
+                        <input type="text" name="Variants[${variantIndex}].SKU" value="${skuVal}-V${variantIndex + 1}" class="form-control form-control-sm font-monospace" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="small text-muted">Color</label>
+                        <input type="text" name="Variants[${variantIndex}].Color" class="form-control form-control-sm" placeholder="e.g. Navy" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="small text-muted">Size / Spec</label>
+                        <input type="text" name="Variants[${variantIndex}].Size" class="form-control form-control-sm" placeholder="e.g. XL or 256GB" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="small text-muted">Price Adj ($)</label>
+                        <input type="number" step="0.01" name="Variants[${variantIndex}].PriceAdjustment" value="0.00" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="small text-muted">Stock</label>
+                        <input type="number" name="Variants[${variantIndex}].Stock" value="25" class="form-control form-control-sm" />
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+            variantIndex++;
+        });
+    </script>
+}

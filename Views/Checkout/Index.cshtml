@@ -1,0 +1,249 @@
+@model HamaraCommerce.Models.CheckoutFormViewModel
+@inject HamaraCommerce.Services.IShippingTaxService ShippingTaxService
+@{
+    ViewData["Title"] = "Secure Checkout";
+    var shippingOptions = ShippingTaxService.GetAvailableShippingMethods(Model.Cart.SubTotal, Model.Cart.CouponGrantsFreeShipping);
+}
+
+<!-- Breadcrumbs -->
+<nav aria-label="breadcrumb" class="mb-4 reveal-on-scroll">
+    <ol class="breadcrumb small mb-0">
+        <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">Home</a></li>
+        <li class="breadcrumb-item"><a asp-controller="Cart" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">Cart</a></li>
+        <li class="breadcrumb-item active fw-bold" style="color:var(--brand-primary);" aria-current="page">Checkout</li>
+    </ol>
+</nav>
+
+<div class="mb-4 reveal-on-scroll">
+    <div class="d-flex align-items-center gap-2 mb-1">
+        <span class="badge rounded-pill bg-success-subtle text-success border border-success px-3 py-1 text-xs fw-bold">
+            <i class="fa-solid fa-lock me-1"></i>256-Bit Encrypted Checkout
+        </span>
+    </div>
+    <h1 class="h3 font-heading fw-bold mb-1" style="color:var(--text-primary); letter-spacing:-0.02em;">Complete Your Order</h1>
+    <p class="small mb-0" style="color:var(--text-muted);">Provide your delivery address and preferred payment method below.</p>
+</div>
+
+<form asp-controller="Checkout" asp-action="ProcessOrder" method="post">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="IdempotencyToken" />
+
+    <div class="row g-4">
+        <!-- Main Form Fields -->
+        <div class="col-lg-8">
+            <!-- 1. Customer Information & Delivery Address -->
+            <div class="card-glass rounded-4 p-4 mb-4 reveal-on-scroll"
+                 style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+                <div class="d-flex align-items-center gap-3 mb-4 pb-2 border-bottom" style="border-color:var(--border-subtle) !important;">
+                    <span class="rounded-circle text-white fw-bold d-inline-flex align-items-center justify-content-center"
+                          style="width: 32px; height: 32px; background: var(--grad-btn); font-size:0.9rem; box-shadow:var(--shadow-btn);">1</span>
+                    <h2 class="h5 font-heading fw-bold mb-0" style="color:var(--text-primary);">Customer &amp; Delivery Address</h2>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label asp-for="CustomerName" class="form-label small fw-bold" style="color:var(--text-muted);">Full Name *</label>
+                        <input asp-for="CustomerName" class="form-control rounded-3" placeholder="e.g. Usman Tariq" required />
+                        <span asp-validation-for="CustomerName" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="CustomerEmail" class="form-label small fw-bold" style="color:var(--text-muted);">Email Address *</label>
+                        <input asp-for="CustomerEmail" class="form-control rounded-3" type="email" placeholder="usman@example.com" required />
+                        <span asp-validation-for="CustomerEmail" class="text-danger small"></span>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label asp-for="CustomerPhone" class="form-label small fw-bold" style="color:var(--text-muted);">Phone Number (Pakistan) *</label>
+                        <input asp-for="CustomerPhone" class="form-control rounded-3" placeholder="0300 1234567" required />
+                        <span asp-validation-for="CustomerPhone" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="City" class="form-label small fw-bold" style="color:var(--text-muted);">City *</label>
+                        <input asp-for="City" class="form-control rounded-3" placeholder="Lahore, Karachi, Islamabad..." required />
+                        <span asp-validation-for="City" class="text-danger small"></span>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="StreetAddress" class="form-label small fw-bold" style="color:var(--text-muted);">Complete Street Address *</label>
+                    <textarea asp-for="StreetAddress" class="form-control rounded-3" rows="2" placeholder="House/Flat No., Street, Sector/Phase, Landmark" required></textarea>
+                    <span asp-validation-for="StreetAddress" class="text-danger small"></span>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="State" class="form-label small fw-bold" style="color:var(--text-muted);">Province / Territory *</label>
+                        <select asp-for="State" class="form-select rounded-3" required>
+                            <option value="Punjab">Punjab</option>
+                            <option value="Sindh">Sindh</option>
+                            <option value="Khyber Pakhtunkhwa">Khyber Pakhtunkhwa</option>
+                            <option value="Balochistan">Balochistan</option>
+                            <option value="Islamabad Capital Territory">Islamabad Capital Territory</option>
+                            <option value="Azad Jammu & Kashmir">Azad Jammu & Kashmir</option>
+                            <option value="Gilgit-Baltistan">Gilgit-Baltistan</option>
+                        </select>
+                        <span asp-validation-for="State" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="PostalCode" class="form-label small fw-bold" style="color:var(--text-muted);">Postal Code *</label>
+                        <input asp-for="PostalCode" class="form-control font-monospace rounded-3" placeholder="54000" required />
+                        <span asp-validation-for="PostalCode" class="text-danger small"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Shipping & Courier Selection -->
+            <div class="card-glass rounded-4 p-4 mb-4 reveal-on-scroll"
+                 style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+                <div class="d-flex align-items-center gap-3 mb-4 pb-2 border-bottom" style="border-color:var(--border-subtle) !important;">
+                    <span class="rounded-circle text-white fw-bold d-inline-flex align-items-center justify-content-center"
+                          style="width: 32px; height: 32px; background: var(--grad-btn); font-size:0.9rem; box-shadow:var(--shadow-btn);">2</span>
+                    <h2 class="h5 font-heading fw-bold mb-0" style="color:var(--text-primary);">Courier &amp; Delivery Speed</h2>
+                </div>
+
+                <div class="d-flex flex-column gap-2.5">
+                    @foreach (var opt in shippingOptions)
+                    {
+                        <div class="p-3 rounded-3 border" style="background:var(--bg-surface-elevated); border-color:var(--border-default) !important;">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" asp-for="ShippingMethod" value="@opt.Code" id="ship_@opt.Code" checked="@(Model.ShippingMethod == opt.Code || (string.IsNullOrEmpty(Model.ShippingMethod) && opt.Code == "Standard"))" />
+                                <label class="form-check-label w-100 d-flex justify-content-between align-items-center ms-2" for="ship_@opt.Code">
+                                    <div>
+                                        <strong class="d-block small" style="color:var(--text-primary);">@opt.Name</strong>
+                                        <span class="small" style="color:var(--text-muted);">@opt.Description</span>
+                                    </div>
+                                    <span class="fw-bold small" style="color:var(--brand-primary);">@opt.FormattedCost</span>
+                                </label>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- 3. Payment Method Selection -->
+            <div class="card-glass rounded-4 p-4 mb-4 reveal-on-scroll"
+                 style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+                <div class="d-flex align-items-center gap-3 mb-4 pb-2 border-bottom" style="border-color:var(--border-subtle) !important;">
+                    <span class="rounded-circle text-white fw-bold d-inline-flex align-items-center justify-content-center"
+                          style="width: 32px; height: 32px; background: var(--grad-btn); font-size:0.9rem; box-shadow:var(--shadow-btn);">3</span>
+                    <h2 class="h5 font-heading fw-bold mb-0" style="color:var(--text-primary);">Payment Method</h2>
+                </div>
+
+                <div class="d-flex flex-column gap-2.5">
+                    <div class="p-3 rounded-3 border" style="background:var(--bg-surface-elevated); border-color:var(--border-default) !important;">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" asp-for="PaymentMethod" value="CashOnDelivery" id="payCOD" checked />
+                            <label class="form-check-label w-100 d-flex justify-content-between align-items-center ms-2" for="payCOD">
+                                <div>
+                                    <strong class="d-block small" style="color:var(--text-primary);">
+                                        <i class="fa-solid fa-money-bill-wave text-success me-2"></i>Cash on Delivery (COD)
+                                    </strong>
+                                    <span class="small" style="color:var(--text-muted);">Pay in cash safely upon package arrival at your doorstep.</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="p-3 rounded-3 border" style="background:var(--bg-surface-elevated); border-color:var(--border-default) !important;">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" asp-for="PaymentMethod" value="OnlineCard" id="payCard" />
+                            <label class="form-check-label w-100 d-flex justify-content-between align-items-center ms-2" for="payCard">
+                                <div>
+                                    <strong class="d-block small" style="color:var(--text-primary);">
+                                        <i class="fa-solid fa-credit-card text-primary me-2"></i>Debit / Credit Card (Online Payment)
+                                    </strong>
+                                    <span class="small" style="color:var(--text-muted);">Visa, Mastercard, or UnionPay processed securely.</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="p-3 rounded-3 border" style="background:var(--bg-surface-elevated); border-color:var(--border-default) !important;">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" asp-for="PaymentMethod" value="BankTransfer" id="payBank" />
+                            <label class="form-check-label w-100 d-flex justify-content-between align-items-center ms-2" for="payBank">
+                                <div>
+                                    <strong class="d-block small" style="color:var(--text-primary);">
+                                        <i class="fa-solid fa-building-columns text-secondary me-2"></i>Direct Bank Transfer / Raast
+                                    </strong>
+                                    <span class="small" style="color:var(--text-muted);">Instant zero-fee transfer via Raast ID or IBAN.</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Customer Notes -->
+            <div class="card-glass rounded-4 p-4 reveal-on-scroll"
+                 style="background:var(--bg-surface); border:1px solid var(--border-default) !important;">
+                <label asp-for="CustomerNotes" class="form-label small fw-bold" style="color:var(--text-muted);">Delivery Instructions / Notes (Optional)</label>
+                <textarea asp-for="CustomerNotes" class="form-control rounded-3" rows="2" placeholder="e.g. Please call before arrival or leave with security"></textarea>
+            </div>
+        </div>
+
+        <!-- Sidebar Summary -->
+        <div class="col-lg-4">
+            <div class="card-glass rounded-4 p-4 position-sticky reveal-on-scroll"
+                 style="top: 85px; background:var(--bg-glass); backdrop-filter:blur(24px); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-md);">
+                <h2 class="h5 font-heading fw-bold mb-3" style="color:var(--text-primary);">Order Items (@Model.Cart.ItemCount)</h2>
+
+                <div class="d-flex flex-column gap-2 mb-3 overflow-y-auto" style="max-height: 240px;">
+                    @foreach (var item in Model.Cart.Items)
+                    {
+                        <div class="d-flex align-items-center justify-content-between gap-2 border-bottom pb-2" style="border-color:var(--border-subtle) !important;">
+                            <div class="d-flex align-items-center gap-2">
+                                <img src="@item.ImageUrl" class="rounded-2 border" style="width: 40px; height: 40px; object-fit: cover; border-color:var(--border-default) !important;" alt="@item.Title" />
+                                <div>
+                                    <div class="small fw-semibold text-truncate" style="max-width: 150px; color:var(--text-primary);">@item.Title</div>
+                                    <span class="text-xs" style="color:var(--text-muted);">Qty: @item.Quantity</span>
+                                </div>
+                            </div>
+                            <span class="small fw-bold" style="color:var(--text-primary);">@ShippingTaxService.FormatCurrency(item.LineTotal)</span>
+                        </div>
+                    }
+                </div>
+
+                <div class="d-flex justify-content-between mb-2 small">
+                    <span style="color:var(--text-muted);">Subtotal</span>
+                    <strong style="color:var(--text-primary);">@ShippingTaxService.FormatCurrency(Model.Cart.SubTotal)</strong>
+                </div>
+
+                @if (Model.Cart.CouponDiscountAmount > 0)
+                {
+                    <div class="d-flex justify-content-between mb-2 small fw-bold" style="color:var(--status-success);">
+                        <span>Discount (@Model.Cart.AppliedCouponCode)</span>
+                        <span>-@ShippingTaxService.FormatCurrency(Model.Cart.CouponDiscountAmount)</span>
+                    </div>
+                }
+
+                <div class="d-flex justify-content-between mb-2 small">
+                    <span style="color:var(--text-muted);">GST Tax</span>
+                    <strong style="color:var(--text-primary);">@ShippingTaxService.FormatCurrency(Model.Cart.EstimatedTax)</strong>
+                </div>
+
+                <div class="d-flex justify-content-between mb-3 small">
+                    <span style="color:var(--text-muted);">Shipping</span>
+                    <strong style="color:var(--text-primary);">@(Model.Cart.EffectiveShippingFee == 0 ? "FREE" : ShippingTaxService.FormatCurrency(Model.Cart.EffectiveShippingFee))</strong>
+                </div>
+
+                <hr style="border-color:var(--border-subtle) !important;" />
+
+                <div class="d-flex justify-content-between fs-5 fw-bold mb-4">
+                    <span style="color:var(--text-primary);">Total</span>
+                    <span class="font-heading" style="color:var(--brand-primary);">@ShippingTaxService.FormatCurrency(Model.Cart.GrandTotal)</span>
+                </div>
+
+                <button type="submit" class="btn btn-primary-custom w-100 py-3 rounded-pill fw-bold shadow-sm mb-3">
+                    <i class="fa-solid fa-lock me-2"></i>Place Order
+                </button>
+
+                <div class="text-center small" style="color:var(--text-muted); font-size:0.75rem;">
+                    <i class="fa-solid fa-shield-halved text-success me-1"></i>256-Bit SSL Encrypted &amp; Protected
+                </div>
+            </div>
+        </div>
+    </div>
+</form>

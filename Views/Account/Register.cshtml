@@ -1,0 +1,85 @@
+@model HamaraCommerce.Models.RegisterViewModel
+@{
+    ViewData["Title"] = "Create Customer Account";
+}
+
+<div class="row justify-content-center py-5 reveal-on-scroll">
+    <div class="col-md-6 col-lg-5 col-xl-4">
+        <div class="card-glass rounded-4 p-4 p-md-5 position-relative overflow-hidden"
+             style="background:var(--bg-glass); backdrop-filter:blur(24px); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-xl);">
+            
+            <!-- Brand Header -->
+            <div class="text-center mb-4">
+                <a asp-controller="Home" asp-action="Index" class="brand-logo justify-content-center mb-3">
+                    <div class="logo-icon"><i class="fa-solid fa-bag-shopping"></i></div>
+                    <div class="logo-text">Hamara<span>Commerce</span></div>
+                </a>
+                <h1 class="h4 font-heading fw-bold mb-1" style="color:var(--text-primary); letter-spacing:-0.02em;">Join Hamara Commerce</h1>
+                <p class="small mb-0" style="color:var(--text-muted);">Create an account for 1-click checkout, package tracking, and exclusive discounts.</p>
+            </div>
+
+            <form asp-controller="Account" asp-action="Register" asp-route-returnUrl="@ViewData["ReturnUrl"]" method="post">
+                @Html.AntiForgeryToken()
+                
+                @if (!ViewData.ModelState.IsValid && ViewData.ModelState[string.Empty]?.Errors.Count > 0)
+                {
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger small rounded-3 mb-3"></div>
+                }
+
+                <div class="mb-3">
+                    <label asp-for="FullName" class="form-label small fw-bold" style="color:var(--text-muted);">Full Name</label>
+                    <div class="input-group">
+                        <span class="input-group-text rounded-start-3" style="border-color:var(--border-default);"><i class="fa-regular fa-user"></i></span>
+                        <input asp-for="FullName" class="form-control rounded-end-3" placeholder="e.g. Usman Tariq" autofocus required />
+                    </div>
+                    <span asp-validation-for="FullName" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="Email" class="form-label small fw-bold" style="color:var(--text-muted);">Email Address</label>
+                    <div class="input-group">
+                        <span class="input-group-text rounded-start-3" style="border-color:var(--border-default);"><i class="fa-regular fa-envelope"></i></span>
+                        <input asp-for="Email" class="form-control rounded-end-3" type="email" placeholder="usman@example.com" required />
+                    </div>
+                    <span asp-validation-for="Email" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="PhoneNumber" class="form-label small fw-bold" style="color:var(--text-muted);">Phone Number (Pakistan)</label>
+                    <div class="input-group">
+                        <span class="input-group-text rounded-start-3" style="border-color:var(--border-default);"><i class="fa-solid fa-phone-volume"></i></span>
+                        <input asp-for="PhoneNumber" class="form-control rounded-end-3" placeholder="0300 1234567" required />
+                    </div>
+                    <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="Password" class="form-label small fw-bold" style="color:var(--text-muted);">Password</label>
+                    <div class="input-group">
+                        <span class="input-group-text rounded-start-3" style="border-color:var(--border-default);"><i class="fa-regular fa-lock"></i></span>
+                        <input asp-for="Password" class="form-control rounded-end-3" type="password" placeholder="••••••••" required />
+                    </div>
+                    <span asp-validation-for="Password" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-4">
+                    <label asp-for="ConfirmPassword" class="form-label small fw-bold" style="color:var(--text-muted);">Confirm Password</label>
+                    <div class="input-group">
+                        <span class="input-group-text rounded-start-3" style="border-color:var(--border-default);"><i class="fa-solid fa-lock"></i></span>
+                        <input asp-for="ConfirmPassword" class="form-control rounded-end-3" type="password" placeholder="••••••••" required />
+                    </div>
+                    <span asp-validation-for="ConfirmPassword" class="text-danger small"></span>
+                </div>
+
+                <button type="submit" class="btn btn-primary-custom w-100 py-2.5 rounded-pill shadow-sm mb-3">
+                    <i class="fa-solid fa-user-plus me-1"></i>Create Free Account
+                </button>
+
+                <div class="text-center small" style="color:var(--text-muted);">
+                    Already have an account? 
+                    <a asp-action="Login" asp-route-returnUrl="@ViewData["ReturnUrl"]" class="fw-bold text-decoration-none" style="color:var(--brand-primary);">Sign In</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,221 @@
+@model HamaraCommerce.Models.ProfileViewModel
+@inject HamaraCommerce.Services.IShippingTaxService ShippingTaxService
+@{
+    ViewData["Title"] = "Customer Account Portal";
+}
+
+<!-- Breadcrumbs -->
+<nav aria-label="breadcrumb" class="mb-4 reveal-on-scroll">
+    <ol class="breadcrumb small mb-0">
+        <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">Home</a></li>
+        <li class="breadcrumb-item active fw-bold" style="color:var(--brand-primary);" aria-current="page">My Account</li>
+    </ol>
+</nav>
+
+<div class="row g-4 reveal-on-scroll">
+    <!-- PROFILE SIDEBAR -->
+    <div class="col-lg-3">
+        <div class="card-glass rounded-4 p-4 text-center mb-4"
+             style="background:var(--bg-glass); backdrop-filter:blur(24px); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-md);">
+            
+            <div class="position-relative d-inline-block mx-auto mb-3">
+                <img src="@(string.IsNullOrEmpty(Model.AvatarUrl) ? "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80" : Model.AvatarUrl)" 
+                     class="rounded-circle border border-2 shadow-sm" 
+                     style="width:90px; height:90px; object-fit:cover; border-color:var(--brand-primary) !important;" alt="Avatar" />
+            </div>
+            
+            <h2 class="h5 font-heading fw-bold mb-1" style="color:var(--text-primary);">@Model.FullName</h2>
+            <p class="small mb-2" style="color:var(--text-muted);">@Model.Email</p>
+            <div class="badge rounded-pill px-3 py-1 mb-3 text-xs fw-bold" style="background:rgba(37,99,235,0.15); color:var(--brand-primary); border:1px solid rgba(37,99,235,0.25);">
+                <i class="fa-solid fa-shield-check me-1"></i>Verified Customer
+            </div>
+
+            <div class="d-flex flex-column gap-1 text-start">
+                <a asp-controller="Account" asp-action="Index" 
+                   class="nav-link-custom active d-flex align-items-center justify-content-between p-2.5 rounded-3">
+                    <span><i class="fa-solid fa-gauge me-2 text-primary"></i>Overview</span>
+                    <i class="fa-solid fa-chevron-right text-xs"></i>
+                </a>
+                <a asp-controller="Account" asp-action="Orders" 
+                   class="nav-link-custom d-flex align-items-center justify-content-between p-2.5 rounded-3">
+                    <span><i class="fa-solid fa-box me-2 text-primary"></i>My Orders</span>
+                    <span class="badge rounded-pill" style="background:var(--bg-surface-elevated); color:var(--text-muted);">@Model.TotalOrders</span>
+                </a>
+                <a asp-controller="Account" asp-action="Wishlist" 
+                   class="nav-link-custom d-flex align-items-center justify-content-between p-2.5 rounded-3">
+                    <span><i class="fa-regular fa-heart me-2 text-danger"></i>Wishlist</span>
+                    <span class="badge rounded-pill" style="background:var(--bg-surface-elevated); color:var(--text-muted);">@Model.WishlistCount</span>
+                </a>
+                <a asp-controller="Account" asp-action="Addresses" 
+                   class="nav-link-custom d-flex align-items-center justify-content-between p-2.5 rounded-3">
+                    <span><i class="fa-solid fa-location-dot me-2 text-info"></i>Addresses</span>
+                    <span class="badge rounded-pill" style="background:var(--bg-surface-elevated); color:var(--text-muted);">@Model.SavedAddresses.Count</span>
+                </a>
+                <a asp-controller="Account" asp-action="ChangePassword" 
+                   class="nav-link-custom d-flex align-items-center justify-content-between p-2.5 rounded-3">
+                    <span><i class="fa-solid fa-key me-2 text-warning"></i>Change Password</span>
+                    <i class="fa-solid fa-chevron-right text-xs"></i>
+                </a>
+            </div>
+
+            <hr style="border-color:var(--border-subtle) !important;" class="my-3" />
+
+            <form asp-controller="Account" asp-action="Logout" method="post">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-glass btn-sm w-100 rounded-pill py-2" style="color:var(--status-danger);">
+                    <i class="fa-solid fa-arrow-right-from-bracket me-1"></i>Sign Out
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MAIN ACCOUNT CONTENT -->
+    <div class="col-lg-9">
+        <!-- STATS HIGHLIGHTS -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <div class="card-glass rounded-4 p-3.5" style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-3 p-3 fs-4" style="background:rgba(37,99,235,0.12); color:#60a5fa;">
+                            <i class="fa-solid fa-bag-shopping"></i>
+                        </div>
+                        <div>
+                            <span class="text-xs text-uppercase fw-bold" style="color:var(--text-muted); letter-spacing:0.04em;">Total Orders</span>
+                            <h3 class="fw-bold font-heading mb-0" style="color:var(--text-primary);">@Model.TotalOrders</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card-glass rounded-4 p-3.5" style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-3 p-3 fs-4" style="background:rgba(239,68,68,0.12); color:#ef4444;">
+                            <i class="fa-solid fa-heart"></i>
+                        </div>
+                        <div>
+                            <span class="text-xs text-uppercase fw-bold" style="color:var(--text-muted); letter-spacing:0.04em;">Wishlist Items</span>
+                            <h3 class="fw-bold font-heading mb-0" style="color:var(--text-primary);">@Model.WishlistCount</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card-glass rounded-4 p-3.5" style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-3 p-3 fs-4" style="background:rgba(16,185,129,0.12); color:#10b981;">
+                            <i class="fa-solid fa-wallet"></i>
+                        </div>
+                        <div>
+                            <span class="text-xs text-uppercase fw-bold" style="color:var(--text-muted); letter-spacing:0.04em;">Total Spent</span>
+                            <h3 class="fw-bold font-heading mb-0" style="color:var(--text-primary); font-size:1.4rem;">@ShippingTaxService.FormatCurrency(Model.TotalSpent)</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RECENT ORDERS CARD -->
+        <div class="card-glass rounded-4 p-4 mb-4" style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+            <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom" style="border-color:var(--border-subtle) !important;">
+                <h3 class="h5 font-heading fw-bold mb-0" style="color:var(--text-primary);">
+                    <i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i>Recent Purchases
+                </h3>
+                @if (Model.TotalOrders > 5)
+                {
+                    <a asp-controller="Account" asp-action="Orders" class="btn btn-glass btn-sm rounded-pill px-3">
+                        View All Orders (@Model.TotalOrders)
+                    </a>
+                }
+            </div>
+            
+            @if (!Model.RecentOrders.Any())
+            {
+                <div class="text-center py-4">
+                    <i class="fa-solid fa-box-open fs-1 mb-3" style="color:var(--text-muted); opacity:0.4;"></i>
+                    <h4 class="h6 fw-bold" style="color:var(--text-primary);">No orders placed yet</h4>
+                    <p class="small mb-3" style="color:var(--text-muted);">Explore our catalog and place your first order!</p>
+                    <a asp-controller="Shop" asp-action="Index" class="btn btn-primary-custom btn-sm px-4 rounded-pill">Start Shopping</a>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead style="background:var(--bg-surface-elevated); border-bottom:1px solid var(--border-subtle);">
+                            <tr>
+                                <th class="ps-3 py-2.5 small text-uppercase fw-bold" style="color:var(--text-muted);">Reference</th>
+                                <th class="py-2.5 small text-uppercase fw-bold" style="color:var(--text-muted);">Date</th>
+                                <th class="py-2.5 small text-uppercase fw-bold" style="color:var(--text-muted);">Status</th>
+                                <th class="py-2.5 small text-uppercase fw-bold" style="color:var(--text-muted);">Total</th>
+                                <th class="pe-3 py-2.5 text-end small text-uppercase fw-bold" style="color:var(--text-muted);">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var order in Model.RecentOrders)
+                            {
+                                <tr style="border-bottom:1px solid var(--border-subtle);">
+                                    <td class="ps-3 py-3">
+                                        <a asp-controller="Account" asp-action="OrderDetail" asp-route-id="@order.OrderNumber" class="fw-bold font-monospace text-decoration-none" style="color:var(--brand-primary);">
+                                            @order.OrderNumber
+                                        </a>
+                                        <span class="text-xs d-block font-monospace" style="color:var(--text-muted);">@order.TrackingNumber</span>
+                                    </td>
+                                    <td class="small" style="color:var(--text-secondary);">@order.OrderDate.ToString("MMM dd, yyyy")</td>
+                                    <td>
+                                        <span class="badge bg-primary-subtle text-primary border border-primary rounded-pill px-2.5 py-1 text-xs font-monospace">@order.Status</span>
+                                    </td>
+                                    <td class="fw-bold font-heading" style="color:var(--text-primary);">@ShippingTaxService.FormatCurrency(order.TotalAmount)</td>
+                                    <td class="pe-3 text-end">
+                                        <a asp-controller="Account" asp-action="OrderDetail" asp-route-id="@order.OrderNumber" class="btn btn-glass btn-sm rounded-pill px-3 me-1">
+                                            <i class="fa-solid fa-eye me-1"></i>View
+                                        </a>
+                                        <a asp-controller="Account" asp-action="Invoice" asp-route-id="@order.OrderNumber" class="btn btn-outline-secondary btn-sm rounded-pill px-3" target="_blank">
+                                            <i class="fa-solid fa-print me-1"></i>Invoice
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <!-- SAVED ADDRESSES PREVIEW -->
+        <div class="card-glass rounded-4 p-4" style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+            <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom" style="border-color:var(--border-subtle) !important;">
+                <h3 class="h5 font-heading fw-bold mb-0" style="color:var(--text-primary);">
+                    <i class="fa-solid fa-map-location-dot me-2 text-primary"></i>Default Delivery Address
+                </h3>
+                <a asp-controller="Account" asp-action="Addresses" class="btn btn-glass btn-sm rounded-pill px-3">
+                    Manage Addresses
+                </a>
+            </div>
+
+            @if (!Model.SavedAddresses.Any())
+            {
+                <div class="text-center py-4">
+                    <p class="small mb-2" style="color:var(--text-muted);">You haven't saved any delivery addresses yet.</p>
+                    <a asp-controller="Account" asp-action="Addresses" class="btn btn-primary-custom btn-sm rounded-pill px-3">
+                        Add Address
+                    </a>
+                </div>
+            }
+            else
+            {
+                var defaultAddr = Model.SavedAddresses.FirstOrDefault(a => a.IsDefault) ?? Model.SavedAddresses.First();
+                <div class="p-3 rounded-3" style="background:var(--bg-surface-elevated); border:1px solid var(--border-subtle);">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <strong style="color:var(--brand-primary);">@defaultAddr.Title</strong>
+                        @if (defaultAddr.IsDefault)
+                        {
+                            <span class="badge bg-success-subtle text-success border border-success rounded-pill px-2.5 py-0.5 text-xs">Default</span>
+                        }
+                    </div>
+                    <p class="small mb-1 fw-semibold" style="color:var(--text-primary);">@defaultAddr.FullName</p>
+                    <p class="small mb-0" style="color:var(--text-secondary);">@defaultAddr.StreetAddress, @defaultAddr.City, @defaultAddr.State @defaultAddr.PostalCode, @defaultAddr.Country</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>

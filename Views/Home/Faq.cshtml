@@ -1,0 +1,98 @@
+@{
+    ViewData["Title"] = "Frequently Asked Questions (FAQs) — Hamara Commerce";
+}
+
+<!-- Breadcrumbs -->
+<nav aria-label="breadcrumb" class="mb-4 reveal-on-scroll">
+    <ol class="breadcrumb small mb-0">
+        <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">Home</a></li>
+        <li class="breadcrumb-item active fw-bold" style="color:var(--brand-primary);" aria-current="page">FAQs</li>
+    </ol>
+</nav>
+
+<div class="row justify-content-center py-2 reveal-on-scroll">
+    <div class="col-lg-9">
+        <div class="card-glass rounded-4 p-4 p-md-5 mb-4"
+             style="background:var(--bg-glass); backdrop-filter:blur(24px); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-lg);">
+            <div class="text-center mb-4">
+                <span class="badge bg-primary-subtle text-primary border border-primary px-3 py-1 rounded-pill mb-2 font-monospace small fw-bold">
+                    Help Center &amp; Guidance
+                </span>
+                <h1 class="h3 font-heading fw-bold mb-2" style="color:var(--text-primary); letter-spacing:-0.02em;">Frequently Asked Questions</h1>
+                <p class="small" style="color:var(--text-muted);">Find instant answers to common questions about ordering, payments, delivery, and warranty claims.</p>
+            </div>
+
+            <div class="accordion accordion-flush" id="faqAccordion">
+                <!-- FAQ 1 -->
+                <div class="accordion-item rounded-3 mb-2 overflow-hidden" style="background:var(--bg-surface); border:1px solid var(--border-default);">
+                    <h2 class="accordion-header" id="faqHead1">
+                        <button class="accordion-button collapsed fw-bold rounded-3" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapse1" style="background:transparent; color:var(--text-primary);">
+                            Are all products sold on Hamara Commerce authentic?
+                        </button>
+                    </h2>
+                    <div id="faqCollapse1" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body small" style="color:var(--text-secondary); line-height:1.7;">
+                            Yes, absolutely. We source all inventory directly from authorized brand distributors and certified manufacturers. Every electronic product comes with an official manufacturer warranty card and serial verification.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FAQ 2 -->
+                <div class="accordion-item rounded-3 mb-2 overflow-hidden" style="background:var(--bg-surface); border:1px solid var(--border-default);">
+                    <h2 class="accordion-header" id="faqHead2">
+                        <button class="accordion-button collapsed fw-bold rounded-3" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapse2" style="background:transparent; color:var(--text-primary);">
+                            What payment methods do you accept?
+                        </button>
+                    </h2>
+                    <div id="faqCollapse2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body small" style="color:var(--text-secondary); line-height:1.7;">
+                            We accept Cash on Delivery (COD) across Pakistan, major debit/credit cards (Visa, Mastercard, UnionPay), and Direct Bank Transfers via Raast ID / IBAN with 256-bit encrypted security.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FAQ 3 -->
+                <div class="accordion-item rounded-3 mb-2 overflow-hidden" style="background:var(--bg-surface); border:1px solid var(--border-default);">
+                    <h2 class="accordion-header" id="faqHead3">
+                        <button class="accordion-button collapsed fw-bold rounded-3" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapse3" style="background:transparent; color:var(--text-primary);">
+                            How can I track my order status?
+                        </button>
+                    </h2>
+                    <div id="faqCollapse3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body small" style="color:var(--text-secondary); line-height:1.7;">
+                            You can track your order anytime by visiting our <a asp-controller="OrderTracking" asp-action="Index" style="color:var(--brand-primary);">Track Order Portal</a> and entering your Tracking Number (e.g. TRK-XXXXXXXX) and order email address.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FAQ 4 -->
+                <div class="accordion-item rounded-3 mb-2 overflow-hidden" style="background:var(--bg-surface); border:1px solid var(--border-default);">
+                    <h2 class="accordion-header" id="faqHead4">
+                        <button class="accordion-button collapsed fw-bold rounded-3" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapse4" style="background:transparent; color:var(--text-primary);">
+                            How do returns and refunds work?
+                        </button>
+                    </h2>
+                    <div id="faqCollapse4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body small" style="color:var(--text-secondary); line-height:1.7;">
+                            We offer a 30-day return policy on all eligible purchases. If your product is defective or incorrect, you can request a return directly from your customer account portal or contact customer support for doorstep pickup.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FAQ 5 -->
+                <div class="accordion-item rounded-3 mb-2 overflow-hidden" style="background:var(--bg-surface); border:1px solid var(--border-default);">
+                    <h2 class="accordion-header" id="faqHead5">
+                        <button class="accordion-button collapsed fw-bold rounded-3" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapse5" style="background:transparent; color:var(--text-primary);">
+                            How do I apply a discount coupon code?
+                        </button>
+                    </h2>
+                    <div id="faqCollapse5" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body small" style="color:var(--text-secondary); line-height:1.7;">
+                            On your <a asp-controller="Cart" asp-action="Index" style="color:var(--brand-primary);">Shopping Cart page</a>, enter your promo code into the "Promo Coupon" box and click "Apply Code". The discount will be dynamically verified and deducted from your subtotal.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,66 @@
+@model HamaraCommerce.Models.LoginViewModel
+@{
+    ViewData["Title"] = "Customer Sign In";
+}
+
+<div class="row justify-content-center py-5 reveal-on-scroll">
+    <div class="col-md-6 col-lg-5 col-xl-4">
+        <div class="card-glass rounded-4 p-4 p-md-5 position-relative overflow-hidden"
+             style="background:var(--bg-glass); backdrop-filter:blur(24px); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-xl);">
+            
+            <!-- Brand Header -->
+            <div class="text-center mb-4">
+                <a asp-controller="Home" asp-action="Index" class="brand-logo justify-content-center mb-3">
+                    <div class="logo-icon"><i class="fa-solid fa-bag-shopping"></i></div>
+                    <div class="logo-text">Hamara<span>Commerce</span></div>
+                </a>
+                <h1 class="h4 font-heading fw-bold mb-1" style="color:var(--text-primary); letter-spacing:-0.02em;">Welcome Back</h1>
+                <p class="small mb-0" style="color:var(--text-muted);">Sign in to track shipments, manage saved addresses, and view your personal wishlist.</p>
+            </div>
+
+            <form asp-controller="Account" asp-action="Login" asp-route-returnUrl="@ViewData["ReturnUrl"]" method="post">
+                @Html.AntiForgeryToken()
+                
+                @if (!ViewData.ModelState.IsValid && ViewData.ModelState[string.Empty]?.Errors.Count > 0)
+                {
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger small rounded-3 mb-3"></div>
+                }
+
+                <div class="mb-3">
+                    <label asp-for="Email" class="form-label small fw-bold" style="color:var(--text-muted);">Email Address</label>
+                    <div class="input-group">
+                        <span class="input-group-text rounded-start-3" style="border-color:var(--border-default);"><i class="fa-regular fa-envelope"></i></span>
+                        <input asp-for="Email" class="form-control rounded-end-3" placeholder="name@example.com" autofocus required />
+                    </div>
+                    <span asp-validation-for="Email" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label asp-for="Password" class="form-label small fw-bold mb-0" style="color:var(--text-muted);">Password</label>
+                        <a asp-action="ForgotPassword" class="text-xs fw-semibold text-decoration-none" style="color:var(--brand-primary);">Forgot Password?</a>
+                    </div>
+                    <div class="input-group">
+                        <span class="input-group-text rounded-start-3" style="border-color:var(--border-default);"><i class="fa-regular fa-lock"></i></span>
+                        <input asp-for="Password" class="form-control rounded-end-3" type="password" placeholder="••••••••" required />
+                    </div>
+                    <span asp-validation-for="Password" class="text-danger small"></span>
+                </div>
+
+                <div class="form-check mb-4">
+                    <input asp-for="RememberMe" class="form-check-input" />
+                    <label asp-for="RememberMe" class="form-check-label small" style="color:var(--text-secondary);">Keep me signed in on this device</label>
+                </div>
+
+                <button type="submit" class="btn btn-primary-custom w-100 py-2.5 rounded-pill shadow-sm mb-3">
+                    <i class="fa-solid fa-arrow-right-to-bracket me-1"></i>Sign In
+                </button>
+
+                <div class="text-center small" style="color:var(--text-muted);">
+                    Don't have an account yet? 
+                    <a asp-action="Register" asp-route-returnUrl="@ViewData["ReturnUrl"]" class="fw-bold text-decoration-none" style="color:var(--brand-primary);">Create Free Account</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

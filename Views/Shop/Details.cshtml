@@ -1,0 +1,432 @@
+@model HamaraCommerce.Models.ProductDetailViewModel
+@inject HamaraCommerce.Services.IShippingTaxService ShippingTaxService
+@{
+    var p = Model.Product;
+    ViewData["Title"] = p.Title;
+}
+
+<!-- Breadcrumbs -->
+<nav aria-label="breadcrumb" class="mb-4 reveal-on-scroll">
+    <ol class="breadcrumb small mb-0">
+        <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">Home</a></li>
+        <li class="breadcrumb-item"><a asp-controller="Shop" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">Catalog</a></li>
+        <li class="breadcrumb-item"><a asp-controller="Shop" asp-action="Index" asp-route-category="@p.CategoryName.ToLower()" class="text-decoration-none" style="color:var(--text-muted);">@p.CategoryName</a></li>
+        <li class="breadcrumb-item active fw-bold text-truncate" style="max-width: 280px; color:var(--brand-primary);" aria-current="page">@p.Title</li>
+    </ol>
+</nav>
+
+<!-- Main Showcase Section -->
+<div class="card-glass p-4 p-md-5 mb-5 rounded-4 border-0 position-relative overflow-hidden reveal-on-scroll"
+     style="background:var(--bg-glass); backdrop-filter:blur(24px); border: 1px solid var(--border-default) !important; box-shadow: var(--shadow-lg);">
+    <div class="row g-4 g-lg-5 align-items-center">
+        <!-- Left: 3D Image Gallery -->
+        <div class="col-lg-6">
+            <div class="position-relative rounded-4 overflow-hidden border mb-3 text-center" 
+                 data-tilt="medium"
+                 style="background: var(--bg-surface-elevated); border-color: var(--border-default) !important; max-height: 480px; box-shadow: inset 0 2px 10px rgba(0,0,0,0.05);">
+                <div class="tilt-glare" aria-hidden="true"></div>
+                <img id="productMainImage" 
+                     src="@p.MainImage" 
+                     alt="@p.Title" 
+                     class="img-fluid mx-auto" 
+                     data-tilt-z="stage"
+                     style="max-height: 460px; object-fit: contain; width: 100%; transition: opacity 0.3s ease, transform 0.4s var(--ease-spring);" />
+            </div>
+
+            <!-- Thumbnails if additional images exist -->
+            @if (p.Images != null && p.Images.Any())
+            {
+                <div class="d-flex gap-2 overflow-x-auto pb-2">
+                    <button type="button" class="btn p-0 border rounded-3 overflow-hidden gallery-thumb-btn border-primary shadow-sm" data-img-src="@p.MainImage" style="width: 70px; height: 70px; flex-shrink: 0;">
+                        <img src="@p.MainImage" class="w-100 h-100 object-fit-cover" alt="Main View" />
+                    </button>
+                    @foreach (var img in p.Images)
+                    {
+                        <button type="button" class="btn p-0 border rounded-3 overflow-hidden gallery-thumb-btn" data-img-src="@img.ImageUrl" style="width: 70px; height: 70px; flex-shrink: 0; border-color:var(--border-default) !important;">
+                            <img src="@img.ImageUrl" class="w-100 h-100 object-fit-cover" alt="@img.AltText" />
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- Right: Product Information & Purchase Options -->
+        <div class="col-lg-6 d-flex flex-column">
+            <!-- Brand & Badges -->
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="badge bg-primary-subtle text-primary border border-primary rounded-pill px-3 py-1 text-uppercase fw-bold small">
+                    @p.Brand
+                </span>
+                @if (p.IsFlashDeal)
+                {
+                    <span class="badge badge-tag badge-flash"><i class="fa-solid fa-bolt me-1"></i>Flash Deal</span>
+                }
+            </div>
+
+            <h1 class="h3 font-heading fw-bold mb-2" style="color:var(--text-primary); letter-spacing:-0.02em;">@p.Title</h1>
+
+            <!-- Ratings & SKU -->
+            <div class="d-flex align-items-center gap-2 mb-3">
+                @await Html.PartialAsync("_RatingStars", (p.Rating, p.ReviewCount > 0 ? p.ReviewCount : (int?)null))
+                <span style="color:var(--text-muted); opacity:0.5;">|</span>
+                <span class="small font-monospace" style="color:var(--text-muted);">SKU: @p.SKU</span>
+            </div>
+
+            <!-- Pricing Display Stage -->
+            <div class="p-3.5 rounded-4 mb-4 d-flex align-items-baseline gap-3" 
+                 style="background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle);">
+                <span class="display-6 font-heading fw-bold" style="color:var(--brand-primary);">@ShippingTaxService.FormatCurrency(p.Price)</span>
+                @if (p.OldPrice > p.Price)
+                {
+                    <span class="fs-5 text-decoration-line-through" style="color:var(--text-muted);">@ShippingTaxService.FormatCurrency(p.OldPrice)</span>
+                    var savePct = (int)Math.Round(((p.OldPrice - p.Price) / p.OldPrice) * 100);
+                    <span class="badge badge-tag badge-discount">Save @savePct%</span>
+                }
+            </div>
+
+            <p class="small mb-4" style="color:var(--text-secondary); line-height: 1.7;">@p.ShortDescription</p>
+
+            <!-- Purchase Form -->
+            <form asp-controller="Cart" asp-action="AddToCart" method="post" class="mb-4">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="productId" value="@p.Id" />
+
+                <!-- Variants Selection if any -->
+                @if (p.Variants != null && p.Variants.Any())
+                {
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold" style="color:var(--text-muted);">Select Variant / Configuration:</label>
+                        <select name="variantId" class="form-select rounded-3">
+                            <option value="">Standard Edition</option>
+                            @foreach (var v in p.Variants.Where(vr => vr.IsActive))
+                            {
+                                <option value="@v.Id">@v.Name @(v.PriceAdjustment != 0 ? $"({(v.PriceAdjustment > 0 ? "+" : "")}{ShippingTaxService.FormatCurrency(v.PriceAdjustment)})" : "")</option>
+                            }
+                        </select>
+                    </div>
+                }
+
+                <!-- Stock Alert & Quantity Stepper -->
+                <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+                    <div class="quantity-stepper">
+                        <button type="button" data-step-minus aria-label="Decrease quantity">
+                            <i class="fa-solid fa-minus small"></i>
+                        </button>
+                        <input type="number" name="quantity" value="1" min="1" max="@(p.Stock > 0 ? p.Stock : 1)" />
+                        <button type="button" data-step-plus aria-label="Increase quantity">
+                            <i class="fa-solid fa-plus small"></i>
+                        </button>
+                    </div>
+
+                    @if (p.Stock > 10)
+                    {
+                        <span class="badge bg-success-subtle text-success border border-success rounded-pill px-3 py-1.5 small">
+                            <i class="fa-solid fa-circle-check me-1"></i>In Stock (@p.Stock available)
+                        </span>
+                    }
+                    else if (p.Stock > 0)
+                    {
+                        <span class="badge bg-warning-subtle text-warning border border-warning rounded-pill px-3 py-1.5 small">
+                            <i class="fa-solid fa-fire me-1"></i>Low Stock: Only @p.Stock left!
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-danger-subtle text-danger border border-danger rounded-pill px-3 py-1.5 small">
+                            <i class="fa-solid fa-ban me-1"></i>Currently Out of Stock
+                        </span>
+                    }
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="d-flex gap-2">
+                    <button type="submit" id="primaryAddToCartBtn" class="btn btn-primary-custom flex-grow-1 py-2.5 rounded-pill" @(p.Stock <= 0 ? "disabled" : "")>
+                        <i class="fa-solid fa-bag-shopping me-2"></i>Add to Cart
+                    </button>
+                    <button type="button" class="btn btn-glass px-3.5 rounded-circle" data-wishlist-toggle data-product-id="@p.Id" aria-label="Save to wishlist" title="Save to wishlist">
+                        <i class="fa-regular fa-heart"></i>
+                    </button>
+                </div>
+            </form>
+
+            <!-- Trust & Assurance Pills -->
+            <div class="row g-2 pt-3 border-top mt-auto small" style="border-color:var(--border-subtle) !important; color:var(--text-muted);">
+                <div class="col-sm-4 d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-truck-fast text-primary"></i>
+                    <span>@p.DeliveryEstimate</span>
+                </div>
+                <div class="col-sm-4 d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-shield-halved text-success"></i>
+                    <span>@p.Warranty</span>
+                </div>
+                <div class="col-sm-4 d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-arrows-rotate text-info"></i>
+                    <span>@p.ReturnPolicy</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs: Description, Specs, Reviews, Q&A -->
+<div class="card-glass rounded-4 mb-5 overflow-hidden reveal-on-scroll"
+     style="background:var(--bg-surface); border: 1px solid var(--border-default) !important; box-shadow: var(--shadow-sm);">
+    <div class="border-bottom px-4 pt-3" style="background:var(--bg-surface-elevated); border-color:var(--border-subtle) !important;">
+        <ul class="nav nav-tabs border-0" id="productDetailTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active fw-bold border-0 pb-3" id="desc-tab" data-bs-toggle="tab" data-bs-target="#desc-pane" type="button" role="tab" style="color:var(--text-primary); background:transparent;">Overview</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link fw-bold border-0 pb-3" id="specs-tab" data-bs-toggle="tab" data-bs-target="#specs-pane" type="button" role="tab" style="color:var(--text-primary); background:transparent;">Specifications</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link fw-bold border-0 pb-3" id="reviews-tab" data-bs-toggle="tab" data-bs-target="#reviews-pane" type="button" role="tab" style="color:var(--text-primary); background:transparent;">Reviews (@(p.Reviews?.Count(r => r.IsApproved) ?? 0))</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link fw-bold border-0 pb-3" id="qa-tab" data-bs-toggle="tab" data-bs-target="#qa-pane" type="button" role="tab" style="color:var(--text-primary); background:transparent;">Customer Q&amp;A (@(p.Questions?.Count(q => q.IsApproved) ?? 0))</button>
+            </li>
+        </ul>
+    </div>
+
+    <div class="tab-content p-4 p-md-5" id="productDetailTabsContent">
+        <!-- Overview Pane -->
+        <div class="tab-pane fade show active" id="desc-pane" role="tabpanel">
+            <div style="color:var(--text-secondary); line-height: 1.8;">
+                @Html.Raw(p.FullDescription?.Replace("\n", "<br />") ?? p.ShortDescription)
+            </div>
+        </div>
+
+        <!-- Specifications Pane -->
+        <div class="tab-pane fade" id="specs-pane" role="tabpanel">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <tbody>
+                        <tr>
+                            <th class="w-25 small" style="color:var(--text-muted);">Brand</th>
+                            <td class="small fw-semibold" style="color:var(--text-primary);">@p.Brand</td>
+                        </tr>
+                        <tr>
+                            <th class="w-25 small" style="color:var(--text-muted);">Category</th>
+                            <td class="small fw-semibold" style="color:var(--text-primary);">@p.CategoryName</td>
+                        </tr>
+                        <tr>
+                            <th class="w-25 small" style="color:var(--text-muted);">SKU</th>
+                            <td class="small font-monospace" style="color:var(--text-primary);">@p.SKU</td>
+                        </tr>
+                        <tr>
+                            <th class="w-25 small" style="color:var(--text-muted);">Weight</th>
+                            <td class="small" style="color:var(--text-primary);">@p.WeightKg kg</td>
+                        </tr>
+                        <tr>
+                            <th class="w-25 small" style="color:var(--text-muted);">Dimensions</th>
+                            <td class="small" style="color:var(--text-primary);">@p.Dimensions</td>
+                        </tr>
+                        @if (p.Specifications != null && p.Specifications.Any())
+                        {
+                            @foreach (var spec in p.Specifications)
+                            {
+                                <tr>
+                                    <th class="w-25 small" style="color:var(--text-muted);">@spec.Key</th>
+                                    <td class="small" style="color:var(--text-primary);">@spec.Value</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Reviews Pane -->
+        <div class="tab-pane fade" id="reviews-pane" role="tabpanel">
+            <div class="row g-4">
+                <div class="col-lg-7">
+                    <h4 class="h5 fw-bold font-heading mb-4" style="color:var(--text-primary);">Customer Feedback</h4>
+                    @if (p.Reviews == null || !p.Reviews.Any(r => r.IsApproved))
+                    {
+                        <p class="small" style="color:var(--text-muted);">No reviews yet for this product. Be the first verified buyer to leave your feedback!</p>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-column gap-3">
+                            @foreach (var r in p.Reviews.Where(r => r.IsApproved))
+                            {
+                                <div class="border-bottom pb-3" style="border-color:var(--border-subtle) !important;">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <strong class="small" style="color:var(--text-primary);">@r.UserName</strong>
+                                            @if (r.IsVerifiedPurchase)
+                                            {
+                                                <span class="badge bg-success-subtle text-success border border-success rounded-pill px-2 py-0.5 text-xs">
+                                                    <i class="fa-solid fa-circle-check me-1"></i>Verified Buyer
+                                                </span>
+                                            }
+                                        </div>
+                                        <span class="text-xs" style="color:var(--text-muted);">@r.Date.ToString("MMM dd, yyyy")</span>
+                                    </div>
+                                    <div class="mb-1">
+                                        @await Html.PartialAsync("_RatingStars", ((double)r.Rating, (int?)null))
+                                    </div>
+                                    <h5 class="small fw-bold mb-1" style="color:var(--text-primary);">@r.Title</h5>
+                                    <p class="small mb-0" style="color:var(--text-secondary);">@r.Comment</p>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="col-lg-5">
+                    <div class="card border-0 shadow-sm rounded-4 p-4" style="background:var(--bg-surface-elevated); border:1px solid var(--border-subtle) !important;">
+                        <h4 class="h6 fw-bold font-heading mb-2" style="color:var(--text-primary);">Write a Review</h4>
+                        <p class="small mb-3" style="color:var(--text-muted);">Purchased this item? Share your honest experience with other customers.</p>
+
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            <form asp-controller="Shop" asp-action="AddReview" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="productId" value="@p.Id" />
+
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold" style="color:var(--text-muted);">Overall Rating</label>
+                                    <select name="rating" class="form-select form-select-sm rounded-3" required>
+                                        <option value="5">⭐⭐⭐⭐⭐ (5 - Exceptional)</option>
+                                        <option value="4">⭐⭐⭐⭐ (4 - Very Good)</option>
+                                        <option value="3">⭐⭐⭐ (3 - Average)</option>
+                                        <option value="2">⭐⭐ (2 - Below Average)</option>
+                                        <option value="1">⭐ (1 - Poor)</option>
+                                    </select>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold" style="color:var(--text-muted);">Review Headline</label>
+                                    <input type="text" name="title" class="form-control form-control-sm rounded-3" placeholder="e.g. Outstanding quality and battery life" required />
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold" style="color:var(--text-muted);">Detailed Comments</label>
+                                    <textarea name="comment" class="form-control form-control-sm rounded-3" rows="3" placeholder="Tell other shoppers about performance, build quality, etc." required></textarea>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary-custom w-100 rounded-pill btn-sm py-2">
+                                    Submit Review
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            <div class="text-center py-3">
+                                <p class="small mb-3" style="color:var(--text-muted);">Please sign in to your customer account to submit a verified product review.</p>
+                                <a asp-controller="Account" asp-action="Login" asp-route-returnUrl="@Context.Request.Path" class="btn btn-primary-custom btn-sm rounded-pill px-4">Sign In</a>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Q&A Pane -->
+        <div class="tab-pane fade" id="qa-pane" role="tabpanel">
+            <div class="row g-4">
+                <div class="col-lg-7">
+                    <h4 class="h5 fw-bold font-heading mb-4" style="color:var(--text-primary);">Questions &amp; Official Answers</h4>
+                    @if (p.Questions == null || !p.Questions.Any(q => q.IsApproved))
+                    {
+                        <p class="small" style="color:var(--text-muted);">No questions asked yet. Ask a question and our official support team will reply!</p>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-column gap-3">
+                            @foreach (var q in p.Questions.Where(q => q.IsApproved))
+                            {
+                                <div class="border-bottom pb-3" style="border-color:var(--border-subtle) !important;">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <strong class="small" style="color:var(--text-primary);"><i class="fa-regular fa-circle-question text-primary me-1"></i>@q.Question</strong>
+                                        <span class="text-xs" style="color:var(--text-muted);">@q.QuestionDate.ToString("MMM dd, yyyy")</span>
+                                    </div>
+                                    <span class="text-xs d-block mb-2" style="color:var(--text-muted);">Asked by @q.AskedBy</span>
+                                    @if (!string.IsNullOrEmpty(q.Answer))
+                                    {
+                                        <div class="p-2.5 rounded-3 small border-start border-primary border-3" style="background:var(--bg-surface-elevated);">
+                                            <strong class="d-block text-primary text-xs mb-1"><i class="fa-solid fa-shield-check me-1"></i>Official Store Reply (@q.AnsweredBy):</strong>
+                                            <span style="color:var(--text-secondary);">@q.Answer</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary-subtle text-muted text-xs">Awaiting official staff answer</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="col-lg-5">
+                    <div class="card border-0 shadow-sm rounded-4 p-4" style="background:var(--bg-surface-elevated); border:1px solid var(--border-subtle) !important;">
+                        <h4 class="h6 fw-bold font-heading mb-2" style="color:var(--text-primary);">Ask a Question</h4>
+                        <p class="small mb-3" style="color:var(--text-muted);">Have an inquiry about compatibility, warranty, or delivery?</p>
+
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            <form asp-controller="Shop" asp-action="AskQuestion" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="productId" value="@p.Id" />
+                                <div class="mb-3">
+                                    <textarea name="question" class="form-control form-control-sm rounded-3" rows="3" placeholder="Type your inquiry here..." required></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary-custom w-100 rounded-pill btn-sm py-2">
+                                    Submit Question
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            <div class="text-center py-3">
+                                <a asp-controller="Account" asp-action="Login" asp-route-returnUrl="@Context.Request.Path" class="btn btn-primary-custom btn-sm rounded-pill px-4">Sign In to Ask</a>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Related Products -->
+@if (Model.RelatedProducts != null && Model.RelatedProducts.Any())
+{
+    <section class="mb-5 reveal-on-scroll">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="h4 font-heading fw-bold mb-1" style="color:var(--text-primary);">Similar Items You Might Like</h2>
+                <p class="small mb-0" style="color:var(--text-muted);">Handpicked products in the same department</p>
+            </div>
+        </div>
+        <div class="row g-3">
+            @foreach (var (related, idx) in Model.RelatedProducts.Take(4).Select((p, i) => (p, i)))
+            {
+                <div class="col-xl-3 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 70)ms">
+                    @await Html.PartialAsync("_ProductCard", related)
+                </div>
+            }
+        </div>
+    </section>
+}
+
+<!-- Sticky Purchase Bar -->
+<div id="stickyPurchaseBar" class="sticky-purchase-bar d-none d-md-flex">
+    <div class="d-flex align-items-center gap-3">
+        <img src="@p.MainImage" class="rounded-3 border" style="width: 48px; height: 48px; object-fit: cover; border-color:var(--border-default) !important;" alt="@p.Title" />
+        <div>
+            <strong class="d-block small text-truncate" style="max-width: 320px; color:var(--text-primary);">@p.Title</strong>
+            <span class="fw-bold small" style="color:var(--brand-primary);">@ShippingTaxService.FormatCurrency(p.Price)</span>
+        </div>
+    </div>
+    <form asp-controller="Cart" asp-action="AddToCart" method="post" class="d-flex align-items-center gap-2">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="productId" value="@p.Id" />
+        <input type="hidden" name="quantity" value="1" />
+        <button type="submit" class="btn btn-primary-custom btn-sm px-4 rounded-pill shadow-sm" @(p.Stock <= 0 ? "disabled" : "")>
+            <i class="fa-solid fa-bag-shopping me-1"></i>Add to Cart
+        </button>
+    </form>
+</div>

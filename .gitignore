@@ -1,0 +1,36 @@
+## Build & Output Artifacts
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+*.user
+*.userosscache
+*.sln.docstates
+
+## Visual Studio & VS Code
+.vs/
+.vscode/
+*.suo
+*.userprefs
+*.launch.json
+
+## Secrets & Local Environment Overrides
+appsettings.*.local.json
+appsettings.Local.json
+*.key
+*.pfx
+.env
+.env.*
+
+## Database & Local SQL Files
+*.mdf
+*.ldf
+*.db
+*.sqlite
+
+## OS Generated
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store

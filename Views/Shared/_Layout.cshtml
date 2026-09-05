@@ -1,0 +1,541 @@
+@using HamaraCommerce.Services
+@using Microsoft.AspNetCore.Identity
+@inject ICartService CartService
+@inject UserManager<HamaraCommerce.Models.ApplicationUser> UserManager
+@{
+    var cart = await CartService.GetCartViewModelAsync();
+    var cartCount = cart.ItemCount;
+    var currentUser = await UserManager.GetUserAsync(User);
+    int wishlistCount = currentUser?.WishlistProductIds?.Count ?? 0;
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+    var qTheme = Context.Request.Query["theme"].ToString();
+    var defaultTheme = (qTheme == "dark" || qTheme == "light") ? qTheme : "light";
+}
+<!DOCTYPE html>
+<html lang="en" data-theme="@defaultTheme">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Hamara Commerce</title>
+    @await Html.PartialAsync("_SeoHead")
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+    <!-- Bootstrap 5.3.2 & Font Awesome 6.5.1 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+    <!-- Design System -->
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+
+    <!-- Prevent Theme Flash -->
+    <script>
+        (function() {
+            var urlParams = new URLSearchParams(window.location.search);
+            var q = urlParams.get('theme');
+            if (q === 'dark' || q === 'light') {
+                localStorage.setItem('hc_theme', q);
+                document.documentElement.setAttribute('data-theme', q);
+                document.documentElement.style.colorScheme = q;
+                return;
+            }
+            var saved = localStorage.getItem('hc_theme');
+            var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            var theme = saved || (dark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', theme);
+            document.documentElement.style.colorScheme = theme;
+        })();
+    </script>
+</head>
+<body>
+    @Html.AntiForgeryToken()
+
+    <!-- ===== LUXURY AURORA BACKGROUND (LIGHT MODE) ===== -->
+    <div class="luxury-aurora-bg" aria-hidden="true">
+        <div class="aurora-field aurora-field--emerald"></div>
+        <div class="aurora-field aurora-field--cobalt"></div>
+        <div class="aurora-field aurora-field--champagne"></div>
+        <div class="luxury-mesh-texture"></div>
+        <div class="glass-bubble glass-bubble--1"></div>
+        <div class="glass-bubble glass-bubble--2"></div>
+        <div class="glass-bubble glass-bubble--3"></div>
+        <div class="glass-bubble glass-bubble--4"></div>
+        <div class="glass-bubble glass-bubble--5"></div>
+        <div class="glass-bubble glass-bubble--6"></div>
+    </div>
+
+    <!-- ===== DARK MODE PARTICLE PLEXUS CANVAS ===== -->
+    <canvas id="plexusCanvas" class="plexus-canvas" aria-hidden="true"></canvas>
+
+    <!-- ===== ANNOUNCEMENT BAR ===== -->
+    <div class="announcement-bar" role="banner" aria-label="Store announcements">
+        <div class="annbar-inner">
+            <div class="annbar-left">
+                <span><i class="fa-solid fa-truck-fast me-1" aria-hidden="true"></i>Free Shipping over Rs. 5,000</span>
+                <span class="annbar-sep d-none d-md-inline" aria-hidden="true">|</span>
+                <span class="d-none d-md-inline"><i class="fa-solid fa-headset me-1" aria-hidden="true"></i>24/7 Expert Support</span>
+            </div>
+            <div class="annbar-right">
+                <a asp-controller="OrderTracking" asp-action="Index">
+                    <i class="fa-solid fa-location-dot me-1" aria-hidden="true"></i><span class="d-none d-sm-inline">Track Order</span>
+                </a>
+                <span class="annbar-sep d-none d-sm-inline" aria-hidden="true">|</span>
+                <a asp-controller="Home" asp-action="Contact" class="d-none d-sm-inline">Help &amp; Contact</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== STICKY GLASS HEADER ===== -->
+    <header class="site-header" id="siteHeader" role="banner">
+        <div class="site-header-inner">
+
+            <!-- Hamburger (mobile only) -->
+            <button type="button"
+                    id="mobileMenuToggle"
+                    class="btn-icon-glass d-lg-none"
+                    aria-expanded="false"
+                    aria-controls="mobileOffcanvas"
+                    aria-label="Open navigation menu">
+                <i class="fa-solid fa-bars" aria-hidden="true"></i>
+            </button>
+
+            <!-- Brand Logo -->
+            <a asp-controller="Home" asp-action="Index" class="brand-logo" aria-label="Hamara Commerce – home">
+                <span class="logo-icon" aria-hidden="true">
+                    <i class="fa-solid fa-bag-shopping"></i>
+                </span>
+                <span class="logo-text">Hamara<span>Commerce</span></span>
+            </a>
+
+            <!-- Desktop Category & Policies Nav (lg+) -->
+            <nav class="header-cat-nav d-none d-lg-flex" aria-label="Main navigation">
+                <a asp-controller="Shop" asp-action="Index"
+                   class="header-nav-link @(currentController == "Shop" && string.IsNullOrEmpty(Context.Request.Query["category"]) && string.IsNullOrEmpty(Context.Request.Query["flashDeal"]) ? "active" : "")">
+                    All Products
+                </a>
+                <a asp-controller="Shop" asp-action="Index" asp-route-category="electronics"
+                   class="header-nav-link @(Context.Request.Query["category"] == "electronics" ? "active" : "")">
+                    Electronics
+                </a>
+                <a asp-controller="Shop" asp-action="Index" asp-route-category="fashion"
+                   class="header-nav-link @(Context.Request.Query["category"] == "fashion" ? "active" : "")">
+                    Fashion
+                </a>
+                <a asp-controller="Shop" asp-action="Index" asp-route-flashDeal="true"
+                   class="header-nav-link header-nav-link--deals">
+                    <i class="fa-solid fa-bolt me-1" aria-hidden="true"></i>Deals
+                </a>
+
+                <!-- Policies Dropdown -->
+                <div class="dropdown header-nav-dropdown">
+                    <button class="header-nav-link dropdown-toggle border-0 bg-transparent"
+                            type="button"
+                            id="policiesDropdownBtn"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false">
+                        <span>Policies</span>
+                        <i class="fa-solid fa-chevron-down ms-1 text-xs" aria-hidden="true"></i>
+                    </button>
+                    <ul class="dropdown-menu glass-dropdown mt-2 shadow-lg" aria-labelledby="policiesDropdownBtn">
+                        <li>
+                            <a class="dropdown-item" asp-controller="Home" asp-action="About">
+                                <i class="fa-solid fa-circle-info me-2 text-primary" aria-hidden="true"></i>About Us
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" asp-controller="Home" asp-action="Contact">
+                                <i class="fa-solid fa-headset me-2 text-info" aria-hidden="true"></i>Contact Support
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider" /></li>
+                        <li>
+                            <a class="dropdown-item" asp-controller="Home" asp-action="Privacy">
+                                <i class="fa-solid fa-shield-halved me-2 text-success" aria-hidden="true"></i>Privacy Policy
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" asp-controller="Home" asp-action="Terms">
+                                <i class="fa-solid fa-scale-balanced me-2 text-secondary" aria-hidden="true"></i>Terms of Service
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" asp-controller="Home" asp-action="ShippingPolicy">
+                                <i class="fa-solid fa-truck-fast me-2 text-warning" aria-hidden="true"></i>Shipping Policy
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" asp-controller="Home" asp-action="ReturnPolicy">
+                                <i class="fa-solid fa-rotate-left me-2 text-danger" aria-hidden="true"></i>30-Day Returns
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Search Bar (md+) -->
+            <form asp-controller="Shop" asp-action="Index" method="get"
+                  class="header-search d-none d-md-flex" role="search" aria-label="Search products">
+                <i class="fa-solid fa-magnifying-glass header-search-icon" aria-hidden="true"></i>
+                <input type="text"
+                       id="headerSearchInput"
+                       name="search"
+                       class="header-search-input"
+                       placeholder="Search catalog..."
+                       aria-label="Search catalog"
+                       autocomplete="off" />
+                <span class="header-search-kbd d-none d-xl-flex" aria-hidden="true">Ctrl K</span>
+            </form>
+
+            <!-- Right Controls -->
+            <div class="header-controls">
+
+                <!-- Mobile Search Toggle (Mobile only < md) -->
+                <button type="button"
+                        class="btn-icon-glass d-md-none"
+                        id="mobileSearchToggleBtn"
+                        title="Search Products"
+                        aria-label="Search products">
+                    <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                </button>
+
+                @if (User.IsInRole("Admin"))
+                {
+                    <a asp-controller="Admin" asp-action="Index"
+                       class="btn-icon-glass header-admin-btn d-none d-xl-flex"
+                       title="Admin Dashboard"
+                       aria-label="Admin Dashboard">
+                        <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
+                        <span class="d-none d-xl-inline ms-1">Admin</span>
+                    </a>
+                }
+
+                <!-- Theme Toggle -->
+                <button type="button"
+                        class="btn-icon-glass theme-toggle-btn"
+                        id="themeToggleBtn"
+                        title="Toggle Dark/Light Mode"
+                        aria-label="Toggle dark mode"
+                        aria-pressed="false">
+                    <i class="fa-solid fa-moon" aria-hidden="true"></i>
+                </button>
+
+                <!-- Wishlist (md+) -->
+                <a asp-controller="Account"
+                   asp-action="Wishlist"
+                   class="btn-icon-glass position-relative d-none d-md-flex"
+                   title="My Wishlist"
+                   aria-label="My Wishlist, @wishlistCount items">
+                    <i class="fa-regular fa-heart" aria-hidden="true"></i>
+                    @if (wishlistCount > 0)
+                    {
+                        <span class="header-badge" id="wishlistBadge" aria-hidden="true">@wishlistCount</span>
+                    }
+                </a>
+
+                <!-- Cart (Desktop & Mobile) -->
+                <a asp-controller="Cart"
+                   asp-action="Index"
+                   class="header-cart-btn"
+                   aria-label="Shopping cart, @cartCount items">
+                    <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
+                    <span class="d-none d-sm-inline ms-1.5">Cart</span>
+                    <span class="header-badge cart-count-badge @(cartCount == 0 ? "d-none" : "")" id="cartBadge" aria-hidden="true">@cartCount</span>
+                </a>
+
+                <!-- Account: Guest or Logged-in State -->
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <div class="dropdown header-account-dropdown">
+                        <button class="header-account-btn"
+                                type="button"
+                                id="accountDropdown"
+                                data-bs-toggle="dropdown"
+                                aria-expanded="false"
+                                aria-label="Account menu for @(currentUser?.FullName ?? "user")">
+                            @if (!string.IsNullOrEmpty(currentUser?.AvatarUrl))
+                            {
+                                <img src="@currentUser.AvatarUrl" class="header-avatar-img me-1" alt="" />
+                            }
+                            else
+                            {
+                                <i class="fa-regular fa-circle-user header-avatar-icon" aria-hidden="true"></i>
+                            }
+                            <span class="header-account-name d-none d-sm-inline ms-1">@(currentUser?.FullName?.Trim() ?? User.Identity.Name)</span>
+                            <i class="fa-solid fa-chevron-down header-account-caret ms-1" aria-hidden="true"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end glass-dropdown mt-2 shadow-lg" aria-labelledby="accountDropdown">
+                            <li class="px-3 py-2 border-bottom mb-1" style="border-color: var(--border-subtle) !important;">
+                                <strong class="d-block small text-truncate" style="color: var(--text-primary); max-width: 190px;">@(currentUser?.FullName ?? "User")</strong>
+                                <span class="d-block text-truncate" style="font-size:0.8rem;color: var(--text-muted); max-width: 190px;">@User.Identity.Name</span>
+                            </li>
+                            @if (User.IsInRole("Admin"))
+                            {
+                                <li>
+                                    <a class="dropdown-item" asp-controller="Admin" asp-action="Index"
+                                       style="color: var(--brand-luxury); font-weight: 700;">
+                                        <i class="fa-solid fa-gauge-high me-2" aria-hidden="true"></i>Admin Dashboard
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider" /></li>
+                            }
+                            <li>
+                                <a class="dropdown-item" asp-controller="Account" asp-action="Index">
+                                    <i class="fa-regular fa-circle-user me-2 text-primary" aria-hidden="true"></i>Profile / My Account
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" asp-controller="Account" asp-action="Orders">
+                                    <i class="fa-solid fa-box-open me-2 text-success" aria-hidden="true"></i>Orders
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider" /></li>
+                            <li>
+                                <form asp-controller="Account" asp-action="Logout" method="post" class="m-0">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="dropdown-item border-0 bg-transparent w-100 text-start" style="color: var(--status-danger);">
+                                        <i class="fa-solid fa-arrow-right-from-bracket me-2" aria-hidden="true"></i>Logout
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </div>
+                }
+                else
+                {
+                    <!-- Guest State: Sign In -->
+                    <a asp-controller="Account" asp-action="Login"
+                       class="header-signin-btn"
+                       title="Sign In"
+                       aria-label="Sign In">
+                        <i class="fa-regular fa-user" aria-hidden="true"></i>
+                        <span class="d-none d-sm-inline ms-1.5">Sign In</span>
+                    </a>
+                }
+            </div>
+
+        </div>
+
+        <!-- Mobile search bar (collapsible under header on small screens) -->
+        <div class="mobile-search-bar d-md-none" id="mobileSearchBar" aria-label="Mobile product search">
+            <form asp-controller="Shop" asp-action="Index" method="get" role="search">
+                <div class="position-relative">
+                    <i class="fa-solid fa-magnifying-glass header-search-icon" aria-hidden="true"></i>
+                    <input type="text"
+                           id="mobileSearchInput"
+                           name="search"
+                           class="header-search-input w-100"
+                           placeholder="Search catalog..."
+                           aria-label="Search catalog" />
+                </div>
+            </form>
+        </div>
+    </header>
+
+    <!-- ===== MOBILE OFF-CANVAS MENU (hidden by default) ===== -->
+    <div id="mobileOffcanvas" class="mobile-offcanvas" role="dialog" aria-modal="true" aria-label="Navigation menu" style="display: none;">
+        <div class="mob-overlay" id="mobileOverlay" aria-hidden="true"></div>
+        <div class="mob-panel" id="mobPanel">
+            <div class="mob-panel-header">
+                <a asp-controller="Home" asp-action="Index" class="brand-logo" aria-label="Hamara Commerce">
+                    <span class="logo-icon" aria-hidden="true"><i class="fa-solid fa-bag-shopping"></i></span>
+                    <span class="logo-text">Hamara<span>Commerce</span></span>
+                </a>
+                <button id="mobileMenuClose"
+                        type="button"
+                        class="btn-icon-glass"
+                        aria-label="Close navigation menu">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <nav class="mob-nav" aria-label="Main navigation menu">
+                <div class="mob-nav-heading">Shop Catalog</div>
+                <a asp-controller="Home" asp-action="Index"
+                   class="mob-nav-link @(currentController == "Home" && currentAction == "Index" ? "active" : "")">
+                    <i class="fa-solid fa-house" aria-hidden="true"></i>Home
+                </a>
+                <a asp-controller="Shop" asp-action="Index"
+                   class="mob-nav-link @(currentController == "Shop" && string.IsNullOrEmpty(Context.Request.Query["category"]) && string.IsNullOrEmpty(Context.Request.Query["flashDeal"]) ? "active" : "")">
+                    <i class="fa-solid fa-bag-shopping" aria-hidden="true"></i>All Products
+                </a>
+                <a asp-controller="Shop" asp-action="Index" asp-route-category="electronics" class="mob-nav-link">
+                    <i class="fa-solid fa-microchip" aria-hidden="true"></i>Electronics
+                </a>
+                <a asp-controller="Shop" asp-action="Index" asp-route-category="fashion" class="mob-nav-link">
+                    <i class="fa-solid fa-shirt" aria-hidden="true"></i>Fashion
+                </a>
+                <a asp-controller="Shop" asp-action="Index" asp-route-flashDeal="true"
+                   class="mob-nav-link mob-nav-link--deals">
+                    <i class="fa-solid fa-bolt" aria-hidden="true"></i>Flash Deals
+                </a>
+
+                <div class="mob-nav-divider" aria-hidden="true"></div>
+
+                <div class="mob-nav-heading">Policies &amp; Support</div>
+                <a asp-controller="Home" asp-action="About" class="mob-nav-link">
+                    <i class="fa-solid fa-circle-info" aria-hidden="true"></i>About Us
+                </a>
+                <a asp-controller="Home" asp-action="Contact" class="mob-nav-link">
+                    <i class="fa-solid fa-headset" aria-hidden="true"></i>Contact Support
+                </a>
+                <a asp-controller="Home" asp-action="Privacy" class="mob-nav-link">
+                    <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>Privacy Policy
+                </a>
+                <a asp-controller="Home" asp-action="Terms" class="mob-nav-link">
+                    <i class="fa-solid fa-scale-balanced" aria-hidden="true"></i>Terms of Service
+                </a>
+                <a asp-controller="Home" asp-action="ShippingPolicy" class="mob-nav-link">
+                    <i class="fa-solid fa-truck-fast" aria-hidden="true"></i>Shipping Policy
+                </a>
+                <a asp-controller="Home" asp-action="ReturnPolicy" class="mob-nav-link">
+                    <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>30-Day Returns
+                </a>
+
+                <div class="mob-nav-divider" aria-hidden="true"></div>
+
+                <div class="mob-nav-heading">Account</div>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <a asp-controller="Account" asp-action="Index" class="mob-nav-link">
+                        <i class="fa-regular fa-circle-user" aria-hidden="true"></i>Profile / My Account
+                    </a>
+                    <a asp-controller="Account" asp-action="Orders" class="mob-nav-link">
+                        <i class="fa-solid fa-box-open" aria-hidden="true"></i>Orders
+                    </a>
+                    <a asp-controller="Account" asp-action="Wishlist" class="mob-nav-link">
+                        <i class="fa-regular fa-heart" aria-hidden="true"></i>Wishlist
+                    </a>
+                    @if (User.IsInRole("Admin"))
+                    {
+                        <a asp-controller="Admin" asp-action="Index"
+                           class="mob-nav-link mob-nav-link--admin">
+                            <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>Admin Dashboard
+                        </a>
+                    }
+                    <form asp-controller="Account" asp-action="Logout" method="post" class="m-0">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="mob-nav-link mob-nav-link--danger w-100 border-0 bg-transparent text-start">
+                            <i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i>Logout
+                        </button>
+                    </form>
+                }
+                else
+                {
+                    <a asp-controller="Account" asp-action="Login" class="mob-nav-link">
+                        <i class="fa-regular fa-user" aria-hidden="true"></i>Sign In
+                    </a>
+                    <a asp-controller="Account" asp-action="Register" class="mob-nav-link">
+                        <i class="fa-solid fa-user-plus" aria-hidden="true"></i>Create Account
+                    </a>
+                }
+            </nav>
+        </div>
+    </div>
+
+
+    <!-- ===== FLASH MESSAGES ===== -->
+    <div class="page-alerts-wrapper" id="flashAlertContainer">
+        @await Html.PartialAsync("_Alerts")
+    </div>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <main id="main-content" tabindex="-1" class="py-4">
+        <div class="page-container">
+            @RenderBody()
+        </div>
+    </main>
+
+    <!-- ===== TOAST CONTAINER ===== -->
+    <div id="toastContainer" class="toast-container-custom" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- ===== FOOTER ===== -->
+    <footer class="footer-main" role="contentinfo">
+        <div class="footer-inner">
+            <div class="row g-4 mb-5">
+                <!-- Col 1: Brand & Bio -->
+                <div class="col-lg-4 col-md-6">
+                    <a asp-controller="Home" asp-action="Index" class="footer-brand" aria-label="Hamara Commerce home">
+                        <span class="footer-brand-icon" aria-hidden="true">
+                            <i class="fa-solid fa-bag-shopping"></i>
+                        </span>
+                        <span class="footer-brand-name">Hamara<span>Commerce</span></span>
+                    </a>
+                    <p class="footer-bio">
+                        Pakistan's trusted destination for verified brands, authentic electronics, daily essentials, and seamless nationwide delivery with cash on delivery.
+                    </p>
+                    <div class="footer-socials" aria-label="Social media links">
+                        <a href="https://facebook.com" class="footer-social-btn" aria-label="Follow us on Facebook" target="_blank" rel="noopener noreferrer"><i class="fa-brands fa-facebook-f" aria-hidden="true"></i></a>
+                        <a href="https://instagram.com" class="footer-social-btn" aria-label="Follow us on Instagram" target="_blank" rel="noopener noreferrer"><i class="fa-brands fa-instagram" aria-hidden="true"></i></a>
+                        <a href="https://twitter.com" class="footer-social-btn" aria-label="Follow us on X/Twitter" target="_blank" rel="noopener noreferrer"><i class="fa-brands fa-x-twitter" aria-hidden="true"></i></a>
+                        <a href="https://linkedin.com" class="footer-social-btn" aria-label="Connect on LinkedIn" target="_blank" rel="noopener noreferrer"><i class="fa-brands fa-linkedin-in" aria-hidden="true"></i></a>
+                    </div>
+                </div>
+
+                <!-- Col 2: Marketplace -->
+                <div class="col-lg-2 col-6">
+                    <h2 class="footer-col-heading">Marketplace</h2>
+                    <ul class="footer-link-list" aria-label="Marketplace links">
+                        <li><a asp-controller="Shop" asp-action="Index" class="footer-link">All Products</a></li>
+                        <li><a asp-controller="Shop" asp-action="Index" asp-route-flashDeal="true" class="footer-link">Flash Deals</a></li>
+                        <li><a asp-controller="OrderTracking" asp-action="Index" class="footer-link">Track Order</a></li>
+                        <li><a asp-controller="Account" asp-action="Wishlist" class="footer-link">My Wishlist</a></li>
+                        <li><a asp-controller="Home" asp-action="Faq" class="footer-link">Help &amp; FAQs</a></li>
+                    </ul>
+                </div>
+
+                <!-- Col 3: Trust & Policies -->
+                <div class="col-lg-2 col-6">
+                    <h2 class="footer-col-heading">Trust &amp; Policies</h2>
+                    <ul class="footer-link-list" aria-label="Policies links">
+                        <li><a asp-controller="Home" asp-action="About" class="footer-link">About Us</a></li>
+                        <li><a asp-controller="Home" asp-action="Contact" class="footer-link">Contact Support</a></li>
+                        <li><a asp-controller="Home" asp-action="Privacy" class="footer-link">Privacy Policy</a></li>
+                        <li><a asp-controller="Home" asp-action="Terms" class="footer-link">Terms of Service</a></li>
+                        <li><a asp-controller="Home" asp-action="ShippingPolicy" class="footer-link">Shipping Policy</a></li>
+                        <li><a asp-controller="Home" asp-action="ReturnPolicy" class="footer-link">30-Day Returns</a></li>
+                    </ul>
+                </div>
+
+                <!-- Col 4: Newsletter -->
+                <div class="col-lg-4 col-md-6">
+                    <h2 class="footer-col-heading">Join Hamara Club</h2>
+                    <p class="footer-newsletter-desc">Get exclusive voucher codes and early access to mega sales.</p>
+                    <form asp-controller="Home" asp-action="SubscribeNewsletter" method="post" class="footer-newsletter-form">
+                        @Html.AntiForgeryToken()
+                        <input type="email"
+                               name="email"
+                               class="footer-newsletter-input"
+                               placeholder="Enter your email..."
+                               required
+                               aria-label="Email address for newsletter" />
+                        <button type="submit" class="footer-newsletter-btn">Subscribe</button>
+                    </form>
+                    <div class="footer-trust-row">
+                        <span><i class="fa-solid fa-lock" aria-hidden="true"></i>SSL Secured</span>
+                        <span><i class="fa-solid fa-shield-halved" aria-hidden="true"></i>PCI Safe</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom bar -->
+            <div class="footer-bottom">
+                <div>&copy; @DateTime.UtcNow.Year Hamara Commerce (Pvt) Ltd. All rights reserved.</div>
+                <div class="footer-payment-icons" aria-label="Accepted payment methods">
+                    <i class="fa-brands fa-cc-visa" title="Visa Accepted" aria-label="Visa"></i>
+                    <i class="fa-brands fa-cc-mastercard" title="Mastercard Accepted" aria-label="Mastercard"></i>
+                    <i class="fa-solid fa-money-bill-wave" title="Cash on Delivery" aria-label="Cash on Delivery"></i>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap 5 Bundle + Site JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

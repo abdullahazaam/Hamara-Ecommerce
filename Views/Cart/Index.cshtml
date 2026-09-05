@@ -1,0 +1,174 @@
+@model HamaraCommerce.Models.ShoppingCartViewModel
+@inject HamaraCommerce.Services.IShippingTaxService ShippingTaxService
+@{
+    ViewData["Title"] = "Shopping Cart";
+}
+
+<!-- Breadcrumbs -->
+<nav aria-label="breadcrumb" class="mb-4 reveal-on-scroll">
+    <ol class="breadcrumb small mb-0">
+        <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">Home</a></li>
+        <li class="breadcrumb-item active fw-bold" style="color:var(--brand-primary);" aria-current="page">Shopping Cart</li>
+    </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2 reveal-on-scroll">
+    <div>
+        <h1 class="h3 font-heading fw-bold mb-1" style="color:var(--text-primary); letter-spacing:-0.02em;">Shopping Cart</h1>
+        <p class="small mb-0" style="color:var(--text-muted);">Review your selected items and apply coupons before checkout.</p>
+    </div>
+    @if (Model.Items.Any())
+    {
+        <span class="badge bg-primary-subtle text-primary border border-primary rounded-pill px-3 py-1.5 small font-monospace fw-bold">
+            <i class="fa-solid fa-cart-shopping me-1"></i>@Model.ItemCount Total Items
+        </span>
+    }
+</div>
+
+@if (!Model.Items.Any())
+{
+    <div class="reveal-on-scroll">
+        @await Html.PartialAsync("_EmptyState", ("fa-solid fa-cart-shopping", "Your shopping cart is empty", "Explore thousands of quality products and add your favorites to the cart to begin checkout.", Url.Action("Index", "Shop") ?? "/Shop", "Start Shopping"))
+    </div>
+}
+else
+{
+    <div class="row g-4">
+        <!-- Cart Items List -->
+        <div class="col-lg-8">
+            <div class="card-glass rounded-4 overflow-hidden mb-4 reveal-on-scroll"
+                 style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead style="background:var(--bg-surface-elevated); border-bottom:1px solid var(--border-subtle);">
+                            <tr>
+                                <th class="ps-4 py-3 small text-uppercase fw-bold" style="color:var(--text-muted); letter-spacing:0.04em;">Product</th>
+                                <th class="py-3 small text-uppercase fw-bold" style="color:var(--text-muted); letter-spacing:0.04em;">Unit Price</th>
+                                <th class="py-3 small text-uppercase fw-bold" style="color:var(--text-muted); letter-spacing:0.04em;">Quantity</th>
+                                <th class="py-3 small text-uppercase fw-bold" style="color:var(--text-muted); letter-spacing:0.04em;">Total</th>
+                                <th class="pe-4 py-3 text-end small text-uppercase fw-bold" style="color:var(--text-muted); letter-spacing:0.04em;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.Items)
+                            {
+                                <tr style="border-bottom:1px solid var(--border-subtle);">
+                                    <td class="ps-4 py-3">
+                                        <div class="d-flex align-items-center gap-3">
+                                            <div class="rounded-3 overflow-hidden border p-1" style="width:64px; height:64px; background:var(--bg-surface-elevated); border-color:var(--border-default) !important; flex-shrink:0;">
+                                                <img src="@item.ImageUrl" class="w-100 h-100 object-fit-contain" alt="@item.Title" />
+                                            </div>
+                                            <div>
+                                                <a asp-controller="Shop" asp-action="Details" asp-route-id="@item.ProductId" class="fw-bold text-decoration-none d-block small" style="color:var(--text-primary);">
+                                                    @item.Title
+                                                </a>
+                                                @if (!string.IsNullOrEmpty(item.VariantName))
+                                                {
+                                                    <span class="badge rounded-pill mt-1" style="background:var(--bg-surface-elevated); color:var(--text-muted); border:1px solid var(--border-subtle); font-size:0.7rem;">@item.VariantName</span>
+                                                }
+                                                <span class="text-xs d-block font-monospace mt-0.5" style="color:var(--text-muted);">SKU: @item.SKU</span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="small fw-semibold" style="color:var(--text-secondary);">@ShippingTaxService.FormatCurrency(item.UnitPrice)</td>
+                                    <td>
+                                        <form asp-controller="Cart" asp-action="UpdateQuantity" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="productId" value="@item.ProductId" />
+                                            <input type="hidden" name="variantId" value="@item.VariantId" />
+                                            <div class="quantity-stepper">
+                                                <button type="submit" name="quantity" value="@(item.Quantity - 1)" aria-label="Decrease quantity">
+                                                    <i class="fa-solid fa-minus text-xs"></i>
+                                                </button>
+                                                <input type="number" name="quantityDisplay" value="@item.Quantity" readonly style="width:36px;" />
+                                                <button type="submit" name="quantity" value="@(item.Quantity + 1)" aria-label="Increase quantity">
+                                                    <i class="fa-solid fa-plus text-xs"></i>
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </td>
+                                    <td class="fw-bold font-heading" style="color:var(--brand-primary); font-size:1rem;">@ShippingTaxService.FormatCurrency(item.LineTotal)</td>
+                                    <td class="pe-4 text-end">
+                                        <form asp-controller="Cart" asp-action="RemoveFromCart" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="productId" value="@item.ProductId" />
+                                            <input type="hidden" name="variantId" value="@item.VariantId" />
+                                            <button type="submit" class="btn btn-glass btn-sm rounded-circle p-2" style="color:var(--status-danger);" title="Remove item" aria-label="Remove item">
+                                                <i class="fa-regular fa-trash-can"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Coupon Code Form -->
+            <div class="card-glass rounded-4 p-4 reveal-on-scroll"
+                 style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="fa-solid fa-tags" style="color:var(--brand-primary);"></i>
+                    <h2 class="h6 font-heading fw-bold mb-0" style="color:var(--text-primary);">Have a Promo Coupon?</h2>
+                </div>
+                <p class="small mb-3" style="color:var(--text-muted);">Enter your discount code to unlock exclusive deals.</p>
+                <form asp-controller="Cart" asp-action="ApplyCoupon" method="post" class="row g-2 align-items-center">
+                    @Html.AntiForgeryToken()
+                    <div class="col-sm-8">
+                        <input type="text" name="couponCode" class="form-control font-monospace text-uppercase rounded-pill" placeholder="Enter coupon (e.g. HAMARA10)" value="@Model.AppliedCouponCode" required />
+                    </div>
+                    <div class="col-sm-4">
+                        <button type="submit" class="btn btn-primary-custom w-100 rounded-pill py-2">Apply Code</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Order Summary Sidebar -->
+        <div class="col-lg-4">
+            <div class="card-glass rounded-4 p-4 position-sticky reveal-on-scroll" 
+                 style="top: 85px; background:var(--bg-glass); backdrop-filter:blur(24px); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-md);">
+                <h2 class="h5 font-heading fw-bold mb-3" style="color:var(--text-primary);">Order Summary</h2>
+
+                <div class="d-flex justify-content-between mb-2 small">
+                    <span style="color:var(--text-muted);">Subtotal</span>
+                    <strong style="color:var(--text-primary);">@ShippingTaxService.FormatCurrency(Model.SubTotal)</strong>
+                </div>
+
+                @if (Model.CouponDiscountAmount > 0)
+                {
+                    <div class="d-flex justify-content-between mb-2 small fw-bold" style="color:var(--status-success);">
+                        <span>Coupon Discount (@Model.AppliedCouponCode)</span>
+                        <span>-@ShippingTaxService.FormatCurrency(Model.CouponDiscountAmount)</span>
+                    </div>
+                }
+
+                <div class="d-flex justify-content-between mb-2 small">
+                    <span style="color:var(--text-muted);">Estimated Tax (5% GST)</span>
+                    <strong style="color:var(--text-primary);">@ShippingTaxService.FormatCurrency(Model.EstimatedTax)</strong>
+                </div>
+
+                <div class="d-flex justify-content-between mb-3 small">
+                    <span style="color:var(--text-muted);">Shipping</span>
+                    <strong style="color:var(--text-primary);">@(Model.EffectiveShippingFee == 0 ? "FREE" : ShippingTaxService.FormatCurrency(Model.EffectiveShippingFee))</strong>
+                </div>
+
+                <hr style="border-color:var(--border-subtle) !important;" />
+
+                <div class="d-flex justify-content-between fs-5 fw-bold mb-4">
+                    <span style="color:var(--text-primary);">Total Amount</span>
+                    <span class="font-heading" style="color:var(--brand-primary);">@ShippingTaxService.FormatCurrency(Model.GrandTotal)</span>
+                </div>
+
+                <a asp-controller="Checkout" asp-action="Index" class="btn btn-primary-custom w-100 py-3 rounded-pill fw-bold shadow-sm mb-3">
+                    Proceed to Checkout <i class="fa-solid fa-arrow-right ms-2"></i>
+                </a>
+
+                <a asp-controller="Shop" asp-action="Index" class="btn btn-glass w-100 rounded-pill small">
+                    <i class="fa-solid fa-arrow-left me-1"></i>Continue Shopping
+                </a>
+            </div>
+        </div>
+    </div>
+}

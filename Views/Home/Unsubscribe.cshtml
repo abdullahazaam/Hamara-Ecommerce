@@ -1,0 +1,30 @@
+@{
+    ViewData["Title"] = "Newsletter Preferences";
+    bool success = ViewBag.Success == true;
+    string? message = ViewBag.Message as string;
+}
+
+<div class="row justify-content-center py-5">
+    <div class="col-md-6 col-lg-5">
+        <div class="card border-0 shadow-sm rounded-4 p-4 p-md-5 bg-card text-center">
+            @if (success)
+            {
+                <div class="p-3 rounded-circle bg-success-subtle text-success d-inline-flex mx-auto mb-3" style="width: 64px; height: 64px; align-items: center; justify-content: center;">
+                    <i class="fa-solid fa-check fs-2"></i>
+                </div>
+                <h1 class="h4 font-heading fw-bold text-dark mb-2">Unsubscribed Successfully</h1>
+                <p class="text-muted small mb-4">@(message ?? "You have been unsubscribed from our marketing and promotional newsletters. You will still receive vital order and security emails.")</p>
+                <a asp-controller="Home" asp-action="Index" class="btn btn-primary-custom rounded-pill px-4">Back to Store</a>
+            }
+            else
+            {
+                <div class="p-3 rounded-circle bg-warning-subtle text-warning d-inline-flex mx-auto mb-3" style="width: 64px; height: 64px; align-items: center; justify-content: center;">
+                    <i class="fa-solid fa-triangle-exclamation fs-2"></i>
+                </div>
+                <h1 class="h4 font-heading fw-bold text-dark mb-2">Invalid or Expired Link</h1>
+                <p class="text-muted small mb-4">@(message ?? "The unsubscribe token provided is invalid or has already been used. Please contact support if you continue receiving unwanted emails.")</p>
+                <a asp-controller="Home" asp-action="Index" class="btn btn-glass rounded-pill px-4">Back to Store</a>
+            }
+        </div>
+    </div>
+</div>

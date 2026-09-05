@@ -1,0 +1,218 @@
+@model HamaraCommerce.Models.Order
+@inject HamaraCommerce.Services.IShippingTaxService ShippingTaxService
+@{
+    ViewData["Title"] = "Manage Order #" + Model.OrderNumber;
+    Layout = "_AdminLayout";
+    var primaryPayment = Model.Payments.OrderByDescending(p => p.CreatedAt).FirstOrDefault();
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <a asp-controller="Admin" asp-action="Orders" class="btn btn-glass btn-sm rounded-pill px-3">
+                <i class="fa-solid fa-arrow-left me-1"></i>Orders List
+            </a>
+            <span class="badge bg-primary font-monospace">@Model.OrderNumber</span>
+        </div>
+        <h2 class="h4 font-heading fw-bold mb-0">Order Operations & Status</h2>
+    </div>
+    <div class="d-flex gap-2">
+        <a asp-controller="Admin" asp-action="Invoice" asp-route-id="@Model.Id" class="btn btn-outline-secondary rounded-pill px-3" target="_blank">
+            <i class="fa-solid fa-print me-1"></i>Tax Invoice
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Left Column: Status Update & Items -->
+    <div class="col-lg-8">
+        <!-- Status Transition Card -->
+        <div class="card border-0 shadow-sm rounded-4 p-4 bg-card mb-4">
+            <h5 class="fw-bold font-heading mb-3 text-dark">
+                <i class="fa-solid fa-arrows-rotate me-2 text-primary"></i>Update Order Status & Tracking
+            </h5>
+
+            <form asp-controller="Admin" asp-action="UpdateOrderStatus" method="post" class="row g-3">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-muted">Lifecycle Status</label>
+                    <select name="status" class="form-select" asp-for="Status" asp-items="Html.GetEnumSelectList<OrderStatus>()"></select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-muted">Tracking Reference</label>
+                    <input type="text" name="trackingNumber" value="@Model.TrackingNumber" class="form-control font-monospace" required />
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-muted">Courier Method</label>
+                    <input type="text" name="courierMethod" value="@Model.ShippingMethod" class="form-control" />
+                </div>
+
+                <div class="col-12 text-end">
+                    <button type="submit" class="btn btn-primary-custom px-4 rounded-pill">
+                        <i class="fa-solid fa-floppy-disk me-1"></i>Update Order
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Purchased Line Items Table -->
+        <div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-card mb-4">
+            <div class="p-3 bg-light border-bottom">
+                <h5 class="fw-bold font-heading mb-0 text-dark">Order Items (@Model.Items.Sum(i => i.Quantity))</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th class="ps-4">Product</th>
+                            <th>Unit Price</th>
+                            <th>Qty</th>
+                            <th class="pe-4 text-end">Line Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Items)
+                        {
+                            <tr>
+                                <td class="ps-4 py-3">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <img src="@item.ProductImage" class="rounded-3 border" style="width:50px; height:50px; object-fit:cover;" alt="@item.ProductTitle" />
+                                        <div>
+                                            <a asp-controller="Shop" asp-action="Details" asp-route-id="@item.ProductId" class="fw-bold text-decoration-none text-dark d-block" target="_blank">
+                                                @item.ProductTitle
+                                            </a>
+                                            @if (!string.IsNullOrEmpty(item.VariantName))
+                                            {
+                                                <span class="badge bg-secondary-subtle text-secondary small border">@item.VariantName</span>
+                                            }
+                                            @if (!string.IsNullOrEmpty(item.SKU))
+                                            {
+                                                <span class="small text-muted d-block font-monospace">SKU: @item.SKU</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>@ShippingTaxService.FormatCurrency(item.UnitPrice)</td>
+                                <td class="fw-bold">@item.Quantity</td>
+                                <td class="pe-4 text-end fw-bold text-primary">@ShippingTaxService.FormatCurrency(item.TotalPrice)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Payment Transactions History -->
+        @if (primaryPayment != null)
+        {
+            <div class="card border-0 shadow-sm rounded-4 p-4 bg-card mb-4">
+                <h5 class="fw-bold font-heading mb-3 text-dark">
+                    <i class="fa-solid fa-credit-card me-2 text-primary"></i>Payment Transaction Record
+                </h5>
+                <div class="row g-3 small">
+                    <div class="col-sm-4">
+                        <span class="text-muted d-block">Transaction Ref:</span>
+                        <strong class="font-monospace text-dark">@primaryPayment.TransactionReference</strong>
+                    </div>
+                    <div class="col-sm-4">
+                        <span class="text-muted d-block">Provider:</span>
+                        <strong class="text-dark">@primaryPayment.Provider</strong>
+                    </div>
+                    <div class="col-sm-4">
+                        <span class="text-muted d-block">Payment Status:</span>
+                        <span class="badge @(primaryPayment.Status == PaymentStatus.Paid ? "bg-success" : "bg-warning text-dark")">@primaryPayment.Status</span>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Right Column: Customer Info & Financials -->
+    <div class="col-lg-4">
+        <!-- Customer & Shipping -->
+        <div class="card border-0 shadow-sm rounded-4 p-4 bg-card mb-4">
+            <h5 class="fw-bold font-heading mb-3 text-dark">Customer & Delivery</h5>
+            <div class="mb-3">
+                <span class="small text-muted d-block">Customer Name:</span>
+                <strong class="text-dark">@Model.CustomerName</strong>
+            </div>
+            <div class="mb-3">
+                <span class="small text-muted d-block">Customer Email:</span>
+                <span class="text-dark">@Model.CustomerEmail</span>
+            </div>
+            <div class="mb-3">
+                <span class="small text-muted d-block">Phone:</span>
+                <span class="text-dark">@Model.CustomerPhone</span>
+            </div>
+            <div class="mb-3">
+                <span class="small text-muted d-block">Shipping Address:</span>
+                <p class="small text-dark mb-0">@Model.ShippingAddress, @Model.City, @Model.State @Model.PostalCode, @Model.Country</p>
+            </div>
+            @if (!string.IsNullOrEmpty(Model.CustomerNotes))
+            {
+                <div class="p-2 bg-light rounded-3 small">
+                    <strong>Customer Notes:</strong> @Model.CustomerNotes
+                </div>
+            }
+        </div>
+
+        <!-- Financial Summary -->
+        <div class="card border-0 shadow-sm rounded-4 p-4 bg-card mb-4">
+            <h5 class="fw-bold font-heading mb-3 text-dark">Order Financials</h5>
+            <div class="d-flex justify-content-between mb-2 small">
+                <span class="text-muted">Subtotal</span>
+                <strong class="text-dark">@ShippingTaxService.FormatCurrency(Model.Subtotal)</strong>
+            </div>
+            @if (Model.DiscountAmount > 0)
+            {
+                <div class="d-flex justify-content-between mb-2 small text-success fw-bold">
+                    <span>Discount @(Model.CouponCode != null ? $"({Model.CouponCode})" : "")</span>
+                    <span>-@ShippingTaxService.FormatCurrency(Model.DiscountAmount)</span>
+                </div>
+            }
+            <div class="d-flex justify-content-between mb-2 small">
+                <span class="text-muted">Tax (GST)</span>
+                <strong class="text-dark">@ShippingTaxService.FormatCurrency(Model.TaxAmount)</strong>
+            </div>
+            <div class="d-flex justify-content-between mb-3 small">
+                <span class="text-muted">Shipping</span>
+                <strong class="text-dark">@(Model.ShippingFee == 0 ? "FREE" : ShippingTaxService.FormatCurrency(Model.ShippingFee))</strong>
+            </div>
+            <hr />
+            <div class="d-flex justify-content-between fs-5 fw-bold">
+                <span class="text-dark">Grand Total</span>
+                <span class="text-primary">@ShippingTaxService.FormatCurrency(Model.TotalAmount)</span>
+            </div>
+        </div>
+
+        <!-- Order Cancellation / Refund -->
+        @if (Model.Status != OrderStatus.Cancelled)
+        {
+            <div class="card border-0 shadow-sm rounded-4 p-4 bg-card">
+                <h5 class="fw-bold font-heading mb-2 text-danger">Administrative Actions</h5>
+                <p class="small text-muted mb-3">Cancel this order and optionally restore inventory items back to stock.</p>
+                <form asp-controller="Admin" asp-action="CancelOrder" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Cancellation Reason</label>
+                        <textarea name="reason" class="form-control form-control-sm" rows="2" placeholder="e.g. Out of stock, customer requested refund" required></textarea>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="restoreInventory" value="true" checked id="restoreCheck" />
+                        <label class="form-check-label small text-dark" for="restoreCheck">
+                            Restore item stock quantities
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-outline-danger w-100 rounded-pill btn-sm" onclick="return confirm('Cancel this order?');">
+                        <i class="fa-solid fa-ban me-1"></i>Cancel Order
+                    </button>
+                </form>
+            </div>
+        }
+    </div>
+</div>

@@ -1,0 +1,152 @@
+@model List<HamaraCommerce.Models.Coupon>
+@inject HamaraCommerce.Services.IShippingTaxService ShippingTaxService
+@{
+    ViewData["Title"] = "Coupon Codes & Promotions";
+    Layout = "_AdminLayout";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h2 class="h4 font-heading fw-bold mb-1">Coupon Codes & Campaign Discounts</h2>
+        <p class="text-muted small mb-0">Manage promo codes, percentage/fixed discounts, usage limits, and validity periods.</p>
+    </div>
+    <button class="btn btn-primary-custom rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#createCouponModal">
+        <i class="fa-solid fa-plus me-1"></i>Create New Coupon
+    </button>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-card mb-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="bg-light">
+                <tr>
+                    <th class="ps-4">Code</th>
+                    <th>Campaign Description</th>
+                    <th>Discount Rule</th>
+                    <th>Min Spend</th>
+                    <th>Usage / Limit</th>
+                    <th>Validity Period</th>
+                    <th>Status</th>
+                    <th class="pe-4 text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Any())
+                {
+                    <tr>
+                        <td colspan="8" class="text-center py-5 text-muted">
+                            <i class="fa-solid fa-tags fs-2 d-block mb-2 opacity-50"></i>
+                            No coupons created yet.
+                        </td>
+                    </tr>
+                }
+                @foreach (var c in Model)
+                {
+                    <tr>
+                        <td class="ps-4">
+                            <span class="fw-bold font-monospace text-primary fs-6">@c.Code</span>
+                        </td>
+                        <td class="small">@c.Description</td>
+                        <td>
+                            @if (c.DiscountPercentage > 0)
+                            {
+                                <span class="badge bg-success-subtle text-success border border-success rounded-pill px-2.5 py-1">@c.DiscountPercentage% OFF</span>
+                            }
+                            else if (c.FixedDiscountAmount > 0)
+                            {
+                                <span class="badge bg-primary-subtle text-primary border border-primary rounded-pill px-2.5 py-1">@ShippingTaxService.FormatCurrency(c.FixedDiscountAmount) OFF</span>
+                            }
+                            else if (c.FreeShipping)
+                            {
+                                <span class="badge bg-info-subtle text-info border border-info rounded-pill px-2.5 py-1">Free Shipping</span>
+                            }
+                        </td>
+                        <td class="small">@ShippingTaxService.FormatCurrency(c.MinimumSpend)</td>
+                        <td class="small">
+                            <strong>@c.UsageCount</strong> / @c.UsageLimit
+                        </td>
+                        <td class="small text-muted">
+                            @c.ExpiryDate.ToString("MMM dd, yyyy")
+                        </td>
+                        <td>
+                            @if (c.IsActive && c.ExpiryDate > DateTime.UtcNow)
+                            {
+                                <span class="badge bg-success rounded-pill px-2.5 py-1">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary rounded-pill px-2.5 py-1">Expired / Inactive</span>
+                            }
+                        </td>
+                        <td class="pe-4 text-end">
+                            <form asp-controller="Admin" asp-action="DeleteCoupon" method="post" class="d-inline" onsubmit="return confirm('Delete this coupon?');">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@c.Id" />
+                                <button type="submit" class="btn btn-outline-danger btn-sm rounded-circle p-2" title="Delete Coupon">
+                                    <i class="fa-regular fa-trash-can"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- CREATE COUPON MODAL -->
+<div class="modal fade" id="createCouponModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-xl">
+            <div class="modal-header border-0">
+                <h5 class="modal-title font-heading fw-bold">Create Promotional Coupon</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-controller="Admin" asp-action="AddCoupon" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Coupon Code</label>
+                        <input type="text" name="Code" class="form-control font-monospace text-uppercase" placeholder="e.g. AZADI25" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Campaign Description</label>
+                        <input type="text" name="Description" class="form-control" placeholder="25% Off Azadi Celebration Sale" required />
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Discount % (if percentage)</label>
+                            <input type="number" name="DiscountPercentage" class="form-control" value="15" step="0.5" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Fixed Discount Amount (PKR)</label>
+                            <input type="number" name="FixedDiscountAmount" class="form-control" value="0" />
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Min Spend (PKR)</label>
+                            <input type="number" name="MinimumSpend" class="form-control" value="1000" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Max Uses (Limit)</label>
+                            <input type="number" name="UsageLimit" class="form-control" value="500" />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Expiry Date</label>
+                        <input type="date" name="ExpiryDate" class="form-control" value="@DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd")" />
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="IsActive" value="true" checked id="activeCheck" />
+                        <label class="form-check-label small text-dark fw-semibold" for="activeCheck">Active immediately</label>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-glass" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom px-4 rounded-pill">Save Coupon</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

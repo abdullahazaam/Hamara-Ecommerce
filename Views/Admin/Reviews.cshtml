@@ -1,0 +1,148 @@
+@model HamaraCommerce.Models.AdminReviewModerationViewModel
+@{
+    ViewData["Title"] = "Customer Reviews Moderation";
+    Layout = "_AdminLayout";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h2 class="h4 font-heading fw-bold mb-1">Customer Reviews Moderation</h2>
+        <p class="text-muted small mb-0">Review product feedback, approve verified testimonials, and moderate spam.</p>
+    </div>
+    <span class="badge bg-primary rounded-pill px-3 py-2">@Model.TotalCount Reviews Total</span>
+</div>
+
+<!-- Filters -->
+<div class="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-card">
+    <form asp-controller="Admin" asp-action="Reviews" method="get" class="row g-2 align-items-center">
+        <div class="col-md-9">
+            <select name="approved" class="form-select border-0 bg-light" onchange="this.form.submit()">
+                <option value="">-- All Moderation States --</option>
+                <option value="true" selected="@(Model.ApprovedFilter == true)">Published & Approved</option>
+                <option value="false" selected="@(Model.ApprovedFilter == false)">Pending / Hidden</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <button type="submit" class="btn btn-primary-custom w-100 rounded-3">Filter Reviews</button>
+        </div>
+    </form>
+</div>
+
+<!-- Reviews Table -->
+<div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-card mb-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="bg-light">
+                <tr>
+                    <th class="ps-4">Product</th>
+                    <th>Customer</th>
+                    <th>Rating</th>
+                    <th>Review Content</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th class="pe-4 text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Reviews.Any())
+                {
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="fa-solid fa-star-half-stroke fs-2 d-block mb-2 opacity-50"></i>
+                            No reviews found matching filter.
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var r in Model.Reviews)
+                    {
+                        <tr>
+                            <td class="ps-4">
+                                @if (r.Product != null)
+                                {
+                                    <div class="d-flex align-items-center gap-2">
+                                        <img src="@r.Product.MainImage" class="rounded-2" style="width:36px; height:36px; object-fit:cover;" alt="@r.Product.Title" />
+                                        <a asp-controller="Shop" asp-action="Details" asp-route-id="@r.ProductId" class="fw-bold small text-decoration-none text-dark text-truncate" style="max-width:140px;" target="_blank">
+                                            @r.Product.Title
+                                        </a>
+                                    </div>
+                                }
+                            </td>
+                            <td>
+                                <strong class="small text-dark d-block">@r.UserName</strong>
+                                @if (r.IsVerifiedPurchase)
+                                {
+                                    <span class="badge bg-success-subtle text-success border border-success rounded-pill px-2 py-0.5 text-xs">
+                                        <i class="fa-solid fa-circle-check me-1"></i>Verified Buyer
+                                    </span>
+                                }
+                            </td>
+                            <td>
+                                <div class="text-warning small">
+                                    @for (int i = 1; i <= 5; i++)
+                                    {
+                                        <i class="fa-solid fa-star @(i <= r.Rating ? "" : "text-muted opacity-25")"></i>
+                                    }
+                                </div>
+                            </td>
+                            <td style="max-width: 280px;">
+                                <strong class="small text-dark d-block">@r.Title</strong>
+                                <span class="small text-muted">@r.Comment</span>
+                            </td>
+                            <td class="small text-muted">@r.Date.ToString("MMM dd, yyyy")</td>
+                            <td>
+                                @if (r.IsApproved)
+                                {
+                                    <span class="badge bg-success-subtle text-success border border-success rounded-pill px-2.5 py-1 small">Approved</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning-subtle text-warning border border-warning rounded-pill px-2.5 py-1 small">Hidden</span>
+                                }
+                            </td>
+                            <td class="pe-4 text-end">
+                                <form asp-controller="Admin" asp-action="ToggleReviewApproval" method="post" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@r.Id" />
+                                    <button type="submit" class="btn btn-sm @(r.IsApproved ? "btn-outline-warning text-dark" : "btn-outline-success") rounded-pill px-3 me-1">
+                                        @(r.IsApproved ? "Hide" : "Approve")
+                                    </button>
+                                </form>
+
+                                <form asp-controller="Admin" asp-action="DeleteReview" method="post" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@r.Id" />
+                                    <button type="submit" class="btn btn-outline-danger btn-sm rounded-circle p-2" title="Delete Review" onclick="return confirm('Delete this review permanently?');">
+                                        <i class="fa-regular fa-trash-can"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Pagination -->
+@if (Model.TotalPages > 1)
+{
+    <nav class="d-flex justify-content-center">
+        <ul class="pagination">
+            <li class="page-item @(!Model.HasPreviousPage ? "disabled" : "")">
+                <a class="page-link rounded-pill me-1" asp-action="Reviews" asp-route-page="@(Model.CurrentPage - 1)" asp-route-approved="@Model.ApprovedFilter">Previous</a>
+            </li>
+            @for (int p = 1; p <= Model.TotalPages; p++)
+            {
+                <li class="page-item @(p == Model.CurrentPage ? "active" : "")">
+                    <a class="page-link rounded-pill mx-1" asp-action="Reviews" asp-route-page="@p" asp-route-approved="@Model.ApprovedFilter">@p</a>
+                </li>
+            }
+            <li class="page-item @(!Model.HasNextPage ? "disabled" : "")">
+                <a class="page-link rounded-pill ms-1" asp-action="Reviews" asp-route-page="@(Model.CurrentPage + 1)" asp-route-approved="@Model.ApprovedFilter">Next</a>
+            </li>
+        </ul>
+    </nav>
+}

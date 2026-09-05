@@ -1,0 +1,340 @@
+@model HamaraCommerce.Models.Order
+@inject HamaraCommerce.Services.IShippingTaxService ShippingTaxService
+@{
+    ViewData["Title"] = "Order Details — #" + Model.OrderNumber;
+    bool canCancel = Model.Status == OrderStatus.Pending || Model.Status == OrderStatus.Confirmed || Model.Status == OrderStatus.Processing;
+    bool canReturn = Model.Status == OrderStatus.Delivered && (DateTime.UtcNow - Model.OrderDate).TotalDays <= 30;
+    var primaryPayment = Model.Payments.OrderByDescending(p => p.CreatedAt).FirstOrDefault();
+
+    int currentStep = Model.Status switch
+    {
+        OrderStatus.Pending => 0,
+        OrderStatus.Confirmed => 1,
+        OrderStatus.Packed => 2,
+        OrderStatus.Shipped => 3,
+        OrderStatus.OutForDelivery => 4,
+        OrderStatus.Delivered => 5,
+        _ => -1
+    };
+}
+
+<!-- Breadcrumbs -->
+<nav aria-label="breadcrumb" class="mb-4 reveal-on-scroll">
+    <ol class="breadcrumb small mb-0">
+        <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">Home</a></li>
+        <li class="breadcrumb-item"><a asp-controller="Account" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">My Account</a></li>
+        <li class="breadcrumb-item"><a asp-controller="Account" asp-action="Orders" class="text-decoration-none" style="color:var(--text-muted);">Orders</a></li>
+        <li class="breadcrumb-item active fw-bold" style="color:var(--brand-primary);" aria-current="page">#@Model.OrderNumber</li>
+    </ol>
+</nav>
+
+<!-- Header & Actions -->
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4 reveal-on-scroll">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="badge bg-primary-subtle text-primary border border-primary px-3 py-1.5 rounded-pill font-monospace fw-bold text-xs">
+                Ref: @Model.OrderNumber
+            </span>
+            <span class="text-xs font-monospace" style="color:var(--text-muted);">TRK: @Model.TrackingNumber</span>
+        </div>
+        <h1 class="h3 font-heading fw-bold mb-0" style="color:var(--text-primary); letter-spacing:-0.02em;">Order Details &amp; History</h1>
+    </div>
+
+    <div class="d-flex align-items-center gap-2">
+        <a asp-controller="Account" asp-action="Invoice" asp-route-id="@Model.OrderNumber" class="btn btn-glass rounded-pill px-3" target="_blank">
+            <i class="fa-solid fa-print me-1.5"></i>Print Invoice
+        </a>
+        @if (canCancel)
+        {
+            <button type="button" class="btn btn-outline-danger rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#cancelOrderModal">
+                <i class="fa-solid fa-ban me-1.5"></i>Cancel Order
+            </button>
+        }
+        @if (canReturn)
+        {
+            <button type="button" class="btn btn-outline-warning rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#returnOrderModal">
+                <i class="fa-solid fa-rotate-left me-1.5"></i>Return / Refund
+            </button>
+        }
+    </div>
+</div>
+
+<!-- VISUAL ORDER TIMELINE -->
+@if (Model.Status == OrderStatus.Cancelled)
+{
+    <div class="alert alert-danger border-0 rounded-4 p-4 mb-4 reveal-on-scroll">
+        <div class="d-flex align-items-center gap-3">
+            <i class="fa-solid fa-circle-xmark fs-2 text-danger"></i>
+            <div>
+                <h5 class="fw-bold mb-1">This order has been cancelled</h5>
+                <p class="mb-0 small">Inventory has been restored and no further shipments will be dispatched.</p>
+            </div>
+        </div>
+    </div>
+}
+else if (Model.Status == OrderStatus.Refunded)
+{
+    <div class="alert alert-warning border-0 rounded-4 p-4 mb-4 reveal-on-scroll">
+        <div class="d-flex align-items-center gap-3">
+            <i class="fa-solid fa-rotate-left fs-2 text-warning"></i>
+            <div>
+                <h5 class="fw-bold mb-1">Return / Refund in Progress</h5>
+                <p class="mb-0 small">Our customer care team is reviewing your request.</p>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card-glass rounded-4 p-4 mb-4 reveal-on-scroll"
+         style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+        <h2 class="h6 font-heading fw-bold mb-4" style="color:var(--text-primary);">
+            <i class="fa-solid fa-truck-ramp-box me-2 text-primary"></i>Delivery Status Progress
+        </h2>
+
+        <div class="position-relative mb-2 px-2">
+            <div class="progress rounded-pill overflow-hidden" style="height: 6px; background:var(--bg-surface-elevated);">
+                <div class="progress-bar" role="progressbar" style="width: @(Math.Min(100, Math.Max(0, (currentStep / 5.0) * 100)))%; background:var(--grad-btn);"></div>
+            </div>
+
+            <div class="d-flex justify-content-between position-relative" style="margin-top: -19px;">
+                @{
+                    var steps = new[] { "Ordered", "Confirmed", "Packed", "Shipped", "Out for Delivery", "Delivered" };
+                }
+                @for (int i = 0; i < steps.Length; i++)
+                {
+                    bool isCompleted = currentStep >= i;
+                    bool isCurrent = currentStep == i;
+                    <div class="text-center" style="width: 80px;">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" 
+                             style="width: 32px; height: 32px; font-size: 0.8rem; background:@(isCompleted ? "var(--grad-btn)" : "var(--bg-surface-elevated)"); color:@(isCompleted ? "#fff" : "var(--text-muted)"); border:1px solid var(--border-default);">
+                            @if (isCompleted)
+                            {
+                                <i class="fa-solid fa-check text-xs"></i>
+                            }
+                            else
+                            {
+                                @(i + 1)
+                            }
+                        </div>
+                        <span class="small d-block @(isCompleted ? "fw-bold" : "")" style="font-size: 0.75rem; color:@(isCompleted ? "var(--brand-primary)" : "var(--text-muted)");">
+                            @steps[i]
+                        </span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<div class="row g-4">
+    <!-- Order Items Column -->
+    <div class="col-lg-8">
+        <div class="card-glass rounded-4 overflow-hidden mb-4 reveal-on-scroll"
+             style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+            <div class="p-3.5 border-bottom" style="background:var(--bg-surface-elevated); border-color:var(--border-subtle) !important;">
+                <h3 class="h6 font-heading fw-bold mb-0" style="color:var(--text-primary);">Purchased Items (@Model.Items.Sum(i => i.Quantity))</h3>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead style="background:var(--bg-surface-elevated); border-bottom:1px solid var(--border-subtle);">
+                        <tr>
+                            <th class="ps-4 py-2.5 small text-uppercase fw-bold" style="color:var(--text-muted);">Product</th>
+                            <th class="py-2.5 small text-uppercase fw-bold" style="color:var(--text-muted);">Unit Price</th>
+                            <th class="py-2.5 small text-uppercase fw-bold" style="color:var(--text-muted);">Qty</th>
+                            <th class="pe-4 py-2.5 text-end small text-uppercase fw-bold" style="color:var(--text-muted);">Line Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Items)
+                        {
+                            <tr style="border-bottom:1px solid var(--border-subtle);">
+                                <td class="ps-4 py-3">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <img src="@item.ProductImage" class="rounded-2 border" style="width:50px; height:50px; object-fit:cover; border-color:var(--border-default) !important;" alt="@item.ProductTitle" />
+                                        <div>
+                                            <a asp-controller="Shop" asp-action="Details" asp-route-id="@item.ProductId" class="fw-bold text-decoration-none small d-block" style="color:var(--text-primary);">
+                                                @item.ProductTitle
+                                            </a>
+                                            @if (!string.IsNullOrEmpty(item.VariantName))
+                                            {
+                                                <span class="badge rounded-pill text-xs" style="background:var(--bg-surface-elevated); color:var(--text-muted); border:1px solid var(--border-subtle);">@item.VariantName</span>
+                                            }
+                                            @if (!string.IsNullOrEmpty(item.SKU))
+                                            {
+                                                <span class="text-xs d-block font-monospace" style="color:var(--text-muted);">SKU: @item.SKU</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="small" style="color:var(--text-secondary);">@ShippingTaxService.FormatCurrency(item.UnitPrice)</td>
+                                <td class="fw-bold small" style="color:var(--text-primary);">@item.Quantity</td>
+                                <td class="pe-4 text-end fw-bold font-heading" style="color:var(--brand-primary);">@ShippingTaxService.FormatCurrency(item.TotalPrice)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Payment Transaction Record -->
+        @if (primaryPayment != null)
+        {
+            <div class="card-glass rounded-4 p-4 mb-4 reveal-on-scroll"
+                 style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+                <h3 class="h6 font-heading fw-bold mb-3" style="color:var(--text-primary);">
+                    <i class="fa-solid fa-receipt me-2 text-primary"></i>Payment Transaction Receipt
+                </h3>
+                <div class="row g-3 small">
+                    <div class="col-sm-4">
+                        <span class="d-block" style="color:var(--text-muted);">Transaction Reference:</span>
+                        <strong class="font-monospace" style="color:var(--text-primary);">@primaryPayment.TransactionReference</strong>
+                    </div>
+                    <div class="col-sm-4">
+                        <span class="d-block" style="color:var(--text-muted);">Provider:</span>
+                        <strong style="color:var(--text-primary);">@primaryPayment.Provider</strong>
+                    </div>
+                    <div class="col-sm-4">
+                        <span class="d-block" style="color:var(--text-muted);">Payment Status:</span>
+                        <span class="badge @(primaryPayment.Status == PaymentStatus.Paid ? "bg-success" : "bg-warning text-dark") rounded-pill px-3 py-1">
+                            @primaryPayment.Status
+                        </span>
+                    </div>
+                    @if (!string.IsNullOrEmpty(primaryPayment.CardLast4))
+                    {
+                        <div class="col-sm-6">
+                            <span class="d-block" style="color:var(--text-muted);">Card Summary:</span>
+                            <strong style="color:var(--text-primary);">@(primaryPayment.CardBrand ?? "Card") ending in •••• @primaryPayment.CardLast4</strong>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Sidebar: Details & Breakdown -->
+    <div class="col-lg-4">
+        <!-- Delivery & Contact Card -->
+        <div class="card-glass rounded-4 p-4 mb-4 reveal-on-scroll"
+             style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+            <h3 class="h6 font-heading fw-bold mb-3" style="color:var(--text-primary);">Delivery Information</h3>
+            
+            <div class="mb-3">
+                <span class="small d-block" style="color:var(--text-muted);">Recipient Name</span>
+                <strong style="color:var(--text-primary);">@Model.CustomerName</strong>
+            </div>
+            <div class="mb-3">
+                <span class="small d-block" style="color:var(--text-muted);">Contact Phone</span>
+                <strong style="color:var(--text-primary);">@Model.CustomerPhone</strong>
+            </div>
+            <div class="mb-3">
+                <span class="small d-block" style="color:var(--text-muted);">Delivery Address</span>
+                <p class="small mb-0" style="color:var(--text-secondary);">@Model.ShippingAddress, @Model.City, @Model.State @Model.PostalCode, @Model.Country</p>
+            </div>
+            <div class="mb-0">
+                <span class="small d-block" style="color:var(--text-muted);">Courier Method</span>
+                <strong style="color:var(--text-primary);">@Model.ShippingMethod</strong>
+            </div>
+        </div>
+
+        <!-- Financial Summary Card -->
+        <div class="card-glass rounded-4 p-4 reveal-on-scroll"
+             style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+            <h3 class="h6 font-heading fw-bold mb-3" style="color:var(--text-primary);">Order Financials</h3>
+
+            <div class="d-flex justify-content-between mb-2 small">
+                <span style="color:var(--text-muted);">Subtotal</span>
+                <strong style="color:var(--text-primary);">@ShippingTaxService.FormatCurrency(Model.Subtotal)</strong>
+            </div>
+
+            @if (Model.DiscountAmount > 0)
+            {
+                <div class="d-flex justify-content-between mb-2 small fw-bold" style="color:var(--status-success);">
+                    <span>Coupon Discount @(Model.CouponCode != null ? $"({Model.CouponCode})" : "")</span>
+                    <span>-@ShippingTaxService.FormatCurrency(Model.DiscountAmount)</span>
+                </div>
+            }
+
+            <div class="d-flex justify-content-between mb-2 small">
+                <span style="color:var(--text-muted);">Estimated Tax (5% GST)</span>
+                <strong style="color:var(--text-primary);">@ShippingTaxService.FormatCurrency(Model.TaxAmount)</strong>
+            </div>
+
+            <div class="d-flex justify-content-between mb-3 small">
+                <span style="color:var(--text-muted);">Shipping Delivery</span>
+                <strong style="color:var(--text-primary);">@(Model.ShippingFee == 0 ? "FREE" : ShippingTaxService.FormatCurrency(Model.ShippingFee))</strong>
+            </div>
+
+            <hr style="border-color:var(--border-subtle) !important;" />
+
+            <div class="d-flex justify-content-between fs-5 fw-bold">
+                <span style="color:var(--text-primary);">Total Paid</span>
+                <span class="font-heading" style="color:var(--brand-primary);">@ShippingTaxService.FormatCurrency(Model.TotalAmount)</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CANCEL ORDER MODAL -->
+@if (canCancel)
+{
+    <div class="modal fade" id="cancelOrderModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4" style="background:var(--bg-surface); color:var(--text-primary); border:1px solid var(--border-default);">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title font-heading fw-bold text-danger">
+                        <i class="fa-solid fa-triangle-exclamation me-2"></i>Cancel Order #@Model.OrderNumber
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form asp-controller="Account" asp-action="CancelOrder" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="OrderNumber" value="@Model.OrderNumber" />
+                    <div class="modal-body">
+                        <p class="small mb-3" style="color:var(--text-muted);">Are you sure you want to cancel this order? Stock will be immediately restored to store inventory.</p>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold" style="color:var(--text-muted);">Reason for Cancellation</label>
+                            <textarea name="Reason" class="form-control rounded-3" rows="3" placeholder="e.g. Changed my mind / ordered incorrect size" required minlength="5"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 pt-0">
+                        <button type="button" class="btn btn-glass" data-bs-dismiss="modal">Keep Order</button>
+                        <button type="submit" class="btn btn-danger px-4 rounded-pill">Confirm Cancellation</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- RETURN / REFUND MODAL -->
+@if (canReturn)
+{
+    <div class="modal fade" id="returnOrderModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4" style="background:var(--bg-surface); color:var(--text-primary); border:1px solid var(--border-default);">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title font-heading fw-bold text-warning">
+                        <i class="fa-solid fa-rotate-left me-2"></i>Request Return for Order #@Model.OrderNumber
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form asp-controller="Account" asp-action="ReturnOrder" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="OrderNumber" value="@Model.OrderNumber" />
+                    <div class="modal-body">
+                        <p class="small mb-3" style="color:var(--text-muted);">Please state the reason for returning this delivered product. Our courier representative will arrange pickup.</p>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold" style="color:var(--text-muted);">Reason for Return</label>
+                            <textarea name="Reason" class="form-control rounded-3" rows="3" placeholder="e.g. Defective item, incorrect color received" required minlength="5"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 pt-0">
+                        <button type="button" class="btn btn-glass" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-warning px-4 rounded-pill text-dark fw-bold">Submit Return Request</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}

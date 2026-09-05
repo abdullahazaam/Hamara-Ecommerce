@@ -1,0 +1,42 @@
+@using HamaraCommerce.Models
+@inject HamaraCommerce.Services.ISeoService SeoService
+@{
+    var seo = (ViewData["SeoMetadata"] ?? ViewBag.SeoMetadata) as PageSeoMetadata ?? new PageSeoMetadata();
+    var request = Context.Request;
+    var baseUrl = $"{request.Scheme}://{request.Host}";
+    var currentUrl = string.IsNullOrEmpty(seo.CanonicalUrl) ? $"{baseUrl}{request.Path}{request.QueryString}" : seo.CanonicalUrl;
+}
+
+<!-- Standard Metadata -->
+<meta name="description" content="@seo.Description" />
+<meta name="keywords" content="@seo.Keywords" />
+<meta name="robots" content="@seo.Robots" />
+<link rel="canonical" href="@currentUrl" />
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content="@seo.OgType" />
+<meta property="og:site_name" content="@seo.OgSiteName" />
+<meta property="og:url" content="@(seo.OgUrl ?? currentUrl)" />
+<meta property="og:title" content="@(seo.OgTitle ?? seo.Title)" />
+<meta property="og:description" content="@(seo.OgDescription ?? seo.Description)" />
+<meta property="og:image" content="@(seo.OgImage ?? $"{baseUrl}/images/og-banner.png")" />
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="@seo.TwitterCard" />
+<meta name="twitter:url" content="@(seo.OgUrl ?? currentUrl)" />
+<meta name="twitter:title" content="@(seo.TwitterTitle ?? seo.Title)" />
+<meta name="twitter:description" content="@(seo.TwitterDescription ?? seo.Description)" />
+<meta name="twitter:image" content="@(seo.TwitterImage ?? seo.OgImage ?? $"{baseUrl}/images/og-banner.png")" />
+
+<!-- Global Organization & WebSite JSON-LD Schema -->
+@Html.Raw(SeoService.GenerateOrganizationJsonLd(baseUrl))
+@Html.Raw(SeoService.GenerateWebSiteJsonLd(baseUrl))
+
+<!-- Page Specific JSON-LD Schema -->
+@if (seo.JsonLdScripts != null && seo.JsonLdScripts.Any())
+{
+    foreach (var script in seo.JsonLdScripts)
+    {
+        @Html.Raw(script)
+    }
+}

@@ -1,0 +1,27 @@
+@model List<HamaraCommerce.Models.BreadcrumbItem>
+
+@if (Model != null && Model.Any())
+{
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb small mb-0">
+            <li class="breadcrumb-item">
+                <a asp-controller="Home" asp-action="Index" class="text-muted text-decoration-none">Home</a>
+            </li>
+            @foreach (var item in Model)
+            {
+                if (item.IsActive || string.IsNullOrEmpty(item.Url))
+                {
+                    <li class="breadcrumb-item active text-dark fw-semibold text-truncate" style="max-width: 250px;" aria-current="page">
+                        @item.Title
+                    </li>
+                }
+                else
+                {
+                    <li class="breadcrumb-item">
+                        <a href="@item.Url" class="text-muted text-decoration-none text-truncate" style="max-width: 200px;">@item.Title</a>
+                    </li>
+                }
+            }
+        </ol>
+    </nav>
+}

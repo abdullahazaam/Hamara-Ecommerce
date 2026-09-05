@@ -1,0 +1,28 @@
+@model (double Rating, int? ReviewCount)
+@{
+    double r = Math.Round(Model.Rating * 2, MidpointRounding.AwayFromZero) / 2;
+}
+
+<div class="d-inline-flex align-items-center gap-1.5" aria-label="Rating: @Model.Rating:0.1 out of 5 stars">
+    <div class="d-inline-flex text-warning small">
+        @for (int i = 1; i <= 5; i++)
+        {
+            if (i <= r)
+            {
+                <i class="fa-solid fa-star" aria-hidden="true"></i>
+            }
+            else if (i - 0.5 == r)
+            {
+                <i class="fa-solid fa-star-half-stroke" aria-hidden="true"></i>
+            }
+            else
+            {
+                <i class="fa-regular fa-star text-muted opacity-50" aria-hidden="true"></i>
+            }
+        }
+    </div>
+    @if (Model.ReviewCount.HasValue)
+    {
+        <span class="small text-muted text-xs">(@Model.ReviewCount)</span>
+    }
+</div>

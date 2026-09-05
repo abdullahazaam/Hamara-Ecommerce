@@ -1,0 +1,69 @@
+@model HamaraCommerce.Models.CustomerWishlistViewModel
+@inject HamaraCommerce.Services.IShippingTaxService ShippingTaxService
+@{
+    ViewData["Title"] = "My Saved Wishlist";
+}
+
+<!-- Breadcrumbs -->
+<nav aria-label="breadcrumb" class="mb-4 reveal-on-scroll">
+    <ol class="breadcrumb small mb-0">
+        <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">Home</a></li>
+        <li class="breadcrumb-item"><a asp-controller="Account" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">My Account</a></li>
+        <li class="breadcrumb-item active fw-bold" style="color:var(--brand-primary);" aria-current="page">Wishlist</li>
+    </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2 reveal-on-scroll">
+    <div>
+        <h1 class="h3 font-heading fw-bold mb-1" style="color:var(--text-primary); letter-spacing:-0.02em;">
+            <i class="fa-solid fa-heart me-2 text-danger"></i>My Saved Wishlist
+        </h1>
+        <p class="small mb-0" style="color:var(--text-muted);">Saved products you love. Add them to your cart when you're ready to purchase.</p>
+    </div>
+    <a asp-controller="Account" asp-action="Index" class="btn btn-glass rounded-pill px-3">
+        <i class="fa-solid fa-arrow-left me-1"></i>Account
+    </a>
+</div>
+
+@if (!Model.Products.Any())
+{
+    <div class="reveal-on-scroll">
+        @await Html.PartialAsync("_EmptyState", ("fa-regular fa-heart", "Your wishlist is currently empty", "Save products you're interested in by clicking the heart icon while browsing our marketplace.", Url.Action("Index", "Shop") ?? "/Shop", "Explore Products"))
+    </div>
+}
+else
+{
+    <div class="row g-3 mb-4 reveal-on-scroll">
+        @foreach (var (product, idx) in Model.Products.Select((p, i) => (p, i)))
+        {
+            <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @((idx % 4) * 70)ms">
+                @await Html.PartialAsync("_ProductCard", product)
+            </div>
+        }
+    </div>
+
+    <!-- Pagination -->
+    @if (Model.TotalPages > 1)
+    {
+        <nav class="d-flex justify-content-center mt-5">
+            <ul class="pagination">
+                <li class="page-item @(!Model.HasPreviousPage ? "disabled" : "")">
+                    <a class="page-link rounded-pill me-1" asp-action="Wishlist" asp-route-page="@(Model.CurrentPage - 1)">
+                        <i class="fa-solid fa-chevron-left me-1"></i>Prev
+                    </a>
+                </li>
+                @for (int p = 1; p <= Model.TotalPages; p++)
+                {
+                    <li class="page-item @(p == Model.CurrentPage ? "active" : "")">
+                        <a class="page-link rounded-pill mx-1" asp-action="Wishlist" asp-route-page="@p">@p</a>
+                    </li>
+                }
+                <li class="page-item @(!Model.HasNextPage ? "disabled" : "")">
+                    <a class="page-link rounded-pill ms-1" asp-action="Wishlist" asp-route-page="@(Model.CurrentPage + 1)">
+                        Next<i class="fa-solid fa-chevron-right ms-1"></i>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    }
+}

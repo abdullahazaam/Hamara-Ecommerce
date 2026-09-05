@@ -1,0 +1,130 @@
+@model HamaraCommerce.Models.CustomerOrderListViewModel
+@inject HamaraCommerce.Services.IShippingTaxService ShippingTaxService
+@{
+    ViewData["Title"] = "My Orders History";
+}
+
+<!-- Breadcrumbs -->
+<nav aria-label="breadcrumb" class="mb-4 reveal-on-scroll">
+    <ol class="breadcrumb small mb-0">
+        <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">Home</a></li>
+        <li class="breadcrumb-item"><a asp-controller="Account" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">My Account</a></li>
+        <li class="breadcrumb-item active fw-bold" style="color:var(--brand-primary);" aria-current="page">Orders</li>
+    </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2 reveal-on-scroll">
+    <div>
+        <h1 class="h3 font-heading fw-bold mb-1" style="color:var(--text-primary); letter-spacing:-0.02em;">
+            <i class="fa-solid fa-box-open me-2 text-primary"></i>My Order History
+        </h1>
+        <p class="small mb-0" style="color:var(--text-muted);">Track shipments, download invoices, request returns, and view order receipts.</p>
+    </div>
+    <a asp-controller="Account" asp-action="Index" class="btn btn-glass rounded-pill px-3">
+        <i class="fa-solid fa-arrow-left me-1"></i>Account Overview
+    </a>
+</div>
+
+@if (!Model.Orders.Any())
+{
+    <div class="reveal-on-scroll">
+        @await Html.PartialAsync("_EmptyState", ("fa-solid fa-box-open", "No orders placed yet", "You haven't placed any orders with this account yet.", Url.Action("Index", "Shop") ?? "/Shop", "Browse Products"))
+    </div>
+}
+else
+{
+    <div class="d-flex flex-column gap-3 mb-4 reveal-on-scroll">
+        @foreach (var order in Model.Orders)
+        {
+            <div class="card-glass rounded-4 overflow-hidden"
+                 style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+                <!-- Order Header -->
+                <div class="p-3.5 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-3"
+                     style="background:var(--bg-surface-elevated); border-color:var(--border-subtle) !important;">
+                    <div class="d-flex flex-wrap align-items-center gap-4">
+                        <div>
+                            <span class="text-xs text-uppercase fw-bold d-block" style="color:var(--text-muted); letter-spacing:0.04em;">Order Reference</span>
+                            <strong class="font-monospace" style="color:var(--brand-primary);">@order.OrderNumber</strong>
+                        </div>
+                        <div>
+                            <span class="text-xs text-uppercase fw-bold d-block" style="color:var(--text-muted); letter-spacing:0.04em;">Date Placed</span>
+                            <span class="small fw-semibold" style="color:var(--text-primary);">@order.OrderDate.ToString("MMM dd, yyyy")</span>
+                        </div>
+                        <div>
+                            <span class="text-xs text-uppercase fw-bold d-block" style="color:var(--text-muted); letter-spacing:0.04em;">Total Amount</span>
+                            <strong class="font-heading" style="color:var(--text-primary);">@ShippingTaxService.FormatCurrency(order.TotalAmount)</strong>
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-primary-subtle text-primary border border-primary rounded-pill px-3 py-1.5 text-xs font-monospace fw-bold">
+                            @order.Status
+                        </span>
+                        <a asp-controller="Account" asp-action="OrderDetail" asp-route-id="@order.OrderNumber" class="btn btn-primary-custom btn-sm rounded-pill px-3">
+                            View Details
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Order Items Preview -->
+                <div class="p-3.5">
+                    <div class="row g-3 align-items-center">
+                        <div class="col-md-8">
+                            <div class="d-flex flex-wrap gap-2">
+                                @foreach (var item in order.Items.Take(4))
+                                {
+                                    <div class="d-flex align-items-center gap-2 border rounded-3 p-1.5 pe-3" 
+                                         style="background:var(--bg-surface-elevated); border-color:var(--border-subtle) !important; max-width: 240px;">
+                                        <img src="@item.ProductImage" class="rounded-2 border" style="width:36px; height:36px; object-fit:cover; border-color:var(--border-default) !important;" alt="@item.ProductTitle" />
+                                        <div class="small text-truncate" style="max-width: 150px;">
+                                            <div class="fw-semibold text-truncate small" style="color:var(--text-primary);">@item.ProductTitle</div>
+                                            <span class="text-xs" style="color:var(--text-muted);">Qty: @item.Quantity</span>
+                                        </div>
+                                    </div>
+                                }
+                                @if (order.Items.Count > 4)
+                                {
+                                    <div class="d-flex align-items-center justify-content-center border rounded-3 px-3 text-xs fw-semibold"
+                                         style="background:var(--bg-surface-elevated); border-color:var(--border-subtle) !important; color:var(--text-muted);">
+                                        +@(order.Items.Count - 4) more
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-md-end">
+                            <span class="small d-block" style="color:var(--text-muted);">Tracking: <strong class="font-monospace" style="color:var(--text-primary);">@order.TrackingNumber</strong></span>
+                            <a asp-controller="Account" asp-action="Invoice" asp-route-id="@order.OrderNumber" class="small fw-semibold text-decoration-none mt-1 d-inline-block" style="color:var(--brand-primary);" target="_blank">
+                                <i class="fa-solid fa-file-invoice me-1"></i>View Printable Invoice
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Pagination -->
+    @if (Model.TotalPages > 1)
+    {
+        <nav class="d-flex justify-content-center mt-5">
+            <ul class="pagination">
+                <li class="page-item @(!Model.HasPreviousPage ? "disabled" : "")">
+                    <a class="page-link rounded-pill me-1" asp-action="Orders" asp-route-page="@(Model.CurrentPage - 1)">
+                        <i class="fa-solid fa-chevron-left me-1"></i>Prev
+                    </a>
+                </li>
+                @for (int p = 1; p <= Model.TotalPages; p++)
+                {
+                    <li class="page-item @(p == Model.CurrentPage ? "active" : "")">
+                        <a class="page-link rounded-pill mx-1" asp-action="Orders" asp-route-page="@p">@p</a>
+                    </li>
+                }
+                <li class="page-item @(!Model.HasNextPage ? "disabled" : "")">
+                    <a class="page-link rounded-pill ms-1" asp-action="Orders" asp-route-page="@(Model.CurrentPage + 1)">
+                        Next<i class="fa-solid fa-chevron-right ms-1"></i>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    }
+}

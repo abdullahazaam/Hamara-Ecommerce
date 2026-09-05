@@ -1,0 +1,37 @@
+@* _Alerts.cshtml — Midnight Sapphire styled flash messages *@
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show shadow-sm rounded-4 mb-3 auto-dismiss" role="alert">
+        <i class="fa-solid fa-circle-check fs-5 flex-shrink-0" aria-hidden="true"></i>
+        <div class="flex-grow-1 fw-semibold">@TempData["SuccessMessage"]</div>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert" aria-label="Dismiss success message"></button>
+    </div>
+}
+
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show shadow-sm rounded-4 mb-3 auto-dismiss" role="alert">
+        <i class="fa-solid fa-circle-exclamation fs-5 flex-shrink-0" aria-hidden="true"></i>
+        <div class="flex-grow-1 fw-semibold">@TempData["ErrorMessage"]</div>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert" aria-label="Dismiss error message"></button>
+    </div>
+}
+
+@if (TempData["InfoMessage"] != null)
+{
+    <div class="alert alert-info alert-dismissible fade show shadow-sm rounded-4 mb-3 auto-dismiss" role="alert">
+        <i class="fa-solid fa-circle-info fs-5 flex-shrink-0" aria-hidden="true"></i>
+        <div class="flex-grow-1 fw-semibold">@TempData["InfoMessage"]</div>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert" aria-label="Dismiss info message"></button>
+    </div>
+}
+
+@if (TempData["WarningMessage"] != null)
+{
+    <div class="alert alert-warning alert-dismissible fade show shadow-sm rounded-4 mb-3 auto-dismiss" role="alert">
+        <i class="fa-solid fa-triangle-exclamation fs-5 flex-shrink-0" aria-hidden="true"></i>
+        <div class="flex-grow-1 fw-semibold">@TempData["WarningMessage"]</div>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert" aria-label="Dismiss warning message"></button>
+    </div>
+}

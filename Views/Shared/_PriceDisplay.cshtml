@@ -1,0 +1,12 @@
+@model (decimal Price, decimal? OldPrice)
+@inject HamaraCommerce.Services.IShippingTaxService ShippingTaxService
+
+<div class="d-flex align-items-baseline gap-2">
+    <span class="product-card-price-current">@ShippingTaxService.FormatCurrency(Model.Price)</span>
+    @if (Model.OldPrice.HasValue && Model.OldPrice.Value > Model.Price)
+    {
+        <span class="product-card-price-old">@ShippingTaxService.FormatCurrency(Model.OldPrice.Value)</span>
+        var discountPct = (int)Math.Round(((Model.OldPrice.Value - Model.Price) / Model.OldPrice.Value) * 100);
+        <span class="badge badge-tag badge-discount">-@discountPct%</span>
+    }
+</div>

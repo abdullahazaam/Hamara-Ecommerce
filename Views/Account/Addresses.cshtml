@@ -1,0 +1,169 @@
+@model List<HamaraCommerce.Models.Address>
+@{
+    ViewData["Title"] = "Saved Delivery Addresses";
+}
+
+<!-- Breadcrumbs -->
+<nav aria-label="breadcrumb" class="mb-4 reveal-on-scroll">
+    <ol class="breadcrumb small mb-0">
+        <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">Home</a></li>
+        <li class="breadcrumb-item"><a asp-controller="Account" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">My Account</a></li>
+        <li class="breadcrumb-item active fw-bold" style="color:var(--brand-primary);" aria-current="page">Addresses</li>
+    </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2 reveal-on-scroll">
+    <div>
+        <h1 class="h3 font-heading fw-bold mb-1" style="color:var(--text-primary); letter-spacing:-0.02em;">
+            <i class="fa-solid fa-location-dot me-2 text-primary"></i>Saved Delivery Addresses
+        </h1>
+        <p class="small mb-0" style="color:var(--text-muted);">Manage and select your default shipping destinations for express checkout.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary-custom rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#addAddressModal">
+            <i class="fa-solid fa-plus me-1"></i>Add Address
+        </button>
+        <a asp-controller="Account" asp-action="Index" class="btn btn-glass rounded-pill px-3">
+            <i class="fa-solid fa-arrow-left me-1"></i>Back
+        </a>
+    </div>
+</div>
+
+<div class="row g-4 reveal-on-scroll">
+    @if (!Model.Any())
+    {
+        <div class="col-12">
+            <div class="card-glass rounded-4 p-5 text-center"
+                 style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+                <i class="fa-solid fa-map-location-dot fs-1 mb-3" style="color:var(--text-muted); opacity:0.4;"></i>
+                <h2 class="h5 font-heading fw-bold mb-2" style="color:var(--text-primary);">No Saved Addresses</h2>
+                <p class="small mb-4" style="color:var(--text-muted);">You haven't added any shipping addresses to your account yet.</p>
+                <button class="btn btn-primary-custom px-4 py-2 rounded-pill fw-bold" data-bs-toggle="modal" data-bs-target="#addAddressModal">
+                    Add Your First Address
+                </button>
+            </div>
+        </div>
+    }
+    else
+    {
+        @foreach (var addr in Model)
+        {
+            <div class="col-md-6 col-lg-4">
+                <div class="card-glass rounded-4 p-4 h-100 position-relative d-flex flex-column"
+                     style="background:var(--bg-surface); border:1px solid @(addr.IsDefault ? "var(--brand-primary)" : "var(--border-default)") !important; box-shadow:var(--shadow-sm);">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="badge bg-primary-subtle text-primary border border-primary px-3 py-1 rounded-pill fw-bold text-xs font-monospace">
+                            @addr.Title
+                        </span>
+                        @if (addr.IsDefault)
+                        {
+                            <span class="badge bg-success-subtle text-success border border-success rounded-pill px-2.5 py-0.5 text-xs">
+                                <i class="fa-solid fa-check me-1"></i>Default
+                            </span>
+                        }
+                    </div>
+
+                    <h3 class="h6 font-heading fw-bold mb-1" style="color:var(--text-primary);">@addr.FullName</h3>
+                    <p class="small mb-3 flex-grow-1" style="color:var(--text-secondary); line-height:1.6;">
+                        @addr.StreetAddress<br />
+                        @addr.City, @addr.State @addr.PostalCode<br />
+                        @addr.Country
+                    </p>
+
+                    <div class="d-flex justify-content-between align-items-center border-top pt-3 mt-auto" style="border-color:var(--border-subtle) !important;">
+                        @if (!addr.IsDefault)
+                        {
+                            <form asp-controller="Account" asp-action="SetDefaultAddress" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@addr.Id" />
+                                <button type="submit" class="btn btn-link p-0 small text-decoration-none fw-semibold" style="color:var(--brand-primary);">
+                                    Set as Default
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            <span class="small fw-bold" style="color:var(--status-success);"><i class="fa-solid fa-shield-check me-1"></i>Primary</span>
+                        }
+
+                        <form asp-controller="Account" asp-action="DeleteAddress" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@addr.Id" />
+                            <button type="submit" class="btn btn-glass btn-sm rounded-circle p-2" style="color:var(--status-danger);" title="Delete Address" onclick="return confirm('Delete this address?');">
+                                <i class="fa-regular fa-trash-can"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<!-- ADD ADDRESS MODAL -->
+<div class="modal fade" id="addAddressModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4" style="background:var(--bg-surface); color:var(--text-primary); border:1px solid var(--border-default);">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title font-heading fw-bold">Add Delivery Address</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-controller="Account" asp-action="AddAddress" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold" style="color:var(--text-muted);">Address Label</label>
+                            <input type="text" name="Title" class="form-control rounded-3" placeholder="Home, Office, Warehouse..." required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold" style="color:var(--text-muted);">Recipient Full Name</label>
+                            <input type="text" name="FullName" class="form-control rounded-3" placeholder="Full name" required />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold" style="color:var(--text-muted);">Street Address</label>
+                            <input type="text" name="StreetAddress" class="form-control rounded-3" placeholder="House / Suite / Street / Area" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold" style="color:var(--text-muted);">City</label>
+                            <input type="text" name="City" class="form-control rounded-3" placeholder="e.g. Lahore / Karachi" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold" style="color:var(--text-muted);">Province / State</label>
+                            <select name="State" class="form-select rounded-3" required>
+                                <option value="Punjab">Punjab</option>
+                                <option value="Sindh">Sindh</option>
+                                <option value="Khyber Pakhtunkhwa">Khyber Pakhtunkhwa</option>
+                                <option value="Balochistan">Balochistan</option>
+                                <option value="Islamabad Capital Territory">Islamabad Capital Territory</option>
+                                <option value="Gilgit-Baltistan">Gilgit-Baltistan</option>
+                                <option value="Azad Jammu and Kashmir">Azad Jammu and Kashmir</option>
+                                <option value="International">International</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold" style="color:var(--text-muted);">Postal Code</label>
+                            <input type="text" name="PostalCode" class="form-control rounded-3 font-monospace" placeholder="54000" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold" style="color:var(--text-muted);">Country</label>
+                            <input type="text" name="Country" class="form-control rounded-3" value="Pakistan" readonly />
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="IsDefault" value="true" id="defaultCheck" />
+                                <label class="form-check-label small fw-semibold" for="defaultCheck" style="color:var(--text-primary);">
+                                    Set as default shipping address
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-glass" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom px-4 rounded-pill">Save Address</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

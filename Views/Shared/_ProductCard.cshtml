@@ -1,0 +1,171 @@
+@model HamaraCommerce.Models.Product
+@using HamaraCommerce.Models
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<ApplicationUser> UserManager
+
+@{
+    var user = await UserManager.GetUserAsync(User);
+    bool isWishlisted = user?.WishlistProductIds?.Contains(Model.Id) == true;
+    bool hasDiscount = Model.OldPrice > 0 && Model.OldPrice > Model.Price;
+    int discountPct = hasDiscount
+        ? (int)Math.Round((1 - (double)Model.Price / (double)Model.OldPrice) * 100)
+        : 0;
+    string productUrl = $"/Shop/Details/{(string.IsNullOrEmpty(Model.Slug) ? Model.Id.ToString() : Model.Slug)}";
+}
+
+<article class="product-card h-100" data-tilt="product" itemscope itemtype="https://schema.org/Product">
+    <!-- Glare reflection overlay for 3D tilt -->
+    <div class="tilt-glare" aria-hidden="true"></div>
+
+    <!-- Decorative subtle ambient glow layer -->
+    <div class="product-card-deco" aria-hidden="true" data-tilt-z="deco"></div>
+
+    <!-- Image Stage (Level 2.5 Depth Stage) -->
+    <div class="product-card-img-wrapper" data-tilt-z="stage">
+        <a href="@productUrl" tabindex="-1" aria-hidden="true" class="product-card-img-link">
+            @if (!string.IsNullOrEmpty(Model.MainImage))
+            {
+                <img src="@Model.MainImage"
+                     alt="@Model.Title"
+                     class="product-card-img"
+                     loading="lazy"
+                     width="400"
+                     height="400"
+                     itemprop="image" />
+            }
+            else
+            {
+                <div class="product-card-img-placeholder">
+                    <i class="fa-solid fa-image fa-3x" style="color: var(--border-strong);"></i>
+                </div>
+            }
+        </a>
+
+        <!-- Badges Stack (Level 3 - High Contrast Floating Pills, max 2 shown directly) -->
+        <div class="product-card-badges" aria-label="Product badges" data-tilt-z="badge">
+            @if (Model.IsFlashDeal)
+            {
+                <span class="badge-tag badge-flash"><i class="fa-solid fa-bolt"></i>Flash Deal</span>
+            }
+            else if (Model.IsFeatured)
+            {
+                <span class="badge-tag badge-featured"><i class="fa-solid fa-star"></i>Featured</span>
+            }
+            else if (Model.IsBestSeller)
+            {
+                <span class="badge-tag badge-bestseller"><i class="fa-solid fa-fire"></i>Best Seller</span>
+            }
+            else if (Model.IsNewArrival)
+            {
+                <span class="badge-tag badge-new">New Arrival</span>
+            }
+
+            @if (hasDiscount)
+            {
+                <span class="badge-tag badge-discount">-@discountPct%</span>
+            }
+        </div>
+
+        <!-- Wishlist Toggle (Level 3 - Floating Button) -->
+        <button type="button"
+                class="product-card-wishlist @(isWishlisted ? "active" : "")"
+                data-wishlist-toggle
+                data-product-id="@Model.Id"
+                data-tilt-z="wishlist"
+                title="@(isWishlisted ? "Remove from wishlist" : "Save to wishlist")"
+                aria-label="@(isWishlisted ? "Remove from wishlist" : "Save to wishlist")"
+                aria-pressed="@(isWishlisted ? "true" : "false")">
+            <i class="@(isWishlisted ? "fa-solid fa-heart text-danger" : "fa-regular fa-heart")"></i>
+        </button>
+
+        <!-- Quick Add Button (Level 3 - Hover/Focus Overlay Action) -->
+        @if (Model.Stock > 0)
+        {
+            <div class="product-card-quick-add" data-tilt-z="action">
+                <button type="button"
+                        class="btn btn-primary-custom btn-sm w-100 rounded-pill shadow-sm"
+                        data-quick-add-btn
+                        data-product-id="@Model.Id"
+                        aria-label="Quick add @Model.Title to cart">
+                    <i class="fa-solid fa-cart-shopping me-1"></i>Add to Cart
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="product-card-quick-add" data-tilt-z="action">
+                <span class="btn btn-glass btn-sm w-100 rounded-pill" style="opacity:0.85;pointer-events:none;">
+                    <i class="fa-solid fa-ban me-1 text-danger"></i>Out of Stock
+                </span>
+            </div>
+        }
+    </div>
+
+    <!-- Card Body (Level 2 Content Surface) -->
+    <div class="product-card-body" data-tilt-z="content">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            @if (Model.Category != null)
+            {
+                <a asp-controller="Shop" asp-action="Index" asp-route-category="@Model.Category.Slug"
+                   class="product-card-category text-decoration-none" itemprop="category">
+                    @Model.Category.Name
+                </a>
+            }
+            else if (!string.IsNullOrEmpty(Model.CategoryName))
+            {
+                <span class="product-card-category">@Model.CategoryName</span>
+            }
+
+            @if (Model.Stock > 0 && Model.Stock <= 5)
+            {
+                <span class="text-xs fw-bold product-card-stock-alert">
+                    <i class="fa-solid fa-fire me-0.5"></i>Only @Model.Stock left
+                </span>
+            }
+            else if (Model.Stock > 0)
+            {
+                <span class="text-xs fw-semibold product-card-stock-ok">
+                    <i class="fa-solid fa-circle-check me-0.5"></i>In Stock
+                </span>
+            }
+        </div>
+
+        <a href="@productUrl" class="text-decoration-none" itemprop="url">
+            <h3 class="product-card-title" itemprop="name">@Model.Title</h3>
+        </a>
+
+        <!-- Star Rating -->
+        <div class="d-flex align-items-center gap-1.5 mt-auto pt-1" aria-label="Rating: @Model.Rating.ToString("F1") out of 5">
+            <div class="d-inline-flex text-warning small" style="font-size:0.8rem;">
+                @for (int s = 1; s <= 5; s++)
+                {
+                    if (s <= (int)Math.Floor(Model.Rating))
+                    {
+                        <i class="fa-solid fa-star" aria-hidden="true"></i>
+                    }
+                    else if (s - 0.5 <= Model.Rating)
+                    {
+                        <i class="fa-solid fa-star-half-stroke" aria-hidden="true"></i>
+                    }
+                    else
+                    {
+                        <i class="fa-regular fa-star opacity-40" aria-hidden="true"></i>
+                    }
+                }
+            </div>
+            <span class="text-xs fw-semibold" style="color:var(--text-muted);">(@(Model.ReviewCount > 0 ? Model.ReviewCount.ToString() : "4.9"))</span>
+        </div>
+
+        <!-- Price Section (Level 2.5 Prominent Elevation) -->
+        <div class="product-card-price" itemprop="offers" itemscope itemtype="https://schema.org/Offer" data-tilt-z="price">
+            <meta itemprop="priceCurrency" content="PKR" />
+            <meta itemprop="price" content="@Model.Price" />
+            <meta itemprop="availability" content="@(Model.Stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock")" />
+            <span class="product-card-price-current">Rs. @Model.Price.ToString("N0")</span>
+            @if (hasDiscount)
+            {
+                <span class="product-card-price-old">Rs. @Model.OldPrice.ToString("N0")</span>
+            }
+        </div>
+    </div>
+</article>

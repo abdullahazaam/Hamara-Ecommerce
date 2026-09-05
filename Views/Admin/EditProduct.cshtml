@@ -1,0 +1,340 @@
+@model HamaraCommerce.Models.ProductFormViewModel
+@{
+    ViewData["Title"] = $"Edit Product - {Model.Title}";
+    Layout = "_AdminLayout";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <a asp-controller="Admin" asp-action="Products" class="text-muted small text-decoration-none">
+            <i class="fa-solid fa-arrow-left me-1"></i>Back to Products
+        </a>
+        <h2 class="h3 font-heading fw-bold mb-0 mt-1">Edit Product: @Model.Title</h2>
+    </div>
+    <div class="d-flex gap-2">
+        <a asp-controller="Shop" asp-action="Details" asp-route-id="@Model.Id" target="_blank" class="btn btn-outline-secondary rounded-pill px-3">
+            <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>View Live in Store
+        </a>
+    </div>
+</div>
+
+        <form asp-controller="Admin" asp-action="EditProduct" method="post" enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="Id" />
+            <input type="hidden" asp-for="RowVersion" />
+
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger rounded-3 small py-2 mb-4" role="alert"></div>
+
+            <div class="row g-4">
+                <!-- MAIN FORM (LEFT 8 COLS) -->
+                <div class="col-lg-8">
+                    <!-- BASIC DETAILS -->
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <h5 class="fw-bold font-heading mb-3"><i class="fa-solid fa-circle-info text-primary me-2"></i>Product Details</h5>
+                        <div class="mb-3">
+                            <label asp-for="Title" class="form-label small fw-semibold text-muted"></label>
+                            <input asp-for="Title" class="form-control" id="productTitleInput" />
+                            <span asp-validation-for="Title" class="text-danger small"></span>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="Brand" class="form-label small fw-semibold text-muted"></label>
+                                <input asp-for="Brand" class="form-control" />
+                                <span asp-validation-for="Brand" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="CategoryId" class="form-label small fw-semibold text-muted"></label>
+                                <select asp-for="CategoryId" class="form-select">
+                                    @foreach (var cat in Model.AvailableCategories)
+                                    {
+                                        <option value="@cat.Id" selected="@(Model.CategoryId == cat.Id)">@cat.Name</option>
+                                    }
+                                </select>
+                                <span asp-validation-for="CategoryId" class="text-danger small"></span>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="SKU" class="form-label small fw-semibold text-muted"></label>
+                                <input asp-for="SKU" class="form-control font-monospace" />
+                                <span asp-validation-for="SKU" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Slug" class="form-label small fw-semibold text-muted"></label>
+                                <input asp-for="Slug" class="form-control font-monospace" id="productSlugInput" />
+                                <span asp-validation-for="Slug" class="text-danger small"></span>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="ShortDescription" class="form-label small fw-semibold text-muted"></label>
+                            <textarea asp-for="ShortDescription" class="form-control" rows="2"></textarea>
+                            <span asp-validation-for="ShortDescription" class="text-danger small"></span>
+                        </div>
+
+                        <div class="mb-0">
+                            <label asp-for="FullDescription" class="form-label small fw-semibold text-muted"></label>
+                            <textarea asp-for="FullDescription" class="form-control" rows="5"></textarea>
+                            <span asp-validation-for="FullDescription" class="text-danger small"></span>
+                        </div>
+                    </div>
+
+                    <!-- PRICING & INVENTORY -->
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <h5 class="fw-bold font-heading mb-3"><i class="fa-solid fa-dollar-sign text-success me-2"></i>Pricing & Stock</h5>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <label asp-for="Price" class="form-label small fw-semibold text-muted"></label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light">$</span>
+                                    <input asp-for="Price" class="form-control" type="number" step="0.01" />
+                                </div>
+                                <span asp-validation-for="Price" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label asp-for="OldPrice" class="form-label small fw-semibold text-muted"></label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light">$</span>
+                                    <input asp-for="OldPrice" class="form-control" type="number" step="0.01" />
+                                </div>
+                                <span asp-validation-for="OldPrice" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label asp-for="CostPrice" class="form-label small fw-semibold text-muted"></label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light">$</span>
+                                    <input asp-for="CostPrice" class="form-control" type="number" step="0.01" />
+                                </div>
+                                <span asp-validation-for="CostPrice" class="text-danger small"></span>
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label asp-for="Stock" class="form-label small fw-semibold text-muted"></label>
+                                <input asp-for="Stock" class="form-control" type="number" />
+                                <span asp-validation-for="Stock" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Status" class="form-label small fw-semibold text-muted"></label>
+                                <select asp-for="Status" class="form-select">
+                                    <option value="Published">Published (Live in Store)</option>
+                                    <option value="Draft">Draft (Hidden)</option>
+                                    <option value="Archived">Archived (Retired)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- IMAGE MANAGEMENT -->
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <h5 class="fw-bold font-heading mb-3"><i class="fa-regular fa-image text-info me-2"></i>Product Images & Gallery</h5>
+
+                        <!-- EXISTING IMAGES GALLERY -->
+                        @if (Model.ExistingImages.Any() || !string.IsNullOrEmpty(Model.ExistingMainImage))
+                        {
+                            <label class="form-label small fw-semibold text-muted mb-2">Current Gallery Images (Check to Delete)</label>
+                            <div class="row g-3 mb-4">
+                                @foreach (var img in Model.ExistingImages)
+                                {
+                                    <div class="col-6 col-md-3">
+                                        <div class="p-2 border rounded-3 text-center position-relative bg-light">
+                                            <img src="@img.ImageUrl" class="img-fluid rounded-2 mb-2" style="height:100px; object-fit:cover; width:100%;" alt="@img.AltText" />
+                                            @if (img.IsMain)
+                                            {
+                                                <span class="badge bg-primary position-absolute top-0 start-0 m-1">Main</span>
+                                            }
+                                            <div class="form-check text-start small">
+                                                <input class="form-check-input" type="checkbox" name="DeletedImageIds" value="@img.Id" id="del_@img.Id" />
+                                                <label class="form-check-label text-danger small" for="del_@img.Id">Remove</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <div class="mb-3">
+                            <label asp-for="MainImageFile" class="form-label small fw-semibold text-muted">Replace Main Image</label>
+                            <input asp-for="MainImageFile" class="form-control" type="file" accept=".jpg,.jpeg,.png,.webp,.gif" />
+                            <div class="form-text small">Upload a new main image to replace current primary image.</div>
+                        </div>
+
+                        <div class="mb-0">
+                            <label asp-for="AdditionalImageFiles" class="form-label small fw-semibold text-muted">Add More Gallery Images</label>
+                            <input asp-for="AdditionalImageFiles" class="form-control" type="file" multiple accept=".jpg,.jpeg,.png,.webp,.gif" />
+                        </div>
+                    </div>
+
+                    <!-- VARIANTS SYSTEM -->
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="fw-bold font-heading mb-0"><i class="fa-solid fa-layer-group text-warning me-2"></i>Product Variants</h5>
+                            <button type="button" class="btn btn-outline-primary btn-sm rounded-pill" id="btnAddVariant">
+                                <i class="fa-solid fa-plus me-1"></i>Add Variant
+                            </button>
+                        </div>
+
+                        <div id="variantsContainer" class="d-flex flex-column gap-3">
+                            @for (int i = 0; i < Model.Variants.Count; i++)
+                            {
+                                <div class="p-3 border rounded-3 bg-light position-relative">
+                                    <input type="hidden" name="Variants[@i].Id" value="@Model.Variants[i].Id" />
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <strong class="small text-primary">Variant #@(i + 1): @Model.Variants[i].Name</strong>
+                                        <button type="button" class="btn btn-link text-danger p-0 small text-decoration-none" onclick="this.closest('.border').remove()">
+                                            <i class="fa-solid fa-trash me-1"></i>Delete Variant
+                                        </button>
+                                    </div>
+                                    <div class="row g-2">
+                                        <div class="col-md-6">
+                                            <label class="small text-muted">Variant Name</label>
+                                            <input type="text" name="Variants[@i].Name" value="@Model.Variants[i].Name" class="form-control form-control-sm" required />
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="small text-muted">Variant SKU</label>
+                                            <input type="text" name="Variants[@i].SKU" value="@Model.Variants[i].SKU" class="form-control form-control-sm font-monospace" required />
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="small text-muted">Color</label>
+                                            <input type="text" name="Variants[@i].Color" value="@Model.Variants[i].Color" class="form-control form-control-sm" />
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="small text-muted">Size / Spec</label>
+                                            <input type="text" name="Variants[@i].Size" value="@Model.Variants[i].Size" class="form-control form-control-sm" />
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="small text-muted">Price Adj ($)</label>
+                                            <input type="number" step="0.01" name="Variants[@i].PriceAdjustment" value="@Model.Variants[i].PriceAdjustment" class="form-control form-control-sm" />
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="small text-muted">Stock</label>
+                                            <input type="number" name="Variants[@i].Stock" value="@Model.Variants[i].Stock" class="form-control form-control-sm" />
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SIDEBAR ATTRIBUTES (RIGHT 4 COLS) -->
+                <div class="col-lg-4">
+                    <!-- PROMOTIONAL FLAGS -->
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <h5 class="fw-bold font-heading mb-3"><i class="fa-solid fa-bullhorn text-danger me-2"></i>Badges & Promotions</h5>
+                        <div class="form-check form-switch mb-2">
+                            <input asp-for="IsFeatured" class="form-check-input" />
+                            <label asp-for="IsFeatured" class="form-check-label small fw-semibold">Featured Product</label>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input asp-for="IsTrending" class="form-check-input" />
+                            <label asp-for="IsTrending" class="form-check-label small fw-semibold">Trending Now</label>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input asp-for="IsNewArrival" class="form-check-input" />
+                            <label asp-for="IsNewArrival" class="form-check-label small fw-semibold">New Arrival</label>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input asp-for="IsBestSeller" class="form-check-input" />
+                            <label asp-for="IsBestSeller" class="form-check-label small fw-semibold">Best Seller</label>
+                        </div>
+                        <div class="form-check form-switch mb-3">
+                            <input asp-for="IsFlashDeal" class="form-check-input" />
+                            <label asp-for="IsFlashDeal" class="form-check-label small fw-semibold">Flash Deal Promo</label>
+                        </div>
+
+                        <div>
+                            <label asp-for="FlashDealEnd" class="form-label small fw-semibold text-muted">Flash Deal End Time</label>
+                            <input asp-for="FlashDealEnd" class="form-control" type="datetime-local" />
+                        </div>
+                    </div>
+
+                    <!-- SHIPPING & LOGISTICS -->
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <h5 class="fw-bold font-heading mb-3"><i class="fa-solid fa-truck-fast text-secondary me-2"></i>Shipping & Specs</h5>
+                        <div class="mb-3">
+                            <label asp-for="WeightKg" class="form-label small fw-semibold text-muted"></label>
+                            <input asp-for="WeightKg" class="form-control" type="number" step="0.01" />
+                        </div>
+                        <div class="mb-3">
+                            <label asp-for="Dimensions" class="form-label small fw-semibold text-muted"></label>
+                            <input asp-for="Dimensions" class="form-control" />
+                        </div>
+                        <div class="mb-3">
+                            <label asp-for="DeliveryEstimate" class="form-label small fw-semibold text-muted"></label>
+                            <input asp-for="DeliveryEstimate" class="form-control" />
+                        </div>
+                        <div class="mb-3">
+                            <label asp-for="Warranty" class="form-label small fw-semibold text-muted"></label>
+                            <input asp-for="Warranty" class="form-control" />
+                        </div>
+                        <div class="mb-0">
+                            <label asp-for="ReturnPolicy" class="form-label small fw-semibold text-muted"></label>
+                            <input asp-for="ReturnPolicy" class="form-control" />
+                        </div>
+                    </div>
+
+                    <!-- ACTIONS -->
+                    <div class="card border-0 shadow-sm rounded-4 p-4">
+                        <button type="submit" class="btn btn-primary-custom w-100 py-2.5 fw-bold rounded-3 mb-2">
+                            <i class="fa-solid fa-floppy-disk me-2"></i>Save Changes
+                        </button>
+                        <a asp-controller="Admin" asp-action="Products" class="btn btn-glass w-100 py-2 rounded-3 text-center">
+                            Cancel
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        let variantIndex = @Model.Variants.Count;
+        document.getElementById('btnAddVariant')?.addEventListener('click', function() {
+            const container = document.getElementById('variantsContainer');
+            const skuVal = document.querySelector('[name="SKU"]')?.value || 'HC-VAR';
+            const card = document.createElement('div');
+            card.className = 'p-3 border rounded-3 bg-light position-relative';
+            card.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <strong class="small text-primary">New Variant #${variantIndex + 1}</strong>
+                    <button type="button" class="btn btn-link text-danger p-0 small text-decoration-none" onclick="this.closest('.border').remove()">
+                        <i class="fa-solid fa-xmark me-1"></i>Remove
+                    </button>
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="small text-muted">Name (e.g. Space Gray / 256GB)</label>
+                        <input type="text" name="Variants[${variantIndex}].Name" class="form-control form-control-sm" required />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="small text-muted">Variant SKU</label>
+                        <input type="text" name="Variants[${variantIndex}].SKU" value="${skuVal}-V${variantIndex + 1}" class="form-control form-control-sm font-monospace" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="small text-muted">Color</label>
+                        <input type="text" name="Variants[${variantIndex}].Color" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="small text-muted">Size / Spec</label>
+                        <input type="text" name="Variants[${variantIndex}].Size" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="small text-muted">Price Adj ($)</label>
+                        <input type="number" step="0.01" name="Variants[${variantIndex}].PriceAdjustment" value="0.00" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="small text-muted">Stock</label>
+                        <input type="number" name="Variants[${variantIndex}].Stock" value="25" class="form-control form-control-sm" />
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+            variantIndex++;
+        });
+    </script>
+}

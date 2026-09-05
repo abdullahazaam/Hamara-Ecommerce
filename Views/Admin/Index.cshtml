@@ -1,0 +1,365 @@
+@model HamaraCommerce.Models.AdminDashboardViewModel
+@inject HamaraCommerce.Services.IShippingTaxService ShippingTaxService
+@{
+    ViewData["Title"] = "Executive Admin Dashboard";
+    Layout = "_AdminLayout";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h2 class="h3 font-heading fw-bold mb-1 text-dark">Executive Operations Dashboard</h2>
+        <p class="text-muted small mb-0">Live real-time marketplace metrics and transactional intelligence.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a asp-controller="Admin" asp-action="ExportOrdersCsv" class="btn btn-outline-secondary rounded-pill px-3">
+            <i class="fa-solid fa-file-csv me-1"></i>Export Orders CSV
+        </a>
+        <a asp-controller="Admin" asp-action="AddProduct" class="btn btn-primary-custom rounded-pill px-4">
+            <i class="fa-solid fa-plus me-1"></i>Add Product
+        </a>
+    </div>
+</div>
+
+<!-- ===== REAL DATABASE KPI METRICS ===== -->
+<div class="row g-3 mb-4">
+    <!-- Total Revenue -->
+    <div class="col-xl-3 col-sm-6">
+        <div class="card border-0 shadow-sm rounded-4 p-3 bg-card h-100">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="small text-muted fw-bold text-uppercase">Net Store Revenue</span>
+                <div class="p-2 rounded-3 bg-primary bg-opacity-10 text-primary fs-5"><i class="fa-solid fa-wallet"></i></div>
+            </div>
+            <h3 class="fw-bold mb-1 text-dark font-heading">@ShippingTaxService.FormatCurrency(Model.TotalRevenue)</h3>
+            <span class="small text-muted">Excludes cancelled orders</span>
+        </div>
+    </div>
+
+    <!-- Total Orders -->
+    <div class="col-xl-3 col-sm-6">
+        <div class="card border-0 shadow-sm rounded-4 p-3 bg-card h-100">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="small text-muted fw-bold text-uppercase">Total Orders</span>
+                <div class="p-2 rounded-3 bg-success bg-opacity-10 text-success fs-5"><i class="fa-solid fa-bag-shopping"></i></div>
+            </div>
+            <h3 class="fw-bold mb-1 text-dark font-heading">@Model.TotalOrders</h3>
+            <span class="small text-muted">Avg Value: <strong>@ShippingTaxService.FormatCurrency(Model.AverageOrderValue)</strong></span>
+        </div>
+    </div>
+
+    <!-- Total Customers -->
+    <div class="col-xl-3 col-sm-6">
+        <div class="card border-0 shadow-sm rounded-4 p-3 bg-card h-100">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="small text-muted fw-bold text-uppercase">Registered Buyers</span>
+                <div class="p-2 rounded-3 bg-info bg-opacity-10 text-info fs-5"><i class="fa-solid fa-users"></i></div>
+            </div>
+            <h3 class="fw-bold mb-1 text-dark font-heading">@Model.TotalCustomers</h3>
+            <span class="small text-muted">Active user accounts</span>
+        </div>
+    </div>
+
+    <!-- Active Catalog & Low Stock -->
+    <div class="col-xl-3 col-sm-6">
+        <div class="card border-0 shadow-sm rounded-4 p-3 bg-card h-100">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="small text-muted fw-bold text-uppercase">Catalog & Alerts</span>
+                <div class="p-2 rounded-3 bg-warning bg-opacity-10 text-warning fs-5"><i class="fa-solid fa-boxes-stacked"></i></div>
+            </div>
+            <h3 class="fw-bold mb-1 text-dark font-heading">@Model.TotalProducts <span class="fs-6 fw-normal text-muted">SKUs</span></h3>
+            <span class="small @(Model.LowStockCount > 0 ? "text-danger fw-bold" : "text-muted")">
+                <i class="fa-solid fa-triangle-exclamation me-1"></i>@Model.LowStockCount items in low stock
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- ===== REVENUE & ORDER CHARTS + LOW STOCK ===== -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm rounded-4 p-4 bg-card">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold font-heading mb-0 text-dark">
+                    <i class="fa-solid fa-chart-line me-2 text-primary"></i>Revenue & Order Trends (Last 6 Months)
+                </h5>
+                <span class="badge bg-light text-muted border">Real-time DB</span>
+            </div>
+            <div style="height: 300px; width: 100%;">
+                <canvas id="revenueChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm rounded-4 p-4 bg-card h-100">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <h5 class="fw-bold font-heading mb-0 text-danger">
+                    <i class="fa-solid fa-triangle-exclamation me-2"></i>Low Stock Alerts
+                </h5>
+                <a asp-controller="Admin" asp-action="Products" class="small text-primary text-decoration-none fw-bold">Manage</a>
+            </div>
+
+            @if (!Model.LowStockProducts.Any())
+            {
+                <div class="text-center py-5 text-muted">
+                    <i class="fa-solid fa-check-circle fs-2 text-success d-block mb-2"></i>
+                    All catalog products are well-stocked.
+                </div>
+            }
+            else
+            {
+                <div class="d-flex flex-column gap-2">
+                    @foreach (var p in Model.LowStockProducts)
+                    {
+                        <div class="d-flex align-items-center justify-content-between p-2 border rounded-3 bg-secondary">
+                            <div class="d-flex align-items-center gap-2">
+                                <img src="@p.MainImage" class="rounded-2 border" style="width:36px; height:36px; object-fit:cover;" alt="@p.Title" />
+                                <div class="small fw-bold text-dark text-truncate" style="max-width:140px;" title="@p.Title">@p.Title</div>
+                            </div>
+                            <span class="badge bg-danger rounded-pill">@p.Stock left</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- ===== RECENT ORDERS & RECENT AUDIT TRAIL ===== -->
+<div class="row g-4">
+    <!-- Recent Orders -->
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm rounded-4 p-4 bg-card h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold font-heading mb-0 text-dark">
+                    <i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i>Recent Orders
+                </h5>
+                <a asp-controller="Admin" asp-action="Orders" class="btn btn-outline-primary btn-sm rounded-pill px-3">View All</a>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th>Order Ref</th>
+                            <th>Customer</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                            <th>Total</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!Model.RecentOrders.Any())
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center py-4 text-muted">No orders placed yet.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var o in Model.RecentOrders)
+                            {
+                                <tr>
+                                    <td>
+                                        <a asp-controller="Admin" asp-action="OrderDetails" asp-route-id="@o.Id" class="fw-bold text-primary font-monospace text-decoration-none">
+                                            @o.OrderNumber
+                                        </a>
+                                    </td>
+                                    <td class="small fw-semibold text-dark">@o.CustomerName</td>
+                                    <td class="small text-muted">@o.OrderDate.ToString("MMM dd")</td>
+                                    <td>
+                                        @{
+                                            var badgeClass = o.Status switch
+                                            {
+                                                OrderStatus.Delivered => "bg-success",
+                                                OrderStatus.OutForDelivery => "bg-warning text-dark",
+                                                OrderStatus.Shipped => "bg-info text-dark",
+                                                OrderStatus.Packed => "bg-primary",
+                                                OrderStatus.Confirmed => "bg-primary-subtle text-primary border border-primary",
+                                                OrderStatus.Cancelled => "bg-danger",
+                                                _ => "bg-secondary text-white"
+                                            };
+                                        }
+                                        <span class="badge @badgeClass rounded-pill px-2.5 py-1 small">@o.Status</span>
+                                    </td>
+                                    <td class="small fw-bold text-dark">@ShippingTaxService.FormatCurrency(o.TotalAmount)</td>
+                                    <td class="text-end">
+                                        <a asp-controller="Admin" asp-action="OrderDetails" asp-route-id="@o.Id" class="btn btn-glass btn-sm rounded-circle p-2" title="Manage Order">
+                                            <i class="fa-solid fa-arrow-right"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Audit Logs -->
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm rounded-4 p-4 bg-card h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold font-heading mb-0 text-dark">
+                    <i class="fa-solid fa-shield-halved me-2 text-primary"></i>Admin Audit Trail
+                </h5>
+                <a asp-controller="Admin" asp-action="AuditLogs" class="small text-primary text-decoration-none fw-bold">View All</a>
+            </div>
+
+            @if (!Model.RecentAuditLogs.Any())
+            {
+                <div class="text-center py-4 text-muted small">No audit logs recorded yet.</div>
+            }
+            else
+            {
+                <div class="d-flex flex-column gap-3">
+                    @foreach (var log in Model.RecentAuditLogs)
+                    {
+                        <div class="border-bottom pb-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="badge bg-secondary rounded-pill px-2 py-0.5 text-xs font-monospace">@log.Action</span>
+                                <span class="small text-muted text-xs">@log.CreatedAt.ToString("MMM dd HH:mm")</span>
+                            </div>
+                            <p class="small text-dark mb-0 mt-1 text-truncate" title="@log.Details">@log.Details</p>
+                            <span class="text-muted text-xs d-block">By @log.AdminUserName</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const ctx = document.getElementById('revenueChart');
+            if (ctx) {
+                const labels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ChartLabels));
+                const revenueData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ChartRevenue));
+                const ordersData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ChartOrders));
+
+                function getChartColors(theme) {
+                    const isDark = theme === 'dark';
+                    return {
+                        textColor: isDark ? '#CBD5E1' : '#334155',
+                        gridColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.07)',
+                        legendColor: isDark ? '#F1F5F9' : '#0F172A',
+                        tooltipBg: isDark ? '#0B1424' : '#FFFFFF',
+                        tooltipTitle: isDark ? '#FFFFFF' : '#0F172A',
+                        tooltipBody: isDark ? '#CBD5E1' : '#334155',
+                        tooltipBorder: isDark ? 'rgba(59, 130, 246, 0.3)' : 'rgba(15, 23, 42, 0.12)'
+                    };
+                }
+
+                const initialTheme = document.documentElement.getAttribute('data-theme') || localStorage.getItem('hc_theme') || 'dark';
+                const colors = getChartColors(initialTheme);
+
+                const chart = new Chart(ctx.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                type: 'line',
+                                label: 'Revenue (PKR)',
+                                data: revenueData,
+                                borderColor: '#2563EB',
+                                backgroundColor: 'rgba(37, 99, 235, 0.12)',
+                                borderWidth: 2.5,
+                                pointBackgroundColor: '#2563EB',
+                                pointBorderColor: '#FFFFFF',
+                                pointRadius: 4,
+                                pointHoverRadius: 6,
+                                tension: 0.35,
+                                yAxisID: 'y'
+                            },
+                            {
+                                type: 'bar',
+                                label: 'Order Volume',
+                                data: ordersData,
+                                backgroundColor: 'rgba(16, 185, 129, 0.75)',
+                                hoverBackgroundColor: 'rgba(16, 185, 129, 0.95)',
+                                borderRadius: 6,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: colors.legendColor,
+                                    font: { family: "'Plus Jakarta Sans', sans-serif", weight: '600', size: 12 }
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: colors.tooltipBg,
+                                titleColor: colors.tooltipTitle,
+                                bodyColor: colors.tooltipBody,
+                                borderColor: colors.tooltipBorder,
+                                borderWidth: 1,
+                                padding: 12,
+                                cornerRadius: 8
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: {
+                                    color: colors.textColor,
+                                    font: { family: "'Plus Jakarta Sans', sans-serif", size: 11 }
+                                },
+                                grid: { color: colors.gridColor }
+                            },
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                beginAtZero: true,
+                                ticks: {
+                                    color: colors.textColor,
+                                    font: { family: "'Plus Jakarta Sans', sans-serif", size: 11 }
+                                },
+                                grid: { color: colors.gridColor }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                grid: { drawOnChartArea: false },
+                                beginAtZero: true,
+                                ticks: {
+                                    color: colors.textColor,
+                                    font: { family: "'Plus Jakarta Sans', sans-serif", size: 11 }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Update chart styles dynamically when theme changes
+                window.addEventListener('themechange', function(e) {
+                    const theme = e.detail?.theme || document.documentElement.getAttribute('data-theme') || 'dark';
+                    const newColors = getChartColors(theme);
+                    if (chart) {
+                        chart.options.plugins.legend.labels.color = newColors.legendColor;
+                        chart.options.plugins.tooltip.backgroundColor = newColors.tooltipBg;
+                        chart.options.plugins.tooltip.titleColor = newColors.tooltipTitle;
+                        chart.options.plugins.tooltip.bodyColor = newColors.tooltipBody;
+                        chart.options.plugins.tooltip.borderColor = newColors.tooltipBorder;
+                        chart.options.scales.x.ticks.color = newColors.textColor;
+                        chart.options.scales.x.grid.color = newColors.gridColor;
+                        chart.options.scales.y.ticks.color = newColors.textColor;
+                        chart.options.scales.y.grid.color = newColors.gridColor;
+                        chart.options.scales.y1.ticks.color = newColors.textColor;
+                        chart.update();
+                    }
+                });
+            }
+        });
+    </script>
+}

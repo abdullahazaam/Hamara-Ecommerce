@@ -1,0 +1,703 @@
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<HamaraCommerce.Models.ApplicationUser> UserManager
+@{
+    var currentUser = await UserManager.GetUserAsync(User);
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] — Hamara Commerce Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+
+    <script>
+        (function () {
+            const saved = localStorage.getItem('hc_theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', saved);
+            document.documentElement.style.colorScheme = saved;
+        })();
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        /* ===== HAMARACOMMERCE ADMIN DUAL-THEME ENGINE ===== */
+        body.admin-body {
+            background-color: var(--bg-base) !important;
+            color: var(--text-primary) !important;
+            font-family: var(--font-body);
+            min-height: 100vh;
+            padding-bottom: 0 !important;
+            transition: background-color var(--transition-base), color var(--transition-base);
+        }
+
+        .admin-shell {
+            display: flex;
+            min-height: 100vh;
+            background-color: var(--bg-base);
+        }
+
+        /* ===== SIDEBAR ===== */
+        .admin-sidebar {
+            width: 255px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            z-index: 1040;
+            transition: transform var(--transition-base), background var(--transition-base), border-color var(--transition-base);
+        }
+
+        [data-theme="light"] .admin-sidebar {
+            background: linear-gradient(180deg, #0F172A 0%, #090D16 100%);
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 4px 0 24px rgba(15, 23, 42, 0.06);
+        }
+
+        [data-theme="dark"] .admin-sidebar {
+            background: linear-gradient(180deg, #060B16 0%, #03060C 100%);
+            border-right: 1px solid rgba(59, 130, 246, 0.12);
+            box-shadow: 4px 0 24px rgba(0, 0, 0, 0.6);
+        }
+
+        @@media (max-width: 991.98px) {
+            .admin-sidebar {
+                position: fixed;
+                top: 0; bottom: 0; left: 0;
+                transform: translateX(-100%);
+            }
+            .admin-sidebar.sidebar-open {
+                transform: translateX(0);
+                box-shadow: 0 0 60px rgba(0,0,0,0.8);
+            }
+            .sidebar-overlay {
+                display: block !important;
+                position: fixed;
+                inset: 0;
+                background: rgba(0,0,0,0.65);
+                z-index: 1039;
+                backdrop-filter: blur(4px);
+                -webkit-backdrop-filter: blur(4px);
+            }
+        }
+
+        .sidebar-brand {
+            padding: 1.25rem 1.25rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .sidebar-brand a {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            text-decoration: none;
+            font-family: var(--font-heading);
+            font-weight: 800;
+            font-size: 1.15rem;
+            color: #F8FAFC;
+            letter-spacing: -0.01em;
+        }
+        .sidebar-brand a span { color: #60A5FA; }
+
+        .sidebar-brand-icon {
+            width: 34px; height: 34px;
+            background: linear-gradient(135deg, #2563EB, #7C3AED);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #FFFFFF;
+            font-size: 0.95rem;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+            flex-shrink: 0;
+        }
+
+        .sidebar-nav { flex: 1; overflow-y: auto; padding: 0.85rem 0.5rem; }
+        .sidebar-section-label {
+            padding: 0.85rem 1rem 0.35rem;
+            font-size: 0.68rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: #94A3B8;
+        }
+
+        .admin-nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.65rem 1rem;
+            color: #CBD5E1;
+            text-decoration: none;
+            border-radius: var(--radius-md);
+            margin: 0.15rem 0.25rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            transition: all var(--transition-fast);
+        }
+        .admin-nav-link:hover { color: #93C5FD; background: rgba(59, 130, 246, 0.14); transform: translateX(3px); }
+        .admin-nav-link.active {
+            color: #FFFFFF;
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.40), rgba(124, 58, 237, 0.28));
+            border: 1px solid rgba(96, 165, 250, 0.35);
+            box-shadow: 0 4px 16px rgba(37, 99, 235, 0.2);
+        }
+        .admin-nav-link i { width: 18px; text-align: center; font-size: 0.9rem; color: #93C5FD; }
+
+        .sidebar-footer {
+            padding: 1rem 1.25rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            flex-shrink: 0;
+            background: rgba(0, 0, 0, 0.15);
+        }
+
+        /* ===== MAIN & TOPBAR ===== */
+        .admin-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+        .admin-topbar {
+            height: 68px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 1.75rem;
+            flex-shrink: 0;
+            position: sticky;
+            top: 0;
+            z-index: 1030;
+            transition: background var(--transition-base), border-color var(--transition-base);
+        }
+
+        [data-theme="light"] .admin-topbar {
+            background: rgba(255, 255, 255, 0.90);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(16, 24, 39, 0.08);
+            box-shadow: 0 4px 20px -2px rgba(16, 24, 39, 0.04);
+        }
+
+        [data-theme="dark"] .admin-topbar {
+            background: rgba(7, 11, 20, 0.90);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(59, 130, 246, 0.12);
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Header Back to Store Button */
+        .admin-back-store-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.45rem 1.1rem;
+            font-size: 0.85rem;
+            font-weight: 700;
+            border-radius: var(--radius-pill);
+            text-decoration: none;
+            transition: all var(--transition-fast);
+        }
+        [data-theme="light"] .admin-back-store-btn {
+            background: #FFFFFF;
+            color: #1E293B !important;
+            border: 1px solid #CBD5E1;
+            box-shadow: 0 2px 6px rgba(16, 24, 39, 0.06);
+        }
+        [data-theme="light"] .admin-back-store-btn:hover {
+            background: #F1F5F9;
+            color: #2563EB !important;
+            border-color: #2563EB;
+            transform: translateX(-2px);
+        }
+        [data-theme="dark"] .admin-back-store-btn {
+            background: rgba(255, 255, 255, 0.06);
+            color: #F1F5F9 !important;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+        [data-theme="dark"] .admin-back-store-btn:hover {
+            background: rgba(59, 130, 246, 0.2);
+            color: #93C5FD !important;
+            border-color: rgba(96, 165, 250, 0.35);
+            transform: translateX(-2px);
+        }
+
+        /* Header Sun/Moon Theme Button */
+        .admin-theme-btn {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+        [data-theme="light"] .admin-theme-btn {
+            background: #FFFFFF;
+            color: #1E293B;
+            border: 1px solid #CBD5E1;
+            box-shadow: 0 2px 6px rgba(16, 24, 39, 0.06);
+        }
+        [data-theme="light"] .admin-theme-btn:hover {
+            background: #F1F5F9;
+            color: #2563EB;
+            border-color: #2563EB;
+            transform: rotate(20deg) scale(1.06);
+        }
+        [data-theme="dark"] .admin-theme-btn {
+            background: rgba(255, 255, 255, 0.06);
+            color: #F59E0B;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+        [data-theme="dark"] .admin-theme-btn:hover {
+            background: rgba(245, 158, 11, 0.18);
+            color: #FBBF24;
+            border-color: rgba(245, 158, 11, 0.35);
+            transform: rotate(20deg) scale(1.06);
+        }
+
+        /* Admin profile styles */
+        .admin-user-pill { display: flex; align-items: center; gap: 0.65rem; }
+        .admin-avatar {
+            width: 36px; height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #2563EB, #7C3AED);
+            display: flex; align-items: center; justify-content: center;
+            color: #FFFFFF; font-size: 0.95rem; font-weight: 700;
+            flex-shrink: 0;
+            box-shadow: 0 3px 10px rgba(37, 99, 235, 0.35);
+        }
+        .admin-user-name { font-size: 0.85rem; font-weight: 700; line-height: 1.2; display: block; }
+        [data-theme="light"] .admin-user-name { color: #0F172A; }
+        [data-theme="dark"] .admin-user-name { color: #F8FAFC; }
+        .admin-user-role { font-size: 0.72rem; display: block; }
+        [data-theme="light"] .admin-user-role { color: #64748B; }
+        [data-theme="dark"] .admin-user-role { color: #94A3B8; }
+
+        .admin-content { padding: 1.75rem; flex-grow: 1; }
+
+        .topbar-status-badge {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            border-radius: var(--radius-pill); padding: 0.25rem 0.85rem;
+            font-size: 0.75rem; font-weight: 700;
+        }
+        [data-theme="light"] .topbar-status-badge {
+            background: rgba(16, 185, 129, 0.10);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #059669;
+        }
+        [data-theme="dark"] .topbar-status-badge {
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            color: #34D399;
+        }
+        .topbar-status-badge::before {
+            content: ''; width: 6px; height: 6px; border-radius: 50%;
+            background: #10B981; animation: admin-pulse-dot 2s ease-in-out infinite;
+        }
+        @@keyframes admin-pulse-dot {
+            0%,100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
+        }
+
+        /* ===== CARDS & SURFACES ===== */
+        .admin-shell .card,
+        .admin-shell .bg-card {
+            transition: background-color var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base);
+        }
+
+        [data-theme="light"] .admin-shell .card,
+        [data-theme="light"] .admin-shell .bg-card {
+            background-color: #FFFFFF !important;
+            border: 1px solid rgba(16, 24, 39, 0.08) !important;
+            box-shadow: 0 10px 25px -5px rgba(16, 24, 39, 0.05), 0 4px 10px -2px rgba(16, 24, 39, 0.03) !important;
+            color: #0F172A !important;
+        }
+        [data-theme="light"] .admin-shell .card-header {
+            background-color: #F8FAFC !important;
+            border-bottom: 1px solid rgba(16, 24, 39, 0.08) !important;
+            color: #0F172A !important;
+        }
+
+        [data-theme="dark"] .admin-shell .card,
+        [data-theme="dark"] .admin-shell .bg-card {
+            background-color: #0B1424 !important;
+            border: 1px solid rgba(59, 130, 246, 0.16) !important;
+            box-shadow: 0 12px 30px -6px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+            color: #F8FAFC !important;
+        }
+        [data-theme="dark"] .admin-shell .card-header {
+            background-color: rgba(59, 130, 246, 0.08) !important;
+            border-bottom: 1px solid rgba(59, 130, 246, 0.16) !important;
+            color: #F8FAFC !important;
+        }
+
+        /* ===== CONTRAST OVERRIDES ===== */
+        [data-theme="light"] .admin-shell h1,
+        [data-theme="light"] .admin-shell h2,
+        [data-theme="light"] .admin-shell h3,
+        [data-theme="light"] .admin-shell h4,
+        [data-theme="light"] .admin-shell h5,
+        [data-theme="light"] .admin-shell h6 { color: #0F172A !important; }
+
+        [data-theme="dark"] .admin-shell h1,
+        [data-theme="dark"] .admin-shell h2,
+        [data-theme="dark"] .admin-shell h3,
+        [data-theme="dark"] .admin-shell h4,
+        [data-theme="dark"] .admin-shell h5,
+        [data-theme="dark"] .admin-shell h6 { color: #FFFFFF !important; }
+
+        /* Never use dark text on dark cards */
+        [data-theme="light"] .admin-shell .text-dark { color: #0F172A !important; }
+        [data-theme="dark"] .admin-shell .text-dark { color: #F8FAFC !important; }
+
+        /* Exceptions for badges where text needs to be dark for contrast */
+        [data-theme="dark"] .admin-shell .badge.bg-warning.text-dark,
+        [data-theme="dark"] .admin-shell .badge.bg-info.text-dark,
+        [data-theme="dark"] .admin-shell .badge.bg-warning-subtle,
+        [data-theme="dark"] .admin-shell .badge.bg-light.text-dark { color: #0F172A !important; }
+
+        [data-theme="light"] .admin-shell .text-muted { color: #64748B !important; }
+        [data-theme="dark"] .admin-shell .text-muted { color: #94A3B8 !important; }
+
+        /* Tables */
+        .admin-shell .table { --bs-table-bg: transparent; margin-bottom: 0; }
+        [data-theme="light"] .admin-shell .table { --bs-table-color: #334155; border-color: #E2E8F0; }
+        [data-theme="light"] .admin-shell .table thead,
+        [data-theme="light"] .admin-shell .table thead.bg-light,
+        [data-theme="light"] .admin-shell .table thead th {
+            background-color: #F8FAFC !important;
+            color: #1E293B !important;
+            font-weight: 700;
+            border-bottom: 1px solid #CBD5E1 !important;
+        }
+        [data-theme="light"] .admin-shell .table-hover > tbody > tr:hover > * {
+            background-color: rgba(37, 99, 235, 0.04) !important;
+        }
+
+        [data-theme="dark"] .admin-shell .table { --bs-table-color: #CBD5E1; border-color: rgba(59, 130, 246, 0.12); }
+        [data-theme="dark"] .admin-shell .table thead,
+        [data-theme="dark"] .admin-shell .table thead.bg-light,
+        [data-theme="dark"] .admin-shell .table thead th {
+            background-color: rgba(59, 130, 246, 0.10) !important;
+            color: #93C5FD !important;
+            font-weight: 700;
+            border-bottom: 1px solid rgba(59, 130, 246, 0.2) !important;
+        }
+        [data-theme="dark"] .admin-shell .table-hover > tbody > tr:hover > * {
+            background-color: rgba(59, 130, 246, 0.08) !important;
+        }
+        [data-theme="dark"] .admin-shell .table > :not(caption) > * > * {
+            border-bottom-color: rgba(255, 255, 255, 0.06);
+        }
+
+        /* Low stock row & light container overrides */
+        [data-theme="light"] .admin-shell .bg-secondary {
+            background-color: #F8FAFC !important;
+            border: 1px solid #E2E8F0 !important;
+            color: #0F172A !important;
+        }
+        [data-theme="dark"] .admin-shell .bg-secondary {
+            background-color: rgba(255, 255, 255, 0.04) !important;
+            border: 1px solid rgba(59, 130, 246, 0.15) !important;
+            color: #F8FAFC !important;
+        }
+        [data-theme="light"] .admin-shell .bg-light {
+            background-color: #F1F5F9 !important;
+            border-color: #E2E8F0 !important;
+        }
+        [data-theme="dark"] .admin-shell .bg-light {
+            background-color: rgba(255, 255, 255, 0.05) !important;
+            border-color: rgba(59, 130, 246, 0.15) !important;
+        }
+
+        /* Forms & Inputs */
+        [data-theme="light"] .admin-shell .form-control,
+        [data-theme="light"] .admin-shell .form-select {
+            background-color: #FFFFFF !important;
+            border: 1px solid #CBD5E1 !important;
+            color: #0F172A !important;
+        }
+        [data-theme="light"] .admin-shell .form-control:focus,
+        [data-theme="light"] .admin-shell .form-select:focus {
+            border-color: #2563EB !important;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+        }
+
+        [data-theme="dark"] .admin-shell .form-control,
+        [data-theme="dark"] .admin-shell .form-select {
+            background-color: rgba(15, 23, 42, 0.8) !important;
+            border: 1px solid rgba(59, 130, 246, 0.25) !important;
+            color: #F8FAFC !important;
+        }
+        [data-theme="dark"] .admin-shell .form-control:focus,
+        [data-theme="dark"] .admin-shell .form-select:focus {
+            border-color: #60A5FA !important;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25) !important;
+        }
+
+        /* Modals & Dropdowns */
+        [data-theme="light"] .admin-shell .modal-content {
+            background: #FFFFFF !important;
+            border: 1px solid #E2E8F0;
+            color: #0F172A;
+        }
+        [data-theme="light"] .admin-shell .dropdown-menu {
+            background: #FFFFFF !important;
+            border: 1px solid #E2E8F0;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+        }
+        [data-theme="light"] .admin-shell .dropdown-item { color: #334155; }
+        [data-theme="light"] .admin-shell .dropdown-item:hover { background: #F1F5F9; color: #0F172A; }
+
+        [data-theme="dark"] .admin-shell .modal-content {
+            background: #0B1424 !important;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            color: #F8FAFC;
+        }
+        [data-theme="dark"] .admin-shell .dropdown-menu {
+            background: #0F172A !important;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+        }
+        [data-theme="dark"] .admin-shell .dropdown-item { color: #94A3B8; }
+        [data-theme="dark"] .admin-shell .dropdown-item:hover { background: rgba(59, 130, 246, 0.15); color: #FFFFFF; }
+    </style>
+</head>
+<body class="admin-body">
+
+<div class="admin-shell">
+    <!-- Mobile Sidebar Overlay -->
+    <div id="sidebarOverlay" class="sidebar-overlay d-none" aria-hidden="true"></div>
+
+    <!-- ===== SIDEBAR ===== -->
+    <aside class="admin-sidebar" id="adminSidebar" role="navigation" aria-label="Admin navigation">
+        <!-- Brand -->
+        <div class="sidebar-brand">
+            <a asp-controller="Admin" asp-action="Index" aria-label="Admin Dashboard">
+                <span class="sidebar-brand-icon" aria-hidden="true">
+                    <i class="fa-solid fa-gauge-high"></i>
+                </span>
+                Hamara<span>Admin</span>
+            </a>
+            <button type="button"
+                    class="btn btn-sm p-1 d-lg-none"
+                    id="sidebarCloseBtn"
+                    aria-label="Close navigation"
+                    style="background:rgba(255,255,255,0.06);border:none;color:#94a3b8;border-radius:var(--radius-md);">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="sidebar-nav" aria-label="Admin menu">
+            <div class="sidebar-section-label">Core Operations</div>
+            <a asp-controller="Admin" asp-action="Index"
+               class="admin-nav-link @(currentAction == "Index" ? "active" : "")">
+                <i class="fa-solid fa-chart-pie"></i>Dashboard
+            </a>
+            <a asp-controller="Admin" asp-action="Orders"
+               class="admin-nav-link @(currentAction == "Orders" || currentAction == "OrderDetails" ? "active" : "")">
+                <i class="fa-solid fa-cart-shopping"></i>Orders
+            </a>
+            <a asp-controller="Admin" asp-action="Products"
+               class="admin-nav-link @(currentAction is "Products" or "AddProduct" or "EditProduct" ? "active" : "")">
+                <i class="fa-solid fa-boxes-stacked"></i>Products
+            </a>
+            <a asp-controller="Admin" asp-action="Customers"
+               class="admin-nav-link @(currentAction == "Customers" || currentAction == "CustomerDetails" ? "active" : "")">
+                <i class="fa-solid fa-users"></i>Customers
+            </a>
+            <a asp-controller="Admin" asp-action="Coupons"
+               class="admin-nav-link @(currentAction is "Coupons" or "AddCoupon" ? "active" : "")">
+                <i class="fa-solid fa-tags"></i>Coupons
+            </a>
+
+            <div class="sidebar-section-label mt-2">Engagement &amp; Trust</div>
+            <a asp-controller="Admin" asp-action="Reviews"
+               class="admin-nav-link @(currentAction == "Reviews" ? "active" : "")">
+                <i class="fa-solid fa-star-half-stroke"></i>Reviews
+            </a>
+            <a asp-controller="Admin" asp-action="Questions"
+               class="admin-nav-link @(currentAction == "Questions" ? "active" : "")">
+                <i class="fa-solid fa-comments"></i>Q&amp;A Inquiries
+            </a>
+
+            <div class="sidebar-section-label mt-2">System &amp; Audit</div>
+            <a asp-controller="Admin" asp-action="AuditLogs"
+               class="admin-nav-link @(currentAction == "AuditLogs" ? "active" : "")">
+                <i class="fa-solid fa-shield-halved"></i>Audit Logs
+            </a>
+            <a asp-controller="Admin" asp-action="Settings"
+               class="admin-nav-link @(currentAction == "Settings" ? "active" : "")">
+                <i class="fa-solid fa-sliders"></i>Store Settings
+            </a>
+        </nav>
+
+        <!-- Sidebar Footer -->
+        <div class="sidebar-footer">
+            <a asp-controller="Home" asp-action="Index"
+               class="btn btn-sm w-100 rounded-pill mb-2 text-start px-3"
+               style="background:rgba(255,255,255,0.06);color:#94a3b8;border:1px solid rgba(255,255,255,0.08);"
+               target="_blank"
+               rel="noopener">
+                <i class="fa-solid fa-arrow-up-right-from-square me-2"></i>Visit Live Store
+            </a>
+            <form asp-controller="Account" asp-action="Logout" method="post">
+                @Html.AntiForgeryToken()
+                <button type="submit"
+                        class="btn btn-sm w-100 rounded-pill text-start px-3"
+                        style="background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.20);">
+                    <i class="fa-solid fa-arrow-right-from-bracket me-2"></i>Sign Out
+                </button>
+            </form>
+        </div>
+    </aside>
+
+    <!-- ===== MAIN AREA ===== -->
+    <div class="admin-main">
+        <!-- Topbar -->
+        <header class="admin-topbar">
+            <div class="d-flex align-items-center gap-2 gap-sm-3">
+                <button type="button"
+                        class="btn btn-sm d-lg-none p-2 admin-back-store-btn"
+                        id="sidebarToggleBtn"
+                        aria-label="Open navigation menu">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <a asp-controller="Home" asp-action="Index" class="admin-back-store-btn" title="Return to Storefront">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span class="d-none d-sm-inline">Back to Store</span>
+                </a>
+                <span class="topbar-status-badge d-none d-md-flex">Live Store Connected</span>
+            </div>
+
+            <div class="d-flex align-items-center gap-2 gap-sm-3">
+                <!-- Theme Toggle Button -->
+                <button type="button"
+                        class="admin-theme-btn theme-toggle-btn"
+                        id="themeToggleBtn"
+                        title="Toggle Light / Dark Mode"
+                        aria-label="Toggle Light / Dark Mode">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
+
+                <!-- Admin Profile Pill -->
+                <div class="admin-user-pill">
+                    <div class="admin-avatar">
+                        @(currentUser?.FullName?.Substring(0, 1).ToUpper() ?? "A")
+                    </div>
+                    <div class="d-none d-sm-block text-end">
+                        <span class="admin-user-name">@(currentUser?.FullName ?? "Administrator")</span>
+                        <span class="admin-user-role">Super Admin</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Flash Alerts -->
+        <div class="px-4 pt-3">
+            @if (TempData["SuccessMessage"] != null)
+            {
+                <div class="alert alert-success alert-dismissible fade show rounded-3 mb-2" role="alert">
+                    <i class="fa-solid fa-circle-check me-2"></i>@TempData["SuccessMessage"]
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            }
+            @if (TempData["ErrorMessage"] != null)
+            {
+                <div class="alert alert-danger alert-dismissible fade show rounded-3 mb-2" role="alert">
+                    <i class="fa-solid fa-triangle-exclamation me-2"></i>@TempData["ErrorMessage"]
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            }
+        </div>
+
+        <!-- Content -->
+        <main class="admin-content">
+            @RenderBody()
+        </main>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="~/js/site.js" asp-append-version="true"></script>
+<script>
+    // Theme sync & toggle icon initialization
+    (function () {
+        function syncThemeIcon() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || localStorage.getItem('hc_theme') || 'dark';
+            const icon = document.querySelector('#themeToggleBtn i');
+            if (icon) {
+                if (currentTheme === 'dark') {
+                    icon.className = 'fa-solid fa-sun text-warning';
+                } else {
+                    icon.className = 'fa-solid fa-moon';
+                }
+            }
+        }
+        // syncThemeIcon updates the icon on themechange and initial page load
+        syncThemeIcon();
+        window.addEventListener('themechange', syncThemeIcon);
+
+        const toggleBtn = document.getElementById('themeToggleBtn');
+        if (toggleBtn && !toggleBtn.dataset.themeBound) {
+            toggleBtn.dataset.themeBound = 'true';
+            toggleBtn.addEventListener('click', function () {
+                if (window.HamaraTheme) {
+                    window.HamaraTheme.toggleTheme();
+                } else {
+                    const current = document.documentElement.getAttribute('data-theme') || localStorage.getItem('hc_theme') || 'dark';
+                    const next = current === 'dark' ? 'light' : 'dark';
+                    localStorage.setItem('hc_theme', next);
+                    document.documentElement.setAttribute('data-theme', next);
+                    document.documentElement.style.colorScheme = next;
+                    syncThemeIcon();
+                    window.dispatchEvent(new CustomEvent('themechange', { detail: { theme: next } }));
+                }
+            });
+        }
+    })();
+
+    // Admin sidebar mobile toggle
+    (function () {
+        const toggleBtn  = document.getElementById('sidebarToggleBtn');
+        const closeBtn   = document.getElementById('sidebarCloseBtn');
+        const sidebar    = document.getElementById('adminSidebar');
+        const overlay    = document.getElementById('sidebarOverlay');
+
+        function openSidebar() {
+            sidebar?.classList.add('sidebar-open');
+            overlay?.classList.remove('d-none');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeSidebar() {
+            sidebar?.classList.remove('sidebar-open');
+            overlay?.classList.add('d-none');
+            document.body.style.removeProperty('overflow');
+        }
+
+        toggleBtn?.addEventListener('click', openSidebar);
+        closeBtn?.addEventListener('click', closeSidebar);
+        overlay?.addEventListener('click', closeSidebar);
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && sidebar?.classList.contains('sidebar-open')) closeSidebar();
+        });
+    })();
+</script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

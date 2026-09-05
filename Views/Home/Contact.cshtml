@@ -1,0 +1,97 @@
+@inject HamaraCommerce.Services.IShippingTaxService ShippingTaxService
+@{
+    ViewData["Title"] = "Contact & Help Center — Hamara Commerce";
+}
+
+<!-- Breadcrumbs -->
+<nav aria-label="breadcrumb" class="mb-4 reveal-on-scroll">
+    <ol class="breadcrumb small mb-0">
+        <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">Home</a></li>
+        <li class="breadcrumb-item active fw-bold" style="color:var(--brand-primary);" aria-current="page">Contact Us</li>
+    </ol>
+</nav>
+
+<div class="row justify-content-center py-2 reveal-on-scroll">
+    <div class="col-lg-10">
+        <div class="card-glass rounded-4 p-4 p-md-5 mb-5"
+             style="background:var(--bg-glass); backdrop-filter:blur(24px); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-lg);">
+            <div class="row g-4 g-lg-5">
+                <!-- Left: Contact Details -->
+                <div class="col-lg-5">
+                    <span class="badge bg-primary-subtle text-primary border border-primary px-3 py-1 rounded-pill mb-2 font-monospace small fw-bold">
+                        24/7 Support Desk
+                    </span>
+                    <h1 class="h3 font-heading fw-bold mb-3" style="color:var(--text-primary); letter-spacing:-0.02em;">We're Here to Help You</h1>
+                    <p class="small mb-4" style="color:var(--text-muted); line-height:1.7;">
+                        Have a question regarding order tracking, warranty claims, returns, or corporate procurement? Reach out to our customer care team.
+                    </p>
+
+                    <div class="d-flex flex-column gap-3 small mb-4">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-circle d-flex align-items-center justify-content-center" 
+                                 style="width:42px; height:42px; background:rgba(37,99,235,0.12); color:#60a5fa; flex-shrink:0;">
+                                <i class="fa-solid fa-phone"></i>
+                            </div>
+                            <div>
+                                <strong class="d-block" style="color:var(--text-primary);">Direct Phone Line</strong>
+                                <span style="color:var(--text-muted);">+92 300 1234567</span>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-circle d-flex align-items-center justify-content-center" 
+                                 style="width:42px; height:42px; background:rgba(16,185,129,0.12); color:#10b981; flex-shrink:0;">
+                                <i class="fa-solid fa-envelope"></i>
+                            </div>
+                            <div>
+                                <strong class="d-block" style="color:var(--text-primary);">Email Inquiries</strong>
+                                <span style="color:var(--text-muted);">support@hamaracommerce.pk</span>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-circle d-flex align-items-center justify-content-center" 
+                                 style="width:42px; height:42px; background:rgba(6,182,212,0.12); color:#06b6d4; flex-shrink:0;">
+                                <i class="fa-solid fa-location-dot"></i>
+                            </div>
+                            <div>
+                                <strong class="d-block" style="color:var(--text-primary);">Head Office Location</strong>
+                                <span style="color:var(--text-muted);">Plaza 45, Main Boulevard, Gulberg III, Lahore, Pakistan</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Contact Form -->
+                <div class="col-lg-7">
+                    <div class="card rounded-4 p-4" style="background:var(--bg-surface-elevated); border:1px solid var(--border-subtle) !important;">
+                        <h2 class="h5 font-heading fw-bold mb-3" style="color:var(--text-primary);">Send an Inquiry</h2>
+                        <form onsubmit="event.preventDefault(); showToast('Thank you! Your message has been dispatched to our support team.', 'success'); this.reset();">
+                            <div class="row g-3 mb-3">
+                                <div class="col-sm-6">
+                                    <label class="form-label small fw-bold" style="color:var(--text-muted);">Your Name</label>
+                                    <input type="text" class="form-control form-control-sm rounded-3" placeholder="Full Name" required />
+                                </div>
+                                <div class="col-sm-6">
+                                    <label class="form-label small fw-bold" style="color:var(--text-muted);">Email Address</label>
+                                    <input type="email" class="form-control form-control-sm rounded-3" placeholder="email@domain.com" required />
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold" style="color:var(--text-muted);">Subject</label>
+                                <input type="text" class="form-control form-control-sm rounded-3" placeholder="e.g. Order Inquiry / Returns" required />
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold" style="color:var(--text-muted);">Message</label>
+                                <textarea class="form-control form-control-sm rounded-3" rows="4" placeholder="How can we assist you today?" required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary-custom w-100 rounded-pill btn-sm py-2">
+                                <i class="fa-regular fa-paper-plane me-1.5"></i>Send Message
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

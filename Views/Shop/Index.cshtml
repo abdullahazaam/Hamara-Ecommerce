@@ -1,0 +1,278 @@
+@model HamaraCommerce.Models.ShopFilterViewModel
+@{
+    ViewData["Title"] = !string.IsNullOrEmpty(Model.Category) ? $"{Model.Category} — Shop Catalog" : "Shop Collection";
+}
+
+<!-- Catalog Header & Breadcrumb Banner -->
+<div class="card-glass p-4 p-md-5 mb-4 rounded-4 border-0 position-relative overflow-hidden reveal-on-scroll"
+     style="background: linear-gradient(135deg, rgba(37,99,235,0.09) 0%, rgba(124,58,237,0.06) 50%, rgba(6,182,212,0.05) 100%); border: 1px solid var(--border-default) !important;">
+    <div class="position-relative" style="z-index: 2;">
+        <nav aria-label="breadcrumb" class="mb-2">
+            <ol class="breadcrumb small mb-0">
+                <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">Home</a></li>
+                @if (!string.IsNullOrEmpty(Model.Category))
+                {
+                    <li class="breadcrumb-item"><a asp-controller="Shop" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">Catalog</a></li>
+                    <li class="breadcrumb-item active fw-bold" style="color:var(--brand-primary);" aria-current="page">@Model.Category</li>
+                }
+                else
+                {
+                    <li class="breadcrumb-item active fw-bold" style="color:var(--brand-primary);" aria-current="page">All Products</li>
+                }
+            </ol>
+        </nav>
+
+        <div class="d-flex flex-wrap justify-content-between align-items-end gap-3">
+            <div>
+                <h1 class="h2 font-heading fw-extrabold mb-1" style="color:var(--text-primary); letter-spacing:-0.02em;">
+                    @(!string.IsNullOrEmpty(Model.Category) ? Model.Category : "Curated Collection")
+                </h1>
+                <p class="mb-0 small" style="color:var(--text-muted);">
+                    Showing <strong>@Model.Products.Count</strong> of <strong>@Model.TotalItems</strong> authentic verified products
+                </p>
+            </div>
+
+            <!-- Sort and Mobile Filter trigger -->
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-glass btn-sm rounded-pill d-lg-none px-3" type="button" data-bs-toggle="offcanvas" data-bs-target="#filterOffcanvas" aria-controls="filterOffcanvas">
+                    <i class="fa-solid fa-sliders me-1.5" style="color:var(--brand-primary);"></i>Filter Catalog
+                </button>
+
+                <form asp-controller="Shop" asp-action="Index" method="get" id="sortForm" class="d-flex align-items-center gap-2">
+                    <input type="hidden" name="category" value="@Model.Category" />
+                    <input type="hidden" name="search" value="@Model.SearchQuery" />
+                    <input type="hidden" name="brand" value="@Model.SelectedBrand" />
+                    <input type="hidden" name="minPrice" value="@Model.MinPrice" />
+                    <input type="hidden" name="maxPrice" value="@Model.MaxPrice" />
+                    <input type="hidden" name="inStockOnly" value="@(Model.InStockOnly ? "true" : "")" />
+                    <input type="hidden" name="onSaleOnly" value="@(Model.OnSaleOnly ? "true" : "")" />
+
+                    <label for="sortSelect" class="small fw-semibold text-nowrap d-none d-sm-inline" style="color:var(--text-muted);">Sort by:</label>
+                    <select id="sortSelect" name="sortBy" class="form-select form-select-sm rounded-pill px-3" style="min-width: 160px;" onchange="document.getElementById('sortForm').submit();">
+                        <option value="popular" selected="@(Model.SortBy == "popular" || string.IsNullOrEmpty(Model.SortBy))">🔥 Most Popular</option>
+                        <option value="newest" selected="@(Model.SortBy == "newest")">✨ Newest Arrivals</option>
+                        <option value="price_asc" selected="@(Model.SortBy == "price_asc")">💵 Price: Low to High</option>
+                        <option value="price_desc" selected="@(Model.SortBy == "price_desc")">💎 Price: High to Low</option>
+                        <option value="rating" selected="@(Model.SortBy == "rating")">⭐ Highest Rated</option>
+                    </select>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Filter Chips -->
+@if (!string.IsNullOrEmpty(Model.Category) || !string.IsNullOrEmpty(Model.SelectedBrand) || !string.IsNullOrEmpty(Model.SearchQuery) || Model.MinPrice.HasValue || Model.MaxPrice.HasValue || Model.InStockOnly || Model.OnSaleOnly)
+{
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-4 p-3 rounded-4" style="background:var(--bg-surface-elevated); border:1px solid var(--border-subtle);">
+        <span class="small fw-bold text-uppercase" style="color:var(--text-muted); font-size:0.75rem; letter-spacing:0.05em;">Active Filters:</span>
+        @if (!string.IsNullOrEmpty(Model.Category))
+        {
+            <a asp-action="Index" asp-route-search="@Model.SearchQuery" asp-route-brand="@Model.SelectedBrand" asp-route-sortBy="@Model.SortBy" asp-route-minPrice="@Model.MinPrice" asp-route-maxPrice="@Model.MaxPrice"
+               class="badge bg-primary-subtle text-primary border border-primary text-decoration-none rounded-pill py-1.5 px-3 small d-inline-flex align-items-center gap-1">
+                Category: @Model.Category <i class="fa-solid fa-xmark ms-1"></i>
+            </a>
+        }
+        @if (!string.IsNullOrEmpty(Model.SelectedBrand))
+        {
+            <a asp-action="Index" asp-route-category="@Model.Category" asp-route-search="@Model.SearchQuery" asp-route-sortBy="@Model.SortBy" asp-route-minPrice="@Model.MinPrice" asp-route-maxPrice="@Model.MaxPrice"
+               class="badge bg-primary-subtle text-primary border border-primary text-decoration-none rounded-pill py-1.5 px-3 small d-inline-flex align-items-center gap-1">
+                Brand: @Model.SelectedBrand <i class="fa-solid fa-xmark ms-1"></i>
+            </a>
+        }
+        @if (!string.IsNullOrEmpty(Model.SearchQuery))
+        {
+            <a asp-action="Index" asp-route-category="@Model.Category" asp-route-brand="@Model.SelectedBrand" asp-route-sortBy="@Model.SortBy"
+               class="badge bg-primary-subtle text-primary border border-primary text-decoration-none rounded-pill py-1.5 px-3 small d-inline-flex align-items-center gap-1">
+                Keyword: "@Model.SearchQuery" <i class="fa-solid fa-xmark ms-1"></i>
+            </a>
+        }
+        @if (Model.InStockOnly)
+        {
+            <a asp-action="Index" asp-route-category="@Model.Category" asp-route-search="@Model.SearchQuery" asp-route-sortBy="@Model.SortBy"
+               class="badge bg-success-subtle text-success border border-success text-decoration-none rounded-pill py-1.5 px-3 small d-inline-flex align-items-center gap-1">
+                In Stock Only <i class="fa-solid fa-xmark ms-1"></i>
+            </a>
+        }
+        @if (Model.OnSaleOnly)
+        {
+            <a asp-action="Index" asp-route-category="@Model.Category" asp-route-search="@Model.SearchQuery" asp-route-sortBy="@Model.SortBy"
+               class="badge bg-danger-subtle text-danger border border-danger text-decoration-none rounded-pill py-1.5 px-3 small d-inline-flex align-items-center gap-1">
+                On Sale <i class="fa-solid fa-xmark ms-1"></i>
+            </a>
+        }
+        <a asp-action="Index" class="small fw-bold text-decoration-none ms-2" style="color:var(--status-danger);">
+            <i class="fa-solid fa-trash-can me-1"></i>Clear All
+        </a>
+    </div>
+}
+
+<div class="row g-4">
+    <!-- Desktop Sidebar Filters -->
+    <aside class="col-lg-3 d-none d-lg-block">
+        <div class="card border-0 shadow-sm rounded-4 p-4 position-sticky" style="top: 85px; background:var(--bg-glass); backdrop-filter:blur(20px); border:1px solid var(--border-default) !important;">
+            <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom" style="border-color:var(--border-subtle) !important;">
+                <h2 class="h6 font-heading fw-bold mb-0" style="color:var(--text-primary);"><i class="fa-solid fa-filter me-2" style="color:var(--brand-primary);"></i>Refine Results</h2>
+                <a asp-action="Index" class="text-xs fw-semibold text-decoration-none" style="color:var(--text-muted);">Reset</a>
+            </div>
+
+            <form asp-controller="Shop" asp-action="Index" method="get">
+                <input type="hidden" name="sortBy" value="@Model.SortBy" />
+                <input type="hidden" name="search" value="@Model.SearchQuery" />
+
+                <!-- Categories -->
+                <div class="mb-4">
+                    <label class="form-label small fw-bold text-uppercase" style="color:var(--text-muted); font-size: 0.725rem; letter-spacing:0.05em;">Departments</label>
+                    <div class="d-flex flex-column gap-2">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="category" value="" id="catAll" checked="@(string.IsNullOrEmpty(Model.Category))" onchange="this.form.submit()" />
+                            <label class="form-check-label small fw-semibold" for="catAll" style="color:var(--text-primary);">All Departments</label>
+                        </div>
+                        @foreach (var c in Model.Categories)
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="category" value="@c.Slug" id="cat_@c.Id" checked="@(Model.Category == c.Slug)" onchange="this.form.submit()" />
+                                <label class="form-check-label small d-flex justify-content-between align-items-center" for="cat_@c.Id" style="color:var(--text-secondary);">
+                                    <span>@c.Name</span>
+                                    @if (c.ProductCount > 0)
+                                    {
+                                        <span class="badge rounded-pill" style="background:var(--bg-surface-elevated); color:var(--text-muted); font-size:0.7rem;">@c.ProductCount</span>
+                                    }
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Price Range -->
+                <div class="mb-4">
+                    <label class="form-label small fw-bold text-uppercase" style="color:var(--text-muted); font-size: 0.725rem; letter-spacing:0.05em;">Price Range (PKR)</label>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <input type="number" name="minPrice" class="form-control form-control-sm rounded-3" placeholder="Min" value="@Model.MinPrice" />
+                        </div>
+                        <div class="col-6">
+                            <input type="number" name="maxPrice" class="form-control form-control-sm rounded-3" placeholder="Max" value="@Model.MaxPrice" />
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-glass btn-sm w-100 rounded-pill py-1.5 font-heading fw-bold">Apply Price</button>
+                </div>
+
+                <!-- Stock & Discount Toggles -->
+                <div class="pt-2 border-top" style="border-color:var(--border-subtle) !important;">
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" name="inStockOnly" value="true" id="inStockSwitch" checked="@Model.InStockOnly" onchange="this.form.submit()" />
+                        <label class="form-check-label small fw-semibold" for="inStockSwitch" style="color:var(--text-primary);">In Stock Only</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="onSaleOnly" value="true" id="onSaleSwitch" checked="@Model.OnSaleOnly" onchange="this.form.submit()" />
+                        <label class="form-check-label small fw-semibold" for="onSaleSwitch" style="color:var(--text-primary);">Discounted Deals</label>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </aside>
+
+    <!-- Main Product Grid -->
+    <section class="col-lg-9">
+        @if (!Model.Products.Any())
+        {
+            @await Html.PartialAsync("_EmptyState", ("fa-solid fa-box-open", "No products match your criteria", "We couldn't find items with your selected combination of filters. Try resetting filters or using a broader search keyword.", Url.Action("Index", "Shop") ?? "/Shop", "Browse Full Catalog"))
+        }
+        else
+        {
+            <div class="row g-3">
+                @foreach (var (product, idx) in Model.Products.Select((p, i) => (p, i)))
+                {
+                    <div class="col-xl-4 col-sm-6 reveal-on-scroll" style="transition-delay: @((idx % 6) * 60)ms">
+                        @await Html.PartialAsync("_ProductCard", product)
+                    </div>
+                }
+            </div>
+
+            @if (Model.TotalPages > 1)
+            {
+                <nav aria-label="Catalog pagination" class="mt-5 d-flex justify-content-center">
+                    <ul class="pagination">
+                        <li class="page-item @(Model.CurrentPage <= 1 ? "disabled" : "")">
+                            <a class="page-link rounded-pill me-1" asp-action="Index" asp-route-page="@(Model.CurrentPage - 1)" asp-route-category="@Model.Category" asp-route-search="@Model.SearchQuery" asp-route-sortBy="@Model.SortBy" asp-route-minPrice="@Model.MinPrice" asp-route-maxPrice="@Model.MaxPrice" asp-route-inStockOnly="@Model.InStockOnly" asp-route-onSaleOnly="@Model.OnSaleOnly">
+                                <i class="fa-solid fa-chevron-left me-1"></i>Prev
+                            </a>
+                        </li>
+                        @for (int i = 1; i <= Model.TotalPages; i++)
+                        {
+                            <li class="page-item @(i == Model.CurrentPage ? "active" : "")">
+                                <a class="page-link rounded-pill mx-1" asp-action="Index" asp-route-page="@i" asp-route-category="@Model.Category" asp-route-search="@Model.SearchQuery" asp-route-sortBy="@Model.SortBy" asp-route-minPrice="@Model.MinPrice" asp-route-maxPrice="@Model.MaxPrice" asp-route-inStockOnly="@Model.InStockOnly" asp-route-onSaleOnly="@Model.OnSaleOnly">@i</a>
+                            </li>
+                        }
+                        <li class="page-item @(Model.CurrentPage >= Model.TotalPages ? "disabled" : "")">
+                            <a class="page-link rounded-pill ms-1" asp-action="Index" asp-route-page="@(Model.CurrentPage + 1)" asp-route-category="@Model.Category" asp-route-search="@Model.SearchQuery" asp-route-sortBy="@Model.SortBy" asp-route-minPrice="@Model.MinPrice" asp-route-maxPrice="@Model.MaxPrice" asp-route-inStockOnly="@Model.InStockOnly" asp-route-onSaleOnly="@Model.OnSaleOnly">
+                                Next<i class="fa-solid fa-chevron-right ms-1"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            }
+        }
+    </section>
+</div>
+
+<!-- Mobile Offcanvas Filters -->
+<div class="offcanvas offcanvas-start rounded-end-4" tabindex="-1" id="filterOffcanvas" aria-labelledby="filterOffcanvasLabel" style="background:var(--bg-surface); color:var(--text-primary);">
+    <div class="offcanvas-header border-bottom" style="border-color:var(--border-subtle) !important;">
+        <h5 class="offcanvas-title font-heading fw-bold" id="filterOffcanvasLabel">
+            <i class="fa-solid fa-sliders me-2 text-primary"></i>Filter Catalog
+        </h5>
+        <button type="button" class="btn-close btn-close-white-focus" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <form asp-controller="Shop" asp-action="Index" method="get">
+            <input type="hidden" name="sortBy" value="@Model.SortBy" />
+            <input type="hidden" name="search" value="@Model.SearchQuery" />
+
+            <div class="mb-4">
+                <label class="form-label small fw-bold text-uppercase" style="color:var(--text-muted);">Departments</label>
+                <div class="d-flex flex-column gap-2">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="category" value="" id="mCatAll" checked="@(string.IsNullOrEmpty(Model.Category))" />
+                        <label class="form-check-label small fw-semibold" for="mCatAll">All Departments</label>
+                    </div>
+                    @foreach (var c in Model.Categories)
+                    {
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="category" value="@c.Slug" id="mCat_@c.Id" checked="@(Model.Category == c.Slug)" />
+                            <label class="form-check-label small" for="mCat_@c.Id">@c.Name</label>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label small fw-bold text-uppercase" style="color:var(--text-muted);">Price Range (PKR)</label>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <input type="number" name="minPrice" class="form-control form-control-sm" placeholder="Min" value="@Model.MinPrice" />
+                    </div>
+                    <div class="col-6">
+                        <input type="number" name="maxPrice" class="form-control form-control-sm" placeholder="Max" value="@Model.MaxPrice" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-4 pt-2 border-top" style="border-color:var(--border-subtle) !important;">
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" name="inStockOnly" value="true" id="mInStockSwitch" checked="@Model.InStockOnly" />
+                    <label class="form-check-label small fw-semibold" for="mInStockSwitch">In Stock Only</label>
+                </div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="onSaleOnly" value="true" id="mOnSaleSwitch" checked="@Model.OnSaleOnly" />
+                    <label class="form-check-label small fw-semibold" for="mOnSaleSwitch">Discounted Deals</label>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary-custom w-100 rounded-pill py-2.5">
+                Apply Filters
+            </button>
+        </form>
+    </div>
+</div>

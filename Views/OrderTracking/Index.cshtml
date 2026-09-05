@@ -1,0 +1,164 @@
+@model HamaraCommerce.Models.Order?
+@inject HamaraCommerce.Services.IShippingTaxService ShippingTaxService
+@{
+    ViewData["Title"] = "Track Your Order";
+}
+
+<!-- Breadcrumbs -->
+<nav aria-label="breadcrumb" class="mb-4 reveal-on-scroll">
+    <ol class="breadcrumb small mb-0">
+        <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index" class="text-decoration-none" style="color:var(--text-muted);">Home</a></li>
+        <li class="breadcrumb-item active fw-bold" style="color:var(--brand-primary);" aria-current="page">Track Order</li>
+    </ol>
+</nav>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <!-- Search Card -->
+        <div class="card-glass rounded-4 p-4 p-md-5 mb-4 text-center reveal-on-scroll"
+             style="background:var(--bg-glass); backdrop-filter:blur(24px); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-md);">
+            
+            <div class="rounded-circle d-inline-flex mx-auto mb-3 p-3"
+                 style="width: 64px; height: 64px; background: rgba(37,99,235,0.15); color: #60a5fa; align-items: center; justify-content: center; box-shadow:0 0 25px rgba(37,99,235,0.20);">
+                <i class="fa-solid fa-location-dot fs-3"></i>
+            </div>
+
+            <h1 class="h4 font-heading fw-bold mb-2" style="color:var(--text-primary); letter-spacing:-0.02em;">Track Your Delivery</h1>
+            <p class="small mb-4 mx-auto" style="max-width: 440px; color:var(--text-muted);">
+                Enter your Tracking Reference (TRK-...) or Order Number along with your billing email address to view live courier updates.
+            </p>
+
+            <form asp-controller="OrderTracking" asp-action="Index" method="get" class="row g-3 justify-content-center text-start">
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold" style="color:var(--text-muted);">Tracking or Order #</label>
+                    <input type="text" name="trackingNumber" value="@Context.Request.Query["trackingNumber"]" class="form-control font-monospace text-uppercase rounded-3" placeholder="TRK-XXXXXXXX or HC-PK-..." required />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold" style="color:var(--text-muted);">Account / Billing Email</label>
+                    <input type="email" name="email" value="@Context.Request.Query["email"]" class="form-control rounded-3" placeholder="your-email@domain.com" required />
+                </div>
+                <div class="col-12 text-center mt-3">
+                    <button type="submit" class="btn btn-primary-custom px-5 py-2.5 rounded-pill shadow-sm">
+                        <i class="fa-solid fa-magnifying-glass me-2"></i>Track Order Status
+                    </button>
+                </div>
+            </form>
+
+            @if (ViewBag.NotFoundMessage != null)
+            {
+                <div class="alert alert-warning border-0 small rounded-4 mt-4 d-flex align-items-center gap-2 text-start">
+                    <i class="fa-solid fa-triangle-exclamation text-warning fs-5"></i>
+                    <div>@ViewBag.NotFoundMessage</div>
+                </div>
+            }
+        </div>
+
+        <!-- Tracking Result if found -->
+        @if (Model != null)
+        {
+            var o = Model;
+            int statusStep = o.Status switch
+            {
+                OrderStatus.Pending => 1,
+                OrderStatus.Confirmed => 2,
+                OrderStatus.Packed => 3,
+                OrderStatus.Shipped => 4,
+                OrderStatus.OutForDelivery => 5,
+                OrderStatus.Delivered => 6,
+                _ => 1
+            };
+
+            <div class="card-glass rounded-4 p-4 p-md-5 mb-4 reveal-on-scroll"
+                 style="background:var(--bg-surface); border:1px solid var(--border-default) !important; box-shadow:var(--shadow-sm);">
+                
+                <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2 border-bottom pb-3" style="border-color:var(--border-subtle) !important;">
+                    <div>
+                        <span class="badge bg-primary-subtle text-primary border border-primary font-monospace small mb-1">@o.OrderNumber</span>
+                        <h2 class="h5 font-heading fw-bold mb-0" style="color:var(--text-primary);">Order Tracking Status</h2>
+                    </div>
+                    <div>
+                        <span class="badge bg-success-subtle text-success border border-success rounded-pill px-3 py-1.5 small fw-bold">
+                            <i class="fa-solid fa-circle-check me-1"></i>Status: @o.Status
+                        </span>
+                    </div>
+                </div>
+
+                <!-- 6-Stage Visual Timeline -->
+                <div class="row g-2 text-center mb-4 small">
+                    <div class="col-2">
+                        <div class="p-2.5 rounded-3 mb-1.5" style="background:@(statusStep >= 1 ? "var(--grad-btn)" : "var(--bg-surface-elevated)"); color:@(statusStep >= 1 ? "#fff" : "var(--text-muted)");">
+                            <i class="fa-solid fa-file-invoice"></i>
+                        </div>
+                        <span class="text-xs @(statusStep >= 1 ? "fw-bold text-primary" : "")" style="color:@(statusStep >= 1 ? "var(--brand-primary)" : "var(--text-muted)");">Ordered</span>
+                    </div>
+                    <div class="col-2">
+                        <div class="p-2.5 rounded-3 mb-1.5" style="background:@(statusStep >= 2 ? "var(--grad-btn)" : "var(--bg-surface-elevated)"); color:@(statusStep >= 2 ? "#fff" : "var(--text-muted)");">
+                            <i class="fa-solid fa-check"></i>
+                        </div>
+                        <span class="text-xs @(statusStep >= 2 ? "fw-bold text-primary" : "")" style="color:@(statusStep >= 2 ? "var(--brand-primary)" : "var(--text-muted)");">Confirmed</span>
+                    </div>
+                    <div class="col-2">
+                        <div class="p-2.5 rounded-3 mb-1.5" style="background:@(statusStep >= 3 ? "var(--grad-btn)" : "var(--bg-surface-elevated)"); color:@(statusStep >= 3 ? "#fff" : "var(--text-muted)");">
+                            <i class="fa-solid fa-box"></i>
+                        </div>
+                        <span class="text-xs @(statusStep >= 3 ? "fw-bold text-primary" : "")" style="color:@(statusStep >= 3 ? "var(--brand-primary)" : "var(--text-muted)");">Packed</span>
+                    </div>
+                    <div class="col-2">
+                        <div class="p-2.5 rounded-3 mb-1.5" style="background:@(statusStep >= 4 ? "var(--grad-btn)" : "var(--bg-surface-elevated)"); color:@(statusStep >= 4 ? "#fff" : "var(--text-muted)");">
+                            <i class="fa-solid fa-truck-fast"></i>
+                        </div>
+                        <span class="text-xs @(statusStep >= 4 ? "fw-bold text-primary" : "")" style="color:@(statusStep >= 4 ? "var(--brand-primary)" : "var(--text-muted)");">Shipped</span>
+                    </div>
+                    <div class="col-2">
+                        <div class="p-2.5 rounded-3 mb-1.5" style="background:@(statusStep >= 5 ? "var(--grad-btn)" : "var(--bg-surface-elevated)"); color:@(statusStep >= 5 ? "#fff" : "var(--text-muted)");">
+                            <i class="fa-solid fa-motorcycle"></i>
+                        </div>
+                        <span class="text-xs @(statusStep >= 5 ? "fw-bold text-primary" : "")" style="color:@(statusStep >= 5 ? "var(--brand-primary)" : "var(--text-muted)");">Out for Delivery</span>
+                    </div>
+                    <div class="col-2">
+                        <div class="p-2.5 rounded-3 mb-1.5" style="background:@(statusStep >= 6 ? "linear-gradient(135deg,#10b981,#059669)" : "var(--bg-surface-elevated)"); color:@(statusStep >= 6 ? "#fff" : "var(--text-muted)");">
+                            <i class="fa-solid fa-house-circle-check"></i>
+                        </div>
+                        <span class="text-xs @(statusStep >= 6 ? "fw-bold text-success" : "")" style="color:@(statusStep >= 6 ? "var(--status-success)" : "var(--text-muted)");">Delivered</span>
+                    </div>
+                </div>
+
+                <!-- Order Details -->
+                <div class="p-3 rounded-4 small mb-4" style="background:var(--bg-surface-elevated); border:1px solid var(--border-subtle);">
+                    <div class="row g-2">
+                        <div class="col-sm-6">
+                            <span class="d-block" style="color:var(--text-muted);">Courier Service:</span>
+                            <strong style="color:var(--text-primary);">@o.ShippingMethod</strong>
+                        </div>
+                        <div class="col-sm-6">
+                            <span class="d-block" style="color:var(--text-muted);">Destination:</span>
+                            <strong style="color:var(--text-primary);">@o.City, @o.State</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Package Contents -->
+                <h3 class="h6 font-heading fw-bold mb-2" style="color:var(--text-primary);">Package Contents</h3>
+                <div class="d-flex flex-column gap-2 mb-4">
+                    @foreach (var item in o.Items)
+                    {
+                        <div class="d-flex align-items-center justify-content-between p-2 rounded-3 border small"
+                             style="background:var(--bg-surface); border-color:var(--border-default) !important;">
+                            <div class="d-flex align-items-center gap-2">
+                                <img src="@item.ProductImage" class="rounded-2 border" style="width: 36px; height: 36px; object-fit: cover; border-color:var(--border-default) !important;" alt="@item.ProductTitle" />
+                                <span class="fw-semibold" style="color:var(--text-primary);">@item.ProductTitle</span>
+                            </div>
+                            <span style="color:var(--text-muted);">Qty: @item.Quantity</span>
+                        </div>
+                    }
+                </div>
+
+                <div class="text-end">
+                    <a asp-controller="Account" asp-action="Invoice" asp-route-id="@o.OrderNumber" class="btn btn-glass btn-sm rounded-pill px-3" target="_blank">
+                        <i class="fa-solid fa-print me-1"></i>View Printable Invoice
+                    </a>
+                </div>
+            </div>
+        }
+    </div>
+</div>
