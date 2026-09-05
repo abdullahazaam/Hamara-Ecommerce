@@ -1,11 +1,8 @@
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Data.SqlClient;
 using HamaraCommerce.Data;
 using HamaraCommerce.Models;
 
@@ -32,212 +29,137 @@ namespace HamaraCommerce.Services
         private readonly ApplicationDbContext _context;
         private readonly IEmailSender _emailSender;
         private readonly ILogger<EmailOutboxService> _logger;
+        public EmailOutboxService(ApplicationDbContext context, IEmailSender emailSender, ILogger<EmailOutboxService> logger)
+        { _context = context; _emailSender = emailSender; _logger = logger; }
 
-        public EmailOutboxService(
-            ApplicationDbContext context,
-            IEmailSender emailSender,
-            ILogger<EmailOutboxService> logger)
+        public static EmailOutboxMessage CreateMessage(string toEmail, string subject, string htmlBody,
+            string? plainTextBody = null, string? eventKey = null, string? metadataJson = null)
         {
-            _context = context;
-            _emailSender = emailSender;
-            _logger = logger;
+            if (string.IsNullOrWhiteSpace(toEmail) || toEmail.Trim().Length > 255) throw new ArgumentException("Invalid recipient.");
+            if (string.IsNullOrWhiteSpace(subject) || subject.Trim().Length > 255) throw new ArgumentException("Invalid subject.");
+            if (eventKey?.Trim().Length > 150) throw new ArgumentException("Event key is too long.");
+            return new EmailOutboxMessage { ToEmail = toEmail.Trim(), Subject = subject.Trim(), HtmlBody = htmlBody,
+                PlainTextBody = plainTextBody, EventKey = string.IsNullOrWhiteSpace(eventKey) ? null : eventKey.Trim(),
+                MetadataJson = metadataJson, Status = EmailOutboxStatus.Queued, CreatedAt = DateTime.UtcNow, MaxAttempts = 3 };
         }
 
-        public async Task<EmailOutboxMessage> QueueEmailAsync(
-            string toEmail,
-            string subject,
-            string htmlBody,
-            string? plainTextBody = null,
-            string? eventKey = null,
-            string? metadataJson = null,
+        public async Task<EmailOutboxMessage> QueueEmailAsync(string toEmail, string subject, string htmlBody,
+            string? plainTextBody = null, string? eventKey = null, string? metadataJson = null,
             CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(toEmail))
+            var message = CreateMessage(toEmail, subject, htmlBody, plainTextBody, eventKey, metadataJson);
+            if (message.EventKey != null)
             {
-                throw new ArgumentException("Recipient email address cannot be empty.", nameof(toEmail));
+                var previous = await _context.EmailOutboxMessages.FirstOrDefaultAsync(e => e.EventKey == message.EventKey, cancellationToken);
+                if (previous != null) return previous;
             }
-
-            if (string.IsNullOrWhiteSpace(subject))
-            {
-                throw new ArgumentException("Email subject cannot be empty.", nameof(subject));
-            }
-
-            // Duplicate Protection: check by eventKey if provided
-            if (!string.IsNullOrWhiteSpace(eventKey))
-            {
-                var cleanKey = eventKey.Trim();
-                var existing = await _context.EmailOutboxMessages
-                    .FirstOrDefaultAsync(e => e.EventKey == cleanKey, cancellationToken);
-
-                if (existing != null)
-                {
-                    _logger.LogInformation("Outbox duplicate eventKey '{EventKey}' detected. Returning existing outbox message #{Id}.", cleanKey, existing.Id);
-                    return existing;
-                }
-            }
-
-            var message = new EmailOutboxMessage
-            {
-                EventKey = !string.IsNullOrWhiteSpace(eventKey) ? eventKey.Trim() : null,
-                ToEmail = toEmail.Trim().ToLowerInvariant(),
-                Subject = subject.Trim(),
-                HtmlBody = htmlBody,
-                PlainTextBody = plainTextBody,
-                Status = EmailOutboxStatus.Queued,
-                CreatedAt = DateTime.UtcNow,
-                AttemptCount = 0,
-                MaxAttempts = 3,
-                MetadataJson = metadataJson
-            };
-
             _context.EmailOutboxMessages.Add(message);
-            await _context.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation("Queued transactional email #{Id} for {ToEmail} (Subject: '{Subject}', EventKey: '{EventKey}')",
-                message.Id, message.ToEmail, message.Subject, message.EventKey ?? "none");
-
+            try { await _context.SaveChangesAsync(cancellationToken); }
+            catch (DbUpdateException ex) when (message.EventKey != null && ex.InnerException is SqlException sql && (sql.Number == 2601 || sql.Number == 2627))
+            {
+                _context.Entry(message).State = EntityState.Detached;
+                var previous = await _context.EmailOutboxMessages.FirstOrDefaultAsync(e => e.EventKey == message.EventKey, cancellationToken);
+                if (previous == null) throw;
+                return previous;
+            }
             return message;
         }
 
+        private IQueryable<EmailOutboxMessage> Eligible(DateTime now) => _context.EmailOutboxMessages.Where(e =>
+            (e.Status == EmailOutboxStatus.Queued || e.Status == EmailOutboxStatus.Blocked ||
+             (e.Status == EmailOutboxStatus.Failed && e.AttemptCount < e.MaxAttempts) ||
+             (e.Status == EmailOutboxStatus.Processing && (e.LockExpiresAt == null || e.LockExpiresAt <= now))) &&
+            (e.NextAttemptAt == null || e.NextAttemptAt <= now));
+
         public async Task<int> ProcessOutboxAsync(int batchSize = 10, CancellationToken cancellationToken = default)
         {
-            var now = DateTime.UtcNow;
-
-            // Fetch pending messages: Queued OR (Failed with attempts remaining and retry backoff reached)
-            var eligibleMessages = await _context.EmailOutboxMessages
-                .Where(e => e.Status == EmailOutboxStatus.Queued || 
-                           (e.Status == EmailOutboxStatus.Failed && e.AttemptCount < e.MaxAttempts && (e.NextAttemptAt == null || e.NextAttemptAt <= now)))
-                .OrderBy(e => e.CreatedAt)
-                .Take(batchSize)
-                .ToListAsync(cancellationToken);
-
-            if (!eligibleMessages.Any())
+            var ids = await Eligible(DateTime.UtcNow).OrderBy(e => e.CreatedAt)
+                .Take(Math.Clamp(batchSize, 1, 100)).Select(e => e.Id).ToListAsync(cancellationToken);
+            int count = 0;
+            foreach (var id in ids)
             {
-                return 0;
+                cancellationToken.ThrowIfCancellationRequested();
+                if (await DispatchSingleAsync(id, cancellationToken) != null) count++;
             }
-
-            int processedCount = 0;
-
-            foreach (var msg in eligibleMessages)
-            {
-                if (cancellationToken.IsCancellationRequested) break;
-
-                msg.AttemptCount++;
-                msg.Status = EmailOutboxStatus.Processing;
-                msg.ProcessedAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync(cancellationToken);
-
-                try
-                {
-                    var result = await _emailSender.SendEmailAsync(msg.ToEmail, msg.Subject, msg.HtmlBody, msg.PlainTextBody, cancellationToken);
-
-                    if (result.Success)
-                    {
-                        msg.Status = EmailOutboxStatus.Sent;
-                        msg.LastError = null;
-                        msg.ProcessedAt = DateTime.UtcNow;
-                        _logger.LogInformation("Email #{Id} successfully dispatched to {ToEmail}.", msg.Id, msg.ToEmail);
-                    }
-                    else if (result.IsBlocked)
-                    {
-                        // SMTP credentials missing: mark BLOCKED honestly, never claim sent
-                        msg.Status = EmailOutboxStatus.Blocked;
-                        msg.LastError = result.ErrorMessage ?? "SMTP credentials are not configured. Delivery blocked.";
-                        msg.ProcessedAt = DateTime.UtcNow;
-                        _logger.LogWarning("Email #{Id} to {ToEmail} BLOCKED: {Reason}", msg.Id, msg.ToEmail, msg.LastError);
-                    }
-                    else
-                    {
-                        msg.LastError = result.ErrorMessage;
-                        msg.ProcessedAt = DateTime.UtcNow;
-
-                        if (msg.AttemptCount >= msg.MaxAttempts)
-                        {
-                            msg.Status = EmailOutboxStatus.Failed;
-                            _logger.LogError("Email #{Id} to {ToEmail} failed permanently after {Attempts} attempts. Error: {Error}",
-                                msg.Id, msg.ToEmail, msg.AttemptCount, msg.LastError);
-                        }
-                        else
-                        {
-                            // Exponential retry backoff: 2^attempt minutes (2m, 4m, etc.)
-                            var delayMinutes = Math.Pow(2, msg.AttemptCount);
-                            msg.NextAttemptAt = DateTime.UtcNow.AddMinutes(delayMinutes);
-                            msg.Status = EmailOutboxStatus.Failed;
-                            _logger.LogWarning("Email #{Id} to {ToEmail} failed attempt {Attempt}. Will retry at {NextAttempt}. Error: {Error}",
-                                msg.Id, msg.ToEmail, msg.AttemptCount, msg.NextAttemptAt, msg.LastError);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    msg.LastError = ex.Message;
-                    msg.ProcessedAt = DateTime.UtcNow;
-
-                    if (msg.AttemptCount >= msg.MaxAttempts)
-                    {
-                        msg.Status = EmailOutboxStatus.Failed;
-                    }
-                    else
-                    {
-                        msg.NextAttemptAt = DateTime.UtcNow.AddMinutes(Math.Pow(2, msg.AttemptCount));
-                        msg.Status = EmailOutboxStatus.Failed;
-                    }
-                    _logger.LogError(ex, "Unhandled exception dispatching email #{Id} to {ToEmail}", msg.Id, msg.ToEmail);
-                }
-
-                await _context.SaveChangesAsync(cancellationToken);
-                processedCount++;
-            }
-
-            return processedCount;
+            return count;
         }
 
         public async Task<EmailOutboxMessage?> DispatchSingleAsync(long messageId, CancellationToken cancellationToken = default)
         {
-            var msg = await _context.EmailOutboxMessages.FirstOrDefaultAsync(e => e.Id == messageId, cancellationToken);
-            if (msg == null) return null;
-
-            msg.AttemptCount++;
-            msg.Status = EmailOutboxStatus.Processing;
-            msg.ProcessedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync(cancellationToken);
-
+            var now = DateTime.UtcNow;
+            var token = Guid.NewGuid().ToString("N");
+            // Atomic SQL claim. Sent messages and live leases cannot be dispatched again.
+            if (_context.Database.IsRelational())
+            {
+                var claimed = await Eligible(now).Where(e => e.Id == messageId).ExecuteUpdateAsync(s => s
+                    .SetProperty(e => e.Status, EmailOutboxStatus.Processing)
+                    .SetProperty(e => e.LockToken, token)
+                    .SetProperty(e => e.LockExpiresAt, now.AddMinutes(5))
+                    .SetProperty(e => e.ProcessedAt, now), cancellationToken);
+                if (claimed == 0) return null;
+            }
+            else
+            {
+                // Unit-test provider only: this path does not prove database concurrency.
+                var candidate = await Eligible(now).FirstOrDefaultAsync(e => e.Id == messageId, cancellationToken);
+                if (candidate == null) return null;
+                candidate.Status = EmailOutboxStatus.Processing;
+                candidate.LockToken = token;
+                candidate.LockExpiresAt = now.AddMinutes(5);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+            var msg = await _context.EmailOutboxMessages.AsNoTracking().FirstAsync(e => e.Id == messageId, cancellationToken);
+            var status = EmailOutboxStatus.Failed;
+            string? error = null;
+            DateTime? retryAt = null;
+            var attempts = msg.AttemptCount + 1;
             try
             {
-                var result = await _emailSender.SendEmailAsync(msg.ToEmail, msg.Subject, msg.HtmlBody, msg.PlainTextBody, cancellationToken);
-                if (result.Success)
-                {
-                    msg.Status = EmailOutboxStatus.Sent;
-                    msg.LastError = null;
-                }
+                // Bound sending well below the lease duration. Crash recovery is at-least-once:
+                // SMTP itself cannot guarantee exactly-once after a server accepts a message.
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeout.CancelAfter(TimeSpan.FromSeconds(60));
+                var result = await _emailSender.SendEmailAsync(msg.ToEmail, msg.Subject, msg.HtmlBody, msg.PlainTextBody, timeout.Token);
+                if (result.Success) status = EmailOutboxStatus.Sent;
                 else if (result.IsBlocked)
                 {
-                    msg.Status = EmailOutboxStatus.Blocked;
-                    msg.LastError = result.ErrorMessage;
+                    status = EmailOutboxStatus.Blocked;
+                    attempts = msg.AttemptCount; // Missing configuration does not exhaust delivery retries.
+                    retryAt = DateTime.UtcNow.AddMinutes(5);
+                    error = result.ErrorMessage;
                 }
-                else
-                {
-                    msg.Status = EmailOutboxStatus.Failed;
-                    msg.LastError = result.ErrorMessage;
-                    if (msg.AttemptCount < msg.MaxAttempts)
-                    {
-                        msg.NextAttemptAt = DateTime.UtcNow.AddMinutes(Math.Pow(2, msg.AttemptCount));
-                    }
-                }
+                else error = result.ErrorMessage;
             }
             catch (Exception ex)
             {
-                msg.Status = EmailOutboxStatus.Failed;
-                msg.LastError = ex.Message;
-                if (msg.AttemptCount < msg.MaxAttempts)
+                error = ex.Message;
+                _logger.LogWarning(ex, "Outbox delivery failed for message {MessageId}", messageId);
+            }
+            if (status == EmailOutboxStatus.Failed && attempts < msg.MaxAttempts)
+                retryAt = DateTime.UtcNow.AddMinutes(Math.Pow(2, attempts));
+            if (error?.Length > 1000) error = error[..1000];
+            var finished = DateTime.UtcNow;
+            // Fencing: a worker cannot overwrite another worker's reclaimed message.
+            if (_context.Database.IsRelational())
+            {
+                await _context.EmailOutboxMessages.Where(e => e.Id == messageId && e.LockToken == token)
+                    .ExecuteUpdateAsync(s => s.SetProperty(e => e.Status, status)
+                        .SetProperty(e => e.AttemptCount, attempts).SetProperty(e => e.LastError, error)
+                        .SetProperty(e => e.NextAttemptAt, retryAt).SetProperty(e => e.ProcessedAt, finished)
+                        .SetProperty(e => e.LockToken, (string?)null).SetProperty(e => e.LockExpiresAt, (DateTime?)null), CancellationToken.None);
+            }
+            else
+            {
+                var tracked = await _context.EmailOutboxMessages.FirstAsync(e => e.Id == messageId, CancellationToken.None);
+                if (tracked.LockToken == token)
                 {
-                    msg.NextAttemptAt = DateTime.UtcNow.AddMinutes(Math.Pow(2, msg.AttemptCount));
+                    tracked.Status = status; tracked.AttemptCount = attempts; tracked.LastError = error;
+                    tracked.NextAttemptAt = retryAt; tracked.ProcessedAt = finished;
+                    tracked.LockToken = null; tracked.LockExpiresAt = null;
+                    await _context.SaveChangesAsync(CancellationToken.None);
                 }
             }
-
-            msg.ProcessedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync(cancellationToken);
-            return msg;
+            return await _context.EmailOutboxMessages.AsNoTracking().FirstAsync(e => e.Id == messageId, CancellationToken.None);
         }
     }
 

@@ -20,12 +20,12 @@ namespace HamaraCommerce.Tests
         public static ApplicationDbContext CreateSqlServerDbContext(string? dbName = null)
         {
             var dbIdentifier = dbName ?? "HamaraCommerce_ConcurrencyTestDb";
-            var connStr = $"Server=(localdb)\\mssqllocaldb;Database={dbIdentifier};Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True;Connect Timeout=15";
+            var connStr = GetSqlServerConnectionString(dbIdentifier);
             var sqlOptions = new DbContextOptionsBuilder<ApplicationDbContext>()
                 .UseSqlServer(connStr)
                 .Options;
             var sqlContext = new ApplicationDbContext(sqlOptions);
-            
+
             // Strictly enforce SQL Server: Do NOT silently fall back to InMemory
             sqlContext.Database.EnsureCreated();
             return sqlContext;
@@ -34,7 +34,13 @@ namespace HamaraCommerce.Tests
         public static string GetSqlServerConnectionString(string? dbName = null)
         {
             var dbIdentifier = dbName ?? "HamaraCommerce_ConcurrencyTestDb";
-            return $"Server=(localdb)\\mssqllocaldb;Database={dbIdentifier};Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True;Connect Timeout=15";
+            var configured = Environment.GetEnvironmentVariable("HAMARA_TEST_SQL_CONNECTION");
+            var builder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(configured ??
+                "Server=(localdb)\\mssqllocaldb;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True;Connect Timeout=15");
+            if (!dbIdentifier.StartsWith("HamaraCommerce_", StringComparison.Ordinal))
+                dbIdentifier = "HamaraCommerce_" + dbIdentifier;
+            builder.InitialCatalog = dbIdentifier;
+            return builder.ConnectionString;
         }
 
         public static (ApplicationDbContext context, bool isSqlServer) CreateTestDbContext(string? dbName = null)

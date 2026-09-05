@@ -113,17 +113,7 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.SlidingExpiration = true;
 
     // Disabled sessions rejection: invalidate principal if user is inactive or deleted
-    options.Events.OnValidatePrincipal = async context =>
-    {
-        var userManager = context.HttpContext.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
-        var user = await userManager.GetUserAsync(context.Principal);
-        if (user == null || !user.IsActive)
-        {
-            context.RejectPrincipal();
-            await Microsoft.AspNetCore.Authentication.AuthenticationHttpContextExtensions.SignOutAsync(
-                context.HttpContext, IdentityConstants.ApplicationScheme);
-        }
-    };
+    options.Events.OnValidatePrincipal = CommerceSessionValidator.ValidateAsync;
 });
 
 // ==========================================
@@ -189,6 +179,15 @@ builder.Services.AddScoped<IEmailOutboxService, EmailOutboxService>();
 builder.Services.AddHostedService<EmailOutboxBackgroundService>();
 builder.Services.AddScoped<ISeoService, SeoService>();
 
+if (builder.Environment.IsProduction())
+{
+    var publicSiteUrl = builder.Configuration["PublicSiteUrl"] ?? builder.Configuration["SiteUrl"];
+    if (!Uri.TryCreate(publicSiteUrl, UriKind.Absolute, out var publicUri) ||
+        publicUri.Scheme != Uri.UriSchemeHttps || publicUri.IsLoopback || !string.IsNullOrEmpty(publicUri.UserInfo) ||
+        !string.IsNullOrEmpty(publicUri.Query) || !string.IsNullOrEmpty(publicUri.Fragment))
+        throw new InvalidOperationException("Set PublicSiteUrl to this store's public HTTPS URL before production startup.");
+}
+
 var app = builder.Build();
 
 // ==========================================
@@ -210,7 +209,8 @@ using (var scope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "An error occurred while migrating or seeding the SQL database.");
+        logger.LogCritical(ex, "Database migration or seeding failed; refusing to start with an incompatible schema.");
+        throw;
     }
 }
 
@@ -239,7 +239,7 @@ app.Use(async (context, next) =>
     response.Headers.Append("X-Frame-Options", "DENY");
     response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
     response.Headers.Append("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
-    response.Headers.Append("Content-Security-Policy", 
+    response.Headers.Append("Content-Security-Policy",
         "default-src 'self'; " +
         "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " +
         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; " +

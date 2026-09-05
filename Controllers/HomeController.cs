@@ -181,29 +181,12 @@ namespace HamaraCommerce.Controllers
             };
 
             _context.ContactMessages.Add(contactMessage);
-            await _context.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation("Contact inquiry #{Id} received from {Email}", contactMessage.Id, contactMessage.Email);
-
-            // Queue notification to support
             var inquiryEmailBody = $"<p><strong>From:</strong> {System.Net.WebUtility.HtmlEncode(name)} ({System.Net.WebUtility.HtmlEncode(email)})</p><p><strong>Phone:</strong> {System.Net.WebUtility.HtmlEncode(phoneNumber ?? "N/A")}</p><p><strong>Subject:</strong> {System.Net.WebUtility.HtmlEncode(subject)}</p><p><strong>Message:</strong><br />{System.Net.WebUtility.HtmlEncode(message)}</p>";
-            if (_emailOutboxService != null)
-            {
-                await _emailOutboxService.QueueEmailAsync(
-                    "support@hamaracommerce.pk",
-                    $"[Support Desk] New Inquiry: {subject}",
-                    inquiryEmailBody,
-                    eventKey: $"contact-form:{contactMessage.Id}",
-                    cancellationToken: cancellationToken);
-            }
-            else
-            {
-                _ = _emailSender.SendEmailAsync(
-                    "support@hamaracommerce.pk",
-                    $"[Support Desk] New Inquiry: {subject}",
-                    inquiryEmailBody,
-                    cancellationToken: cancellationToken);
-            }
+            var notificationSubject = $"[Support Desk] New Inquiry: {subject.Trim()}";
+            if (notificationSubject.Length > 255) notificationSubject = notificationSubject[..255];
+            _context.EmailOutboxMessages.Add(EmailOutboxService.CreateMessage("support@hamaracommerce.pk",
+                notificationSubject, inquiryEmailBody, eventKey: $"contact-form:{Guid.NewGuid():N}"));
+            await _context.SaveChangesAsync(cancellationToken);
 
             if (isAjax)
             {

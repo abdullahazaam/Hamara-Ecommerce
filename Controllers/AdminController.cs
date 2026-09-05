@@ -63,7 +63,7 @@ namespace HamaraCommerce.Controllers
             int lowStockThreshold = settings.LowStockThreshold;
 
             var validPaidOrdersQuery = _context.Orders
-                .Where(o => o.Status != OrderStatus.Cancelled && 
+                .Where(o => o.Status != OrderStatus.Cancelled &&
                            (o.PaymentStatus == PaymentStatus.Paid || o.Status == OrderStatus.Delivered));
 
             decimal totalRevenue = await validPaidOrdersQuery.SumAsync(o => o.TotalAmount);
@@ -196,12 +196,33 @@ namespace HamaraCommerce.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UpdateOrderStatus(int id, OrderStatus status, string? trackingNumber, string? courierMethod)
+        public Task<IActionResult> UpdateOrderStatus(int id, OrderStatus status, string? trackingNumber, string? courierMethod)
         {
+            return CommerceDatabaseWork.TransactionAsync<IActionResult>(_context, () => UpdateOrderStatusCore(id, status, trackingNumber, courierMethod));
+        }
+
+        private async Task<IActionResult> UpdateOrderStatusCore(int id, OrderStatus status, string? trackingNumber, string? courierMethod)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
             var order = await _context.Orders.Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == id);
             if (order == null) return NotFound();
 
             var prevStatus = order.Status;
+            if (!Enum.IsDefined(status)) return BadRequest("Invalid order status.");
+            if (status == OrderStatus.Cancelled && prevStatus != OrderStatus.Cancelled)
+                return await CancelOrderCore(id, "Cancelled through status update", true);
+            if (status == OrderStatus.Refunded && order.PaymentStatus != PaymentStatus.Refunded)
+            {
+                TempData["ErrorMessage"] = "Record a verified payment refund before marking an order refunded.";
+                return RedirectToAction(nameof(OrderDetails), new { id });
+            }
+            if (status != prevStatus && (prevStatus == OrderStatus.Refunded || (int)status < (int)prevStatus ||
+                (status == OrderStatus.Refunded && prevStatus != OrderStatus.Delivered)))
+            {
+                TempData["ErrorMessage"] = "This order status transition is not allowed.";
+                return RedirectToAction(nameof(OrderDetails), new { id });
+            }
 
             // Reject invalid transitions
             if (prevStatus == OrderStatus.Cancelled && status != OrderStatus.Cancelled)
@@ -220,11 +241,9 @@ namespace HamaraCommerce.Controllers
             if (!string.IsNullOrWhiteSpace(trackingNumber)) order.TrackingNumber = trackingNumber.Trim();
             if (!string.IsNullOrWhiteSpace(courierMethod)) order.ShippingMethod = courierMethod.Trim();
 
-            // Auto-mark Paid on Delivered if COD
-            if (status == OrderStatus.Delivered && order.PaymentStatus == PaymentStatus.Pending)
-            {
-                order.PaymentStatus = PaymentStatus.Paid;
-            }
+            // Delivery is not evidence of a captured payment or COD remittance.
+            if (status == OrderStatus.Delivered && !order.DeliveredAt.HasValue)
+                order.DeliveredAt = DateTime.UtcNow;
 
             if ((status == OrderStatus.Cancelled || status == OrderStatus.Refunded) && (prevStatus != OrderStatus.Cancelled && prevStatus != OrderStatus.Refunded))
             {
@@ -234,27 +253,13 @@ namespace HamaraCommerce.Controllers
             await LogAuditAsync("OrderStatusUpdated", "Order", order.OrderNumber, $"Order status changed from {prevStatus} to {status}. Courier: {order.ShippingMethod}");
             await _context.SaveChangesAsync();
 
-            // Dispatch customer status update notification
-            try
+            if (status != prevStatus)
             {
-                var emailBody = _emailTemplateService.GenerateOrderStatusUpdateEmail(order, prevStatus.ToString(), status.ToString());
-                if (_emailOutboxService != null)
-                {
-                    await _emailOutboxService.QueueEmailAsync(
-                        order.CustomerEmail,
-                        $"Order #{order.OrderNumber} Update: {status}",
-                        emailBody,
-                        eventKey: $"order-status:{order.OrderNumber}:{status}"
-                    );
-                }
-                else
-                {
-                    _ = _emailSender.SendEmailAsync(order.CustomerEmail, $"Order #{order.OrderNumber} Update: {status}", emailBody);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to send status update email to {Email}", order.CustomerEmail);
+                _context.EmailOutboxMessages.Add(EmailOutboxService.CreateMessage(order.CustomerEmail,
+                    $"Order #{order.OrderNumber} Update: {status}",
+                    _emailTemplateService.GenerateOrderStatusUpdateEmail(order, prevStatus.ToString(), status.ToString()),
+                    eventKey: $"order-status:{order.OrderNumber}:{status}"));
+                await _context.SaveChangesAsync();
             }
 
             TempData["SuccessMessage"] = $"Order #{order.OrderNumber} status successfully updated to {status}.";
@@ -263,14 +268,21 @@ namespace HamaraCommerce.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CancelOrder(int id, string reason, bool restoreInventory = true)
+        public Task<IActionResult> CancelOrder(int id, string reason, bool restoreInventory = true)
         {
+            return CommerceDatabaseWork.TransactionAsync<IActionResult>(_context, () => CancelOrderCore(id, reason, restoreInventory));
+        }
+
+        private async Task<IActionResult> CancelOrderCore(int id, string reason, bool restoreInventory = true)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
             var order = await _context.Orders.Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == id);
             if (order == null) return NotFound();
 
-            if (order.Status == OrderStatus.Cancelled)
+            if (order.Status is OrderStatus.Cancelled or OrderStatus.Refunded or OrderStatus.Delivered or OrderStatus.Shipped or OrderStatus.OutForDelivery)
             {
-                TempData["ErrorMessage"] = "This order is already cancelled.";
+                TempData["ErrorMessage"] = "This order cannot be cancelled in its current state.";
                 return RedirectToAction(nameof(OrderDetails), new { id });
             }
 
@@ -313,28 +325,11 @@ namespace HamaraCommerce.Controllers
             await LogAuditAsync("OrderCancelled", "Order", order.OrderNumber, $"Cancelled order #{order.OrderNumber}. Stock restored: {restoreInventory}. Reason: {reason}");
             await _context.SaveChangesAsync();
 
-            // Dispatch customer cancellation email
-            try
-            {
-                var emailBody = _emailTemplateService.GenerateOrderCancellationEmail(order, reason);
-                if (_emailOutboxService != null)
-                {
-                    await _emailOutboxService.QueueEmailAsync(
-                        order.CustomerEmail,
-                        $"Order #{order.OrderNumber} Cancellation Notice",
-                        emailBody,
-                        eventKey: $"order-cancel:{order.OrderNumber}"
-                    );
-                }
-                else
-                {
-                    _ = _emailSender.SendEmailAsync(order.CustomerEmail, $"Order #{order.OrderNumber} Cancellation Notice", emailBody);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to send cancellation email to {Email}", order.CustomerEmail);
-            }
+            _context.EmailOutboxMessages.Add(EmailOutboxService.CreateMessage(order.CustomerEmail,
+                $"Order #{order.OrderNumber} Cancellation Notice",
+                _emailTemplateService.GenerateOrderCancellationEmail(order, reason),
+                eventKey: $"order-cancelled:{order.OrderNumber}"));
+            await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = $"Order #{order.OrderNumber} cancelled successfully.";
             return RedirectToAction(nameof(OrderDetails), new { id });
@@ -382,8 +377,8 @@ namespace HamaraCommerce.Controllers
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var s = search.ToLower().Trim();
-                query = query.Where(u => u.FullName.ToLower().Contains(s) || 
-                                         (u.Email != null && u.Email.ToLower().Contains(s)) || 
+                query = query.Where(u => u.FullName.ToLower().Contains(s) ||
+                                         (u.Email != null && u.Email.ToLower().Contains(s)) ||
                                          (u.PhoneNumber != null && u.PhoneNumber.Contains(s)));
             }
 
@@ -471,8 +466,8 @@ namespace HamaraCommerce.Controllers
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var s = search.ToLower().Trim();
-                query = query.Where(p => p.Title.ToLower().Contains(s) || 
-                                         p.SKU.ToLower().Contains(s) || 
+                query = query.Where(p => p.Title.ToLower().Contains(s) ||
+                                         p.SKU.ToLower().Contains(s) ||
                                          p.Brand.ToLower().Contains(s));
             }
 

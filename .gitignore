@@ -27,6 +27,9 @@ appsettings.Local.json
 *.ldf
 *.db
 *.sqlite
+*.bak
+[Bb]ackup/
+[Bb]ackups/
 
 ## OS Generated
 Thumbs.db
@@ -34,3 +37,8 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 .DS_Store
+
+## Generated test results
+TestResults/
+coverage/
+*.trx

@@ -17,6 +17,11 @@ namespace HamaraCommerce.Models
         public string IdempotencyKey { get; set; } = string.Empty;
         public string? UserId { get; set; }
         public string CustomerEmail { get; set; } = string.Empty;
+        // Immutable server-priced cart only; never persist card numbers or CVC.
+        public string? CartSnapshotJson { get; set; }
+        public int HashVersion { get; set; }
+        [System.ComponentModel.DataAnnotations.Timestamp]
+        public byte[] RowVersion { get; set; } = Array.Empty<byte>();
         public string RequestHash { get; set; } = string.Empty;
         public IdempotencyStatus Status { get; set; } = IdempotencyStatus.Processing;
 

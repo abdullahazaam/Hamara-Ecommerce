@@ -171,11 +171,11 @@ namespace HamaraCommerce.Services
                         .FirstOrDefaultAsync();
                 }
 
-                var activeItemData = activeItems.Select(i => new CartItemData 
-                { 
-                    ProductId = i.ProductId, 
-                    VariantId = i.VariantId, 
-                    Quantity = i.Quantity 
+                var activeItemData = activeItems.Select(i => new CartItemData
+                {
+                    ProductId = i.ProductId,
+                    VariantId = i.VariantId,
+                    Quantity = i.Quantity
                 }).ToList();
 
                 var couponCheck = await ValidateCouponAsync(result.AppliedCouponCode, result.SubTotal, userId, userEmail, activeItemData);
@@ -186,7 +186,7 @@ namespace HamaraCommerce.Services
                     result.CouponDiscountPercentage = couponCheck.Coupon.DiscountPercentage;
                     result.CouponFixedDiscountAmount = couponCheck.Coupon.FixedDiscountAmount;
                     result.CouponGrantsFreeShipping = couponCheck.Coupon.FreeShipping;
-                    
+
                     // Strictly clamp coupon discount so it never exceeds SubTotal and is non-negative
                     result.CouponDiscountAmount = Math.Min(result.SubTotal, Math.Max(0m, couponCheck.CalculatedDiscount));
                 }
@@ -209,8 +209,8 @@ namespace HamaraCommerce.Services
 
             // 7. Shipping Calculation (authoritative via store settings & selected delivery tier)
             var (isShipValid, calculatedShippingFee, shippingName) = _shippingTaxService.CalculateShippingFee(
-                result.ShippingMethodCode, 
-                result.SubTotal, 
+                result.ShippingMethodCode,
+                result.SubTotal,
                 result.CouponGrantsFreeShipping);
 
             result.ShippingMethodName = string.IsNullOrEmpty(shippingName) ? result.ShippingMethodCode : shippingName;
@@ -232,10 +232,10 @@ namespace HamaraCommerce.Services
         }
 
         public async Task<CouponValidationResult> ValidateCouponAsync(
-            string couponCode, 
-            decimal subtotal, 
-            string? userId = null, 
-            string? customerEmail = null, 
+            string couponCode,
+            decimal subtotal,
+            string? userId = null,
+            string? customerEmail = null,
             List<CartItemData>? items = null)
         {
             if (string.IsNullOrWhiteSpace(couponCode))
@@ -341,7 +341,7 @@ namespace HamaraCommerce.Services
             {
                 if (items == null || !items.Any())
                 {
-                    string targetName = coupon.ApplicableCategory?.Name 
+                    string targetName = coupon.ApplicableCategory?.Name
                         ?? (hasCategoryRestriction ? "the specified category" : (coupon.ApplicableProduct?.Title ?? "the specified product"));
                     return new CouponValidationResult
                     {
@@ -387,7 +387,7 @@ namespace HamaraCommerce.Services
 
                 if (eligibleCount == 0 || restrictedSubtotal <= 0m)
                 {
-                    string targetName = coupon.ApplicableCategory?.Name 
+                    string targetName = coupon.ApplicableCategory?.Name
                         ?? (hasCategoryRestriction ? "the specified category" : (coupon.ApplicableProduct?.Title ?? "the specified product"));
                     return new CouponValidationResult
                     {
@@ -501,106 +501,43 @@ namespace HamaraCommerce.Services
             return false;
         }
 
-        public async Task<bool> RestoreCouponRedemptionAsync(Order order)
+        public Task<bool> RestoreCouponRedemptionAsync(Order order) =>
+            CommerceDatabaseWork.TransactionAsync(_context, () => RestoreCouponCore(order));
+
+        private async Task<bool> RestoreCouponCore(Order order)
         {
-            if (order == null || string.IsNullOrWhiteSpace(order.CouponCode))
+            if (order == null || string.IsNullOrWhiteSpace(order.CouponCode)) return false;
+            var code = order.CouponCode.Trim().ToUpperInvariant();
+            if (_context.Database.IsSqlServer())
+                await _context.Database.ExecuteSqlInterpolatedAsync($"SELECT Id FROM Coupons WITH (UPDLOCK,HOLDLOCK) WHERE Code={code}");
+            var coupon = await _context.Coupons.FirstOrDefaultAsync(c => c.Code == code);
+            if (coupon == null) return false;
+            if (_context.Database.IsRelational()) await _context.Entry(coupon).ReloadAsync();
+            var redemption = await _context.CouponRedemptions.FirstOrDefaultAsync(r => r.OrderId == order.Id && r.CouponCode == code);
+            if (redemption != null && _context.Database.IsRelational()) await _context.Entry(redemption).ReloadAsync();
+            if (redemption?.IsRestored == true) return false;
+            if (redemption == null)
             {
-                return false;
+                if (order.CustomerNotes?.Contains($"[CouponRestored:{code}]") == true ||
+                    order.CustomerNotes?.Contains($"[COUPON_RESTORED:{code}]") == true) return false;
+                redemption = new CouponRedemption { CouponId = coupon.Id, CouponCode = code, OrderId = order.Id,
+                    UserId = order.UserId, CustomerEmail = order.CustomerEmail, DiscountAmount = order.DiscountAmount,
+                    RedeemedAt = order.OrderDate };
+                _context.CouponRedemptions.Add(redemption);
             }
-
-            var normalizedCode = order.CouponCode.Trim().ToUpperInvariant();
-
-            // 1. Relational database atomic restoration (ensures exact-once execution under concurrent calls)
-            if (_context.Database.IsRelational())
-            {
-                int affectedRedemptions = await _context.CouponRedemptions
-                    .Where(r => r.OrderId == order.Id && r.CouponCode == normalizedCode && !r.IsRestored)
-                    .ExecuteUpdateAsync(s => s
-                        .SetProperty(r => r.IsRestored, true)
-                        .SetProperty(r => r.RestoredAt, DateTime.UtcNow)
-                        .SetProperty(r => r.RestoreReason, $"Restored on order #{order.OrderNumber} cancellation/refund"));
-
-                if (affectedRedemptions > 0)
-                {
-                    await _context.Coupons
-                        .Where(c => c.Code == normalizedCode && c.UsageCount > 0)
-                        .ExecuteUpdateAsync(s => s.SetProperty(c => c.UsageCount, c => c.UsageCount - 1));
-
-                    _logger.LogInformation("Atomically restored coupon {Code} on order #{OrderNumber}", normalizedCode, order.OrderNumber);
-                    return true;
-                }
-
-                // If no row was updated, check if it was already restored
-                var alreadyRestored = await _context.CouponRedemptions
-                    .AnyAsync(r => r.OrderId == order.Id && r.CouponCode == normalizedCode && r.IsRestored);
-                if (alreadyRestored)
-                {
-                    return false;
-                }
-            }
-            else
-            {
-                // In-memory provider fallback for unit tests
-                var redemption = await _context.CouponRedemptions
-                    .FirstOrDefaultAsync(r => r.OrderId == order.Id && r.CouponCode == normalizedCode);
-
-                if (redemption != null)
-                {
-                    if (redemption.IsRestored)
-                    {
-                        return false;
-                    }
-
-                    redemption.IsRestored = true;
-                    redemption.RestoredAt = DateTime.UtcNow;
-                    redemption.RestoreReason = $"Restored on order #{order.OrderNumber} cancellation/refund";
-
-                    var coupon = await _context.Coupons.FirstOrDefaultAsync(c => c.Code == normalizedCode);
-                    if (coupon != null && coupon.UsageCount > 0)
-                    {
-                        coupon.UsageCount--;
-                    }
-                    await _context.SaveChangesAsync();
-                    return true;
-                }
-            }
-
-            // Fallback for pre-migration historical orders:
-            var marker = $"[CouponRestored:{normalizedCode}]";
-            if (order.CustomerNotes != null && (order.CustomerNotes.Contains(marker) || order.CustomerNotes.Contains($"[COUPON_RESTORED:{normalizedCode}]")))
-            {
-                return false;
-            }
-
-            var histCoupon = await _context.Coupons.FirstOrDefaultAsync(c => c.Code == normalizedCode);
-            if (histCoupon != null)
-            {
-                var newRedemption = new CouponRedemption
-                {
-                    CouponId = histCoupon.Id,
-                    CouponCode = histCoupon.Code,
-                    OrderId = order.Id,
-                    UserId = order.UserId,
-                    CustomerEmail = order.CustomerEmail,
-                    DiscountAmount = order.DiscountAmount,
-                    RedeemedAt = order.OrderDate,
-                    IsRestored = true,
-                    RestoredAt = DateTime.UtcNow,
-                    RestoreReason = $"Historical restoration for order #{order.OrderNumber}"
-                };
-                _context.CouponRedemptions.Add(newRedemption);
-                if (histCoupon.UsageCount > 0)
-                {
-                    histCoupon.UsageCount--;
-                }
-                await _context.SaveChangesAsync();
-                return true;
-            }
-
-            return false;
+            redemption.IsRestored = true;
+            redemption.RestoredAt = DateTime.UtcNow;
+            redemption.RestoreReason = $"Restored on order #{order.OrderNumber} cancellation/refund";
+            coupon.UsageCount = Math.Max(0, coupon.UsageCount - 1);
+            // Caller cancellation changes, redemption and usage count share one transaction.
+            await _context.SaveChangesAsync();
+            return true;
         }
 
-        public async Task<int> BackfillHistoricalCouponRedemptionsAsync()
+        public Task<int> BackfillHistoricalCouponRedemptionsAsync() =>
+            CommerceDatabaseWork.TransactionAsync(_context, BackfillHistoricalCouponRedemptionsCore);
+
+        private async Task<int> BackfillHistoricalCouponRedemptionsCore()
         {
             var ordersWithCoupons = await _context.Orders
                 .Where(o => !string.IsNullOrEmpty(o.CouponCode))

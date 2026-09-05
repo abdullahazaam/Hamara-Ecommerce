@@ -18,6 +18,13 @@ namespace HamaraCommerce.Services
             _logger = logger;
         }
 
+        private static string StableReference(string prefix, PaymentProcessingRequest request)
+        {
+            var key = string.IsNullOrWhiteSpace(request.IdempotencyKey) ? request.OrderNumber : request.IdempotencyKey;
+            var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(prefix + ":" + key));
+            return prefix + "-" + Convert.ToHexString(bytes)[..24];
+        }
+
         public bool IsDevelopmentSandboxAvailable => _env.IsDevelopment();
 
         public System.Collections.Generic.IEnumerable<PaymentMethodOption> GetAvailablePaymentMethods()
@@ -81,7 +88,7 @@ namespace HamaraCommerce.Services
             if (string.Equals(method, "CashOnDelivery", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(method, "COD", StringComparison.OrdinalIgnoreCase))
             {
-                _logger.LogInformation("Processing Cash on Delivery for Order {OrderNumber}, Amount: {Amount} {Currency}", 
+                _logger.LogInformation("Processing Cash on Delivery for Order {OrderNumber}, Amount: {Amount} {Currency}",
                     request.OrderNumber, request.Amount, request.Currency);
 
                 return new PaymentProcessingResult
@@ -89,7 +96,7 @@ namespace HamaraCommerce.Services
                     Success = true,
                     Status = PaymentStatus.Pending,
                     Provider = "CashOnDelivery",
-                    ProviderReference = $"COD-{Guid.NewGuid():N}"[..18].ToUpperInvariant(),
+                    ProviderReference = StableReference("COD", request),
                     ProcessedAt = DateTime.UtcNow
                 };
             }
@@ -110,15 +117,15 @@ namespace HamaraCommerce.Services
                     };
                 }
 
-                _logger.LogInformation("Processing Sandbox Payment for Order {OrderNumber}, Amount: {Amount} {Currency}", 
+                _logger.LogInformation("Processing Sandbox Payment for Order {OrderNumber}, Amount: {Amount} {Currency}",
                     request.OrderNumber, request.Amount, request.Currency);
 
                 string cardNum = (request.CardNumber ?? string.Empty).Replace(" ", "").Replace("-", "");
                 string last4 = cardNum.Length >= 4 ? cardNum[^4..] : "4242";
 
                 // Check for simulated failure
-                if (request.SimulateFailure || 
-                    cardNum.EndsWith("0000") || 
+                if (request.SimulateFailure ||
+                    cardNum.EndsWith("0000") ||
                     string.Equals(request.CardholderName, "DECLINE", StringComparison.OrdinalIgnoreCase))
                 {
                     _logger.LogWarning("Sandbox card payment simulated failure for Order {OrderNumber}.", request.OrderNumber);
@@ -140,7 +147,7 @@ namespace HamaraCommerce.Services
                     Success = true,
                     Status = PaymentStatus.Paid,
                     Provider = "Development Sandbox Gateway",
-                    ProviderReference = $"SBX-{Guid.NewGuid():N}"[..20].ToUpperInvariant(),
+                    ProviderReference = StableReference("SBX", request),
                     CardLast4 = last4,
                     CardBrand = cardNum.StartsWith("5") ? "Mastercard" : "Visa",
                     ProcessedAt = DateTime.UtcNow

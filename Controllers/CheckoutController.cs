@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System;
 using System.Data;
 using System.Linq;
@@ -147,6 +148,16 @@ namespace HamaraCommerce.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ProcessOrder(CheckoutFormViewModel model)
         {
+            if (string.IsNullOrWhiteSpace(model.IdempotencyToken) || model.IdempotencyToken.Length > 64)
+                return BadRequest("A valid checkout token is required. Reload checkout and try again.");
+            await using var gate = await CommerceDatabaseWork.TryLockAsync(_context,
+                "checkout:" + model.IdempotencyToken, HttpContext.RequestAborted);
+            if (gate == null) return Conflict("This checkout is processing. Retry the same request shortly.");
+            return await ProcessOrderCore(model);
+        }
+
+        private async Task<IActionResult> ProcessOrderCore(CheckoutFormViewModel model)
+        {
             var user = User.Identity?.IsAuthenticated == true ? await _userManager.GetUserAsync(User) : null;
 
             // 0. Enforce EnableGuestCheckout
@@ -157,36 +168,49 @@ namespace HamaraCommerce.Controllers
                 return RedirectToAction("Login", "Account", new { returnUrl = "/Checkout" });
             }
 
-            var rawCart = await _cartService.GetRawCartDataAsync();
-            var cart = await _pricingService.CalculateCartAsync(rawCart, user?.Id, model.ShippingMethod);
-            model.Cart = cart;
-            model.IsDevelopmentSandboxEnabled = _paymentGateway.IsDevelopmentSandboxAvailable;
-
-            // 0.1 Validate Payment Method Support
-            if (!_paymentGateway.IsMethodSupported(model.PaymentMethod))
-            {
-                ModelState.AddModelError(nameof(model.PaymentMethod), $"The payment method '{model.PaymentMethod}' is not currently available. Please select Cash on Delivery.");
-            }
-
-            // 1. Idempotency Check with Database Persistence, State Machine & Owner Binding
-            if (string.IsNullOrWhiteSpace(model.IdempotencyToken))
-            {
-                model.IdempotencyToken = Guid.NewGuid().ToString("N");
-                HttpContext.Session.SetString(IdempotencySessionKey, model.IdempotencyToken);
-            }
-
-            var emailLower = model.CustomerEmail?.Trim().ToLowerInvariant() ?? string.Empty;
-            string requestHash = ComputeRequestHash(model, cart);
-
             var existingRecord = await _context.CheckoutIdempotencyRecords
                 .FirstOrDefaultAsync(r => r.IdempotencyKey == model.IdempotencyToken);
+            var emailLower = model.CustomerEmail?.Trim().ToLowerInvariant() ?? string.Empty;
+            // Authenticate ownership BEFORE deserializing or exposing any saved purchase data.
+            if (existingRecord != null &&
+                (existingRecord.UserId != null ? existingRecord.UserId != user?.Id :
+                    !string.Equals(existingRecord.CustomerEmail, emailLower, StringComparison.OrdinalIgnoreCase)))
+                return Forbid();
+
+            ShoppingCartViewModel cart;
+            if (existingRecord?.CartSnapshotJson != null)
+            {
+                cart = JsonSerializer.Deserialize<ShoppingCartViewModel>(existingRecord.CartSnapshotJson)
+                    ?? throw new InvalidOperationException("Checkout snapshot is invalid.");
+            }
+            else if (existingRecord?.Status == IdempotencyStatus.Completed && existingRecord.OrderId.HasValue)
+            {
+                // Compatibility for completed purchases made before snapshots were introduced.
+                var saved = await _context.Orders.AsNoTracking().Include(o => o.Items)
+                    .FirstOrDefaultAsync(o => o.Id == existingRecord.OrderId);
+                if (saved == null) return Conflict("Saved checkout order could not be found. Contact support.");
+                cart = new ShoppingCartViewModel { GrandTotal = saved.TotalAmount, SubTotal = saved.Subtotal,
+                    AppliedCouponCode = saved.CouponCode, CurrencyCode = saved.Currency,
+                    Items = saved.Items.Select(i => new CartItemViewModel { ProductId = i.ProductId,
+                        VariantId = i.VariantId, Quantity = i.Quantity, UnitPrice = i.UnitPrice }).ToList() };
+            }
+            else
+            {
+                var rawCart = await _cartService.GetRawCartDataAsync();
+                cart = await _pricingService.CalculateCartAsync(rawCart, user?.Id, model.ShippingMethod);
+            }
+            model.Cart = cart;
+            model.IsDevelopmentSandboxEnabled = _paymentGateway.IsDevelopmentSandboxAvailable;
+            if (!_paymentGateway.IsMethodSupported(model.PaymentMethod))
+                ModelState.AddModelError(nameof(model.PaymentMethod), "Select an available payment method.");
+            string requestHash = ComputeRequestHash(model, cart, existingRecord?.HashVersion ?? 2);
 
             bool isPaymentRecovered = false;
 
             if (existingRecord != null)
             {
                 // Expiry Check
-                if (existingRecord.ExpiresAt < DateTime.UtcNow)
+                if (existingRecord.ExpiresAt < DateTime.UtcNow && existingRecord.Status != IdempotencyStatus.Completed && string.IsNullOrEmpty(existingRecord.PaymentReference))
                 {
                     _logger.LogWarning("Checkout idempotency token expired: {Token}", model.IdempotencyToken);
                     ModelState.AddModelError(string.Empty, "This checkout session has expired. Please return to your cart and start a fresh checkout.");
@@ -252,41 +276,17 @@ namespace HamaraCommerce.Controllers
                     });
                 }
 
-                if (existingRecord.Status == IdempotencyStatus.Processing)
+                if (existingRecord.Status == IdempotencyStatus.RecoveryRequired && string.IsNullOrEmpty(existingRecord.PaymentReference))
                 {
-                    // Check lock timeout (2 minutes)
-                    if (existingRecord.LockedAt != null && DateTime.UtcNow - existingRecord.LockedAt.Value < TimeSpan.FromMinutes(2))
-                    {
-                        _logger.LogWarning("Checkout submission already in progress for token {Token}", model.IdempotencyToken);
-                        Response.StatusCode = StatusCodes.Status409Conflict;
-                        TempData["ErrorMessage"] = "A checkout submission is already being processed for this order. Please wait a moment.";
-                        return RedirectToAction("Index", "Cart");
-                    }
-                    else
-                    {
-                        existingRecord.LockedAt = DateTime.UtcNow;
-                        await _context.SaveChangesAsync();
-                    }
+                    // An external call may have succeeded before its result was saved. Never charge blindly.
+                    return Conflict("Payment outcome is awaiting reconciliation. Contact support with your checkout reference; do not pay again.");
                 }
-                else if (existingRecord.Status == IdempotencyStatus.PaymentCompleted ||
-                         (existingRecord.Status == IdempotencyStatus.RecoveryRequired && !string.IsNullOrEmpty(existingRecord.PaymentReference)))
-                {
-                    // Safe Recovery Mode: payment already charged; proceed to finalize order without re-charging
-                    isPaymentRecovered = true;
-                    existingRecord.Status = IdempotencyStatus.Processing;
-                    existingRecord.LockedAt = DateTime.UtcNow;
-                    await _context.SaveChangesAsync();
-                }
-                else if (existingRecord.Status == IdempotencyStatus.Failed)
-                {
-                    existingRecord.Status = IdempotencyStatus.Processing;
-                    existingRecord.LockedAt = DateTime.UtcNow;
-                    existingRecord.FailureReason = null;
-                    await _context.SaveChangesAsync();
-                }
+                isPaymentRecovered = !string.IsNullOrEmpty(existingRecord.PaymentReference);
+                existingRecord.LockedAt = DateTime.UtcNow;
+                existingRecord.Status = isPaymentRecovered ? IdempotencyStatus.PaymentCompleted : IdempotencyStatus.Processing;
+                await _context.SaveChangesAsync();
             }
 
-            // Atomic Insert for new record
             CheckoutIdempotencyRecord currentRecord;
             if (existingRecord != null)
             {
@@ -300,6 +300,8 @@ namespace HamaraCommerce.Controllers
                     UserId = user?.Id,
                     CustomerEmail = emailLower,
                     RequestHash = requestHash,
+                    CartSnapshotJson = JsonSerializer.Serialize(cart),
+                    HashVersion = 2,
                     Status = IdempotencyStatus.Processing,
                     LockedAt = DateTime.UtcNow,
                     CreatedAt = DateTime.UtcNow,
@@ -314,26 +316,10 @@ namespace HamaraCommerce.Controllers
                 }
                 catch (DbUpdateException)
                 {
-                    // Concurrency race: another thread just inserted this key
-                    existingRecord = await _context.CheckoutIdempotencyRecords.AsNoTracking()
-                        .FirstOrDefaultAsync(r => r.IdempotencyKey == model.IdempotencyToken);
-
-                    if (existingRecord?.Status == IdempotencyStatus.Completed && existingRecord.OrderNumber != null)
-                    {
-                        if (!string.IsNullOrEmpty(existingRecord.GuestAccessToken))
-                        {
-                            HttpContext.Session.SetString($"GuestOrderToken_{existingRecord.OrderNumber}", existingRecord.GuestAccessToken);
-                        }
-                        return RedirectToAction(nameof(OrderConfirmation), new
-                        {
-                            orderNumber = existingRecord.OrderNumber,
-                            guestToken = existingRecord.GuestAccessToken
-                        });
-                    }
-
-                    Response.StatusCode = StatusCodes.Status409Conflict;
-                    TempData["ErrorMessage"] = "A checkout submission is already being processed for this order. Please wait a moment.";
-                    return RedirectToAction("Index", "Cart");
+                    _context.Entry(newRecord).State = EntityState.Detached;
+                    // Do not expose a collided record's order/token. The next request follows normal owner/hash checks.
+                    if (!await _context.CheckoutIdempotencyRecords.AsNoTracking().AnyAsync(r => r.IdempotencyKey == model.IdempotencyToken)) throw;
+                    return Conflict("Checkout state changed. Retry the same request.");
                 }
             }
 
@@ -342,6 +328,7 @@ namespace HamaraCommerce.Controllers
             {
                 currentRecord.Status = IdempotencyStatus.Failed;
                 currentRecord.FailureReason = "Cart empty";
+                RefreshCheckoutToken(model);
                 await _context.SaveChangesAsync();
 
                 ModelState.AddModelError(string.Empty, "Your cart is empty or has no available items.");
@@ -349,10 +336,11 @@ namespace HamaraCommerce.Controllers
             }
 
             var validItems = cart.Items.Where(i => i.IsAvailable && i.Quantity > 0).ToList();
-            if (!validItems.Any())
+            if (!validItems.Any() || validItems.Count != cart.Items.Count)
             {
                 currentRecord.Status = IdempotencyStatus.Failed;
                 currentRecord.FailureReason = "All items out of stock";
+                RefreshCheckoutToken(model);
                 await _context.SaveChangesAsync();
 
                 ModelState.AddModelError(string.Empty, "All items in your cart are currently out of stock.");
@@ -403,6 +391,7 @@ namespace HamaraCommerce.Controllers
                     {
                         currentRecord.Status = IdempotencyStatus.Failed;
                         currentRecord.FailureReason = "Limited coupon requires account with verified email";
+                RefreshCheckoutToken(model);
                         await _context.SaveChangesAsync();
 
                         ModelState.AddModelError(string.Empty, $"Coupon '{couponCheck.Code}' has customer usage limits and requires an account with a verified email address. Entered email alone is not eligible.");
@@ -416,6 +405,7 @@ namespace HamaraCommerce.Controllers
             {
                 currentRecord.Status = IdempotencyStatus.Failed;
                 currentRecord.FailureReason = "Validation errors";
+                RefreshCheckoutToken(model);
                 await _context.SaveChangesAsync();
 
                 HttpContext.Session.SetString(IdempotencySessionKey, model.IdempotencyToken);
@@ -424,7 +414,10 @@ namespace HamaraCommerce.Controllers
             }
 
             // Authoritative Order Reference & Financials
-            var publicOrderNumber = GenerateSecureOrderNumber();
+            var publicOrderNumber = currentRecord.OrderNumber ?? GenerateSecureOrderNumber();
+            currentRecord.OrderNumber = publicOrderNumber;
+            currentRecord.CartSnapshotJson ??= JsonSerializer.Serialize(cart);
+            await _context.SaveChangesAsync();
             var trackingNumber = $"TRK-{RandomNumberGenerator.GetInt32(10000000, 99999999)}";
 
             decimal subtotal = cart.SubTotal;
@@ -439,6 +432,8 @@ namespace HamaraCommerce.Controllers
 
             if (isPaymentRecovered && !string.IsNullOrEmpty(currentRecord.PaymentReference))
             {
+                if (currentRecord.PaymentAmount != totalAmount)
+                    return Conflict("Saved payment amount does not match this purchase. Support reconciliation is required.");
                 _logger.LogInformation("Checkout recovering previously authorized payment {Ref} for idempotency token {Token}",
                     currentRecord.PaymentReference, currentRecord.IdempotencyKey);
 
@@ -455,9 +450,10 @@ namespace HamaraCommerce.Controllers
             {
                 var paymentRequest = new PaymentProcessingRequest
                 {
+                    IdempotencyKey = currentRecord.IdempotencyKey,
                     OrderNumber = publicOrderNumber,
                     Amount = totalAmount,
-                    Currency = _shippingTaxService.CurrencyCode,
+                    Currency = cart.CurrencyCode,
                     CustomerName = model.CustomerName,
                     CustomerEmail = model.CustomerEmail,
                     PaymentMethod = model.PaymentMethod,
@@ -468,7 +464,16 @@ namespace HamaraCommerce.Controllers
                     SimulateFailure = model.SimulatePaymentFailure
                 };
 
-                paymentResult = await _paymentGateway.ProcessPaymentAsync(paymentRequest);
+                // Persist intent before the external side effect. A crash leaves an honest uncertain outcome.
+                currentRecord.Status = IdempotencyStatus.RecoveryRequired;
+                currentRecord.FailureReason = "Payment outcome awaiting reconciliation";
+                await _context.SaveChangesAsync();
+                try { paymentResult = await _paymentGateway.ProcessPaymentAsync(paymentRequest); }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Uncertain payment outcome for checkout {Key}", currentRecord.IdempotencyKey);
+                    return Conflict("Payment outcome is awaiting reconciliation. Contact support before retrying payment.");
+                }
 
                 if (!paymentResult.Success)
                 {
@@ -499,9 +504,23 @@ namespace HamaraCommerce.Controllers
 
             await executionStrategy.ExecuteAsync(async () =>
             {
-                using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+                transactionError = null;
+                // Reload all tracked stock/coupon values inside the transaction, including after a retry.
+                _context.ChangeTracker.Clear();
+                using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
                 try
                 {
+                    currentRecord = await _context.CheckoutIdempotencyRecords.FirstAsync(r => r.IdempotencyKey == model.IdempotencyToken);
+                    if (currentRecord.Status == IdempotencyStatus.Completed && currentRecord.OrderId.HasValue)
+                    {
+                        createdOrder = await _context.Orders.Include(o => o.Items).FirstAsync(o => o.Id == currentRecord.OrderId);
+                        await transaction.CommitAsync();
+                        return;
+                    }
+                    // Lock products in stable order before reading tracked quantities.
+                    if (_context.Database.IsSqlServer())
+                        foreach (var productId in validItems.Select(i => i.ProductId).Distinct().OrderBy(i => i))
+                            await _context.Database.ExecuteSqlInterpolatedAsync($"SELECT Id FROM Products WITH (UPDLOCK,HOLDLOCK) WHERE Id={productId}");
                     // Step A: Live Stock Verification & Concurrency Row Lock
                     foreach (var item in validItems)
                     {
@@ -529,7 +548,7 @@ namespace HamaraCommerce.Controllers
                             liveStock = variant.Stock;
                         }
 
-                        if (liveStock < item.Quantity)
+                        if (liveStock < validItems.Where(i => i.ProductId == item.ProductId && i.VariantId == item.VariantId).Sum(i => i.Quantity) || prod.Stock < validItems.Where(i => i.ProductId == item.ProductId).Sum(i => i.Quantity))
                         {
                             transactionError = $"Insufficient stock for '{item.Title}'. Only {liveStock} unit{(liveStock == 1 ? "" : "s")} available right now.";
                             await transaction.RollbackAsync();
@@ -541,7 +560,15 @@ namespace HamaraCommerce.Controllers
                     Coupon? couponEntity = null;
                     if (cart.CouponIsValid && !string.IsNullOrEmpty(cart.AppliedCouponCode))
                     {
+                        if (_context.Database.IsSqlServer())
+                            await _context.Database.ExecuteSqlInterpolatedAsync($"SELECT Id FROM Coupons WITH (UPDLOCK,HOLDLOCK) WHERE Code={cart.AppliedCouponCode}");
                         couponEntity = await _context.Coupons.FirstOrDefaultAsync(c => c.Code == cart.AppliedCouponCode);
+                        if (couponEntity == null)
+                        {
+                            transactionError = "Applied coupon no longer exists. Support must reconcile the payment.";
+                            await transaction.RollbackAsync();
+                            return;
+                        }
                         if (couponEntity != null)
                         {
                             var now = DateTime.UtcNow;
@@ -605,7 +632,7 @@ namespace HamaraCommerce.Controllers
                         },
                         PaymentStatus = paymentResult.Status,
                         Status = OrderStatus.Confirmed,
-                        Currency = _shippingTaxService.CurrencyCode,
+                        Currency = cart.CurrencyCode,
                         OrderDate = DateTime.UtcNow,
                         EstimatedDeliveryDate = DateTime.UtcNow.AddDays(model.ShippingMethod == "Overnight" ? 1 : (model.ShippingMethod == "Express" ? 2 : 4)),
 
@@ -691,7 +718,7 @@ namespace HamaraCommerce.Controllers
                         ProviderTransactionId = paymentResult.ProviderReference,
                         Status = paymentResult.Status,
                         Amount = totalAmount,
-                        Currency = _shippingTaxService.CurrencyCode,
+                        Currency = cart.CurrencyCode,
                         PaymentMethod = order.PaymentMethod,
                         CardLast4 = paymentResult.CardLast4,
                         CardBrand = paymentResult.CardBrand,
@@ -711,6 +738,11 @@ namespace HamaraCommerce.Controllers
                     currentRecord.OrderId = order.Id;
                     await _context.SaveChangesAsync();
 
+                    // Save the email event in the SAME transaction as the order.
+                    _context.EmailOutboxMessages.Add(EmailOutboxService.CreateMessage(
+                        order.CustomerEmail, $"Order Confirmed - #{order.OrderNumber} | Hamara Commerce",
+                        _emailTemplateService.GenerateOrderConfirmationEmail(order), eventKey: $"order-confirmation:{order.OrderNumber}"));
+                    await _context.SaveChangesAsync();
                     await transaction.CommitAsync();
                     createdOrder = order;
 
@@ -753,32 +785,6 @@ namespace HamaraCommerce.Controllers
             if (!string.IsNullOrEmpty(createdOrder.GuestAccessToken))
             {
                 HttpContext.Session.SetString($"GuestOrderToken_{createdOrder.OrderNumber}", createdOrder.GuestAccessToken);
-            }
-
-            // Dispatch Order Confirmation Email Notification
-            try
-            {
-                var emailHtml = _emailTemplateService.GenerateOrderConfirmationEmail(createdOrder);
-                if (_emailOutboxService != null)
-                {
-                    await _emailOutboxService.QueueEmailAsync(
-                        toEmail: createdOrder.CustomerEmail,
-                        subject: $"Order Confirmed - #{createdOrder.OrderNumber} | Hamara Commerce",
-                        htmlBody: emailHtml,
-                        eventKey: $"order-confirmation:{createdOrder.OrderNumber}"
-                    );
-                }
-                else
-                {
-                    _ = _emailSender.SendEmailAsync(
-                        createdOrder.CustomerEmail,
-                        $"Order Confirmed - #{createdOrder.OrderNumber} | Hamara Commerce",
-                        emailHtml);
-                }
-            }
-            catch (Exception emailEx)
-            {
-                _logger.LogWarning(emailEx, "Failed to enqueue order confirmation email for Order #{OrderNumber}", createdOrder.OrderNumber);
             }
 
             // Post/Redirect/Get pattern
@@ -855,8 +861,22 @@ namespace HamaraCommerce.Controllers
             return View(order);
         }
 
-        private static string ComputeRequestHash(CheckoutFormViewModel model, ShoppingCartViewModel cart)
+        private static string ComputeRequestHash(CheckoutFormViewModel model, ShoppingCartViewModel cart, int version = 2)
         {
+            if (version >= 2)
+            {
+                // JSON avoids delimiter ambiguity and uses invariant numeric serialization.
+                var canonical = JsonSerializer.Serialize(new {
+                    Email = model.CustomerEmail?.Trim().ToLowerInvariant(), Name = model.CustomerName?.Trim(),
+                    Phone = model.CustomerPhone?.Trim(), Address = model.StreetAddress?.Trim(),
+                    City = model.City?.Trim(), State = model.State?.Trim(), PostalCode = model.PostalCode?.Trim(),
+                    Country = model.Country?.Trim(), Shipping = model.ShippingMethod?.Trim(),
+                    Payment = model.PaymentMethod?.Trim(), Notes = model.CustomerNotes?.Trim(),
+                    model.ExpectedGrandTotal, cart.GrandTotal, cart.CurrencyCode, cart.AppliedCouponCode,
+                    Items = cart.Items.OrderBy(i => i.ProductId).ThenBy(i => i.VariantId).Select(i => new { i.ProductId, i.VariantId, i.Quantity, i.UnitPrice })
+                });
+                return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
+            }
             var sb = new StringBuilder();
             sb.Append("EMAIL:").Append(model.CustomerEmail?.Trim().ToLowerInvariant()).Append(';');
             sb.Append("NAME:").Append(model.CustomerName?.Trim().ToLowerInvariant()).Append(';');
@@ -873,12 +893,19 @@ namespace HamaraCommerce.Controllers
             sb.Append("ITEMS:[");
             foreach (var item in cart.Items.OrderBy(i => i.ProductId).ThenBy(i => i.VariantId ?? 0))
             {
-                sb.Append($"{item.ProductId}:{item.VariantId}:{item.Quantity}:{item.UnitPrice:F2};");
+                sb.Append(FormattableString.Invariant($"{item.ProductId}:{item.VariantId}:{item.Quantity}:{item.UnitPrice:F2};"));
             }
             sb.Append(']');
 
             byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString()));
             return Convert.ToHexString(hash);
+        }
+
+        private void RefreshCheckoutToken(CheckoutFormViewModel model)
+        {
+            model.IdempotencyToken = Guid.NewGuid().ToString("N");
+            HttpContext.Session.SetString(IdempotencySessionKey, model.IdempotencyToken);
+            ModelState.Remove(nameof(model.IdempotencyToken));
         }
 
         private static string GenerateSecureOrderNumber()

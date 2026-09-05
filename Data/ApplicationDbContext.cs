@@ -552,6 +552,7 @@ namespace HamaraCommerce.Data
                 entity.Property(r => r.RestoreReason).HasMaxLength(250);
 
                 entity.HasIndex(r => r.CouponCode);
+                entity.HasIndex(r => new { r.OrderId, r.CouponCode }).IsUnique();
                 entity.HasIndex(r => r.OrderId);
                 entity.HasIndex(r => r.UserId);
                 entity.HasIndex(r => r.CustomerEmail);

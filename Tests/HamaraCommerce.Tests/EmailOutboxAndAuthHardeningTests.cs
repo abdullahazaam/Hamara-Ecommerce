@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -123,6 +123,8 @@ namespace HamaraCommerce.Tests
                 WishlistProductIds = new List<int> { 1, 2 }
             };
             var (controller, context, userManagerMock, _) = CreateAccountController(user);
+            context.Products.Add(new Product { Id = 3, Title = "Test Product", Status = ProductStatus.Published, Price = 1000m });
+            await context.SaveChangesAsync();
 
             // Setup failure when saving user
             userManagerMock.Setup(m => m.UpdateAsync(user))

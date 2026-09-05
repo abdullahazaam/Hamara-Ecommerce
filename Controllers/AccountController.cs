@@ -16,7 +16,6 @@ using HamaraCommerce.Services;
 
 namespace HamaraCommerce.Controllers
 {
-    [EnableRateLimiting("AuthPolicy")]
     public class AccountController : Controller
     {
         private readonly UserManager<ApplicationUser> _userManager;
@@ -28,6 +27,7 @@ namespace HamaraCommerce.Controllers
         private readonly IEmailTemplateService _emailTemplateService;
         private readonly IEmailOutboxService? _emailOutboxService;
         private readonly ILogger<AccountController> _logger;
+        private readonly Microsoft.Extensions.Configuration.IConfiguration? _configuration;
 
         public AccountController(
             UserManager<ApplicationUser> userManager,
@@ -38,7 +38,8 @@ namespace HamaraCommerce.Controllers
             IEmailSender emailSender,
             IEmailTemplateService emailTemplateService,
             ILogger<AccountController> logger,
-            IEmailOutboxService? emailOutboxService = null)
+            IEmailOutboxService? emailOutboxService = null,
+            Microsoft.Extensions.Configuration.IConfiguration? configuration = null)
         {
             _userManager = userManager;
             _signInManager = signInManager;
@@ -49,6 +50,15 @@ namespace HamaraCommerce.Controllers
             _emailTemplateService = emailTemplateService;
             _logger = logger;
             _emailOutboxService = emailOutboxService;
+            _configuration = configuration;
+        }
+
+        private string UsePublicOrigin(string callbackUrl)
+        {
+            var origin = _configuration?["PublicSiteUrl"] ?? _configuration?["SiteUrl"];
+            if (!string.IsNullOrWhiteSpace(origin) && Uri.TryCreate(callbackUrl, UriKind.Absolute, out var callback))
+                return origin.TrimEnd('/') + callback.PathAndQuery;
+            return callbackUrl;
         }
 
         private async Task ClaimGuestOrdersAsync(ApplicationUser user)
@@ -194,8 +204,16 @@ namespace HamaraCommerce.Controllers
         [Authorize]
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CancelOrder(CancelOrderViewModel model)
+        public Task<IActionResult> CancelOrder(CancelOrderViewModel model)
         {
+            return CommerceDatabaseWork.TransactionAsync<IActionResult>(_context, () => CancelOrderCore(model));
+        }
+
+        private async Task<IActionResult> CancelOrderCore(CancelOrderViewModel model)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (string.IsNullOrWhiteSpace(model.OrderNumber)) return BadRequest("Order number is required.");
+
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Challenge();
 
@@ -268,8 +286,16 @@ namespace HamaraCommerce.Controllers
         [Authorize]
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ReturnOrder(ReturnOrderViewModel model)
+        public Task<IActionResult> ReturnOrder(ReturnOrderViewModel model)
         {
+            return CommerceDatabaseWork.TransactionAsync<IActionResult>(_context, () => ReturnOrderCore(model));
+        }
+
+        private async Task<IActionResult> ReturnOrderCore(ReturnOrderViewModel model)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (string.IsNullOrWhiteSpace(model.OrderNumber)) return BadRequest("Order number is required.");
+
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Challenge();
 
@@ -292,15 +318,20 @@ namespace HamaraCommerce.Controllers
                 return RedirectToAction(nameof(OrderDetail), new { id = order.OrderNumber });
             }
 
-            if ((DateTime.UtcNow - order.OrderDate).TotalDays > 30)
+            if ((DateTime.UtcNow - (order.DeliveredAt ?? order.OrderDate)).TotalDays > 30)
             {
                 TempData["ErrorMessage"] = "The 30-day return window for this order has expired.";
                 return RedirectToAction(nameof(OrderDetail), new { id = order.OrderNumber });
             }
 
-            order.Status = OrderStatus.Refunded;
+            if (order.ReturnRequestedAt.HasValue)
+            {
+                TempData["SuccessMessage"] = "Your return request is already awaiting review.";
+                return RedirectToAction(nameof(OrderDetail), new { id = order.OrderNumber });
+            }
+            order.ReturnRequestedAt = DateTime.UtcNow;
+            order.ReturnReason = model.Reason;
             order.CustomerNotes = (order.CustomerNotes ?? "") + $" | Return requested by customer on {DateTime.UtcNow:yyyy-MM-dd}: {model.Reason}";
-            await _pricingService.RestoreCouponRedemptionAsync(order);
             await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = $"Return request submitted for Order #{order.OrderNumber}. Our support team will contact you.";
@@ -534,6 +565,8 @@ namespace HamaraCommerce.Controllers
                 isAdded = true;
             }
 
+            if (wishlist.Contains(productId) && !await _context.Products.AnyAsync(p => p.Id == productId && p.Status == ProductStatus.Published))
+                return Json(new { success = false, message = "This product is no longer available." });
             user.WishlistProductIds = wishlist;
             IdentityResult updateResult;
             try
@@ -668,6 +701,7 @@ namespace HamaraCommerce.Controllers
         // 10. AUTHENTICATION (LOGIN, REGISTER, LOGOUT)
         // ==========================================
         [HttpGet]
+        [EnableRateLimiting("AuthPolicy")]
         public IActionResult Login(string? returnUrl = null)
         {
             if (User.Identity?.IsAuthenticated == true)
@@ -680,6 +714,7 @@ namespace HamaraCommerce.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [EnableRateLimiting("AuthPolicy")]
         public async Task<IActionResult> Login(LoginViewModel model, string? returnUrl = null)
         {
             ViewData["ReturnUrl"] = returnUrl;
@@ -737,6 +772,7 @@ namespace HamaraCommerce.Controllers
         }
 
         [HttpGet]
+        [EnableRateLimiting("AuthPolicy")]
         public IActionResult Register(string? returnUrl = null)
         {
             if (User.Identity?.IsAuthenticated == true)
@@ -749,6 +785,7 @@ namespace HamaraCommerce.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [EnableRateLimiting("AuthPolicy")]
         public async Task<IActionResult> Register(RegisterViewModel model, string? returnUrl = null)
         {
             ViewData["ReturnUrl"] = returnUrl;
@@ -783,9 +820,9 @@ namespace HamaraCommerce.Controllers
                     try
                     {
                         var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-                        var callbackUrl = Url.Action("ConfirmEmail", "Account", new { userId = user.Id, code = token }, protocol: Request.Scheme) 
+                        var callbackUrl = Url.Action("ConfirmEmail", "Account", new { userId = user.Id, code = token }, protocol: Request.Scheme)
                                           ?? $"{Request.Scheme}://{Request.Host}/Account/ConfirmEmail?userId={user.Id}&code={Uri.EscapeDataString(token)}";
-                        var emailBody = _emailTemplateService.GenerateAccountVerificationEmail(user.FullName, callbackUrl);
+                        var emailBody = _emailTemplateService.GenerateAccountVerificationEmail(user.FullName, UsePublicOrigin(callbackUrl));
                         if (_emailOutboxService != null)
                         {
                             await _emailOutboxService.QueueEmailAsync(
@@ -822,6 +859,7 @@ namespace HamaraCommerce.Controllers
         // 11. PASSWORD RECOVERY (FORGOT & RESET)
         // ==========================================
         [HttpGet]
+        [EnableRateLimiting("AuthPolicy")]
         public IActionResult ForgotPassword()
         {
             return View();
@@ -829,6 +867,7 @@ namespace HamaraCommerce.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [EnableRateLimiting("AuthPolicy")]
         public async Task<IActionResult> ForgotPassword(ForgotPasswordViewModel model)
         {
             if (!ModelState.IsValid) return View(model);
@@ -837,11 +876,11 @@ namespace HamaraCommerce.Controllers
             if (user != null && user.IsActive)
             {
                 var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-                var callbackUrl = Url.Action("ResetPassword", "Account", new { code = token, email = user.Email }, protocol: Request.Scheme) ?? $"{Request.Scheme}://{Request.Host}/Account/ResetPassword";
-                
+                var callbackUrl = Url.Action("ResetPassword", "Account", new { code = token, email = user.Email }, protocol: Request.Scheme) ?? $"{Request.Scheme}://{Request.Host}/Account/ResetPassword?code={Uri.EscapeDataString(token)}&email={Uri.EscapeDataString(user.Email!)}";
+
                 try
                 {
-                    var emailBody = _emailTemplateService.GeneratePasswordResetEmail(user.FullName, callbackUrl);
+                    var emailBody = _emailTemplateService.GeneratePasswordResetEmail(user.FullName, UsePublicOrigin(callbackUrl));
                     if (_emailOutboxService != null)
                     {
                         await _emailOutboxService.QueueEmailAsync(
@@ -873,6 +912,7 @@ namespace HamaraCommerce.Controllers
         }
 
         [HttpGet]
+        [EnableRateLimiting("AuthPolicy")]
         public IActionResult ResetPassword(string? code = null, string? email = null)
         {
             if (code == null) return BadRequest("A security code must be supplied for password reset.");
@@ -882,6 +922,7 @@ namespace HamaraCommerce.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [EnableRateLimiting("AuthPolicy")]
         public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
         {
             if (!ModelState.IsValid) return View(model);
@@ -915,6 +956,7 @@ namespace HamaraCommerce.Controllers
         // 12. EMAIL CONFIRMATION & RESEND
         // ==========================================
         [HttpGet]
+        [EnableRateLimiting("AuthPolicy")]
         public async Task<IActionResult> ConfirmEmail(string userId, string code)
         {
             if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(code))
@@ -923,7 +965,7 @@ namespace HamaraCommerce.Controllers
             }
 
             var user = await _userManager.FindByIdAsync(userId);
-            if (user == null)
+            if (user == null || !user.IsActive)
             {
                 return NotFound($"Unable to load user with ID '{userId}'.");
             }
@@ -945,6 +987,7 @@ namespace HamaraCommerce.Controllers
         }
 
         [HttpGet]
+        [EnableRateLimiting("AuthPolicy")]
         public IActionResult ResendEmailConfirmation(string? email = null)
         {
             return View(new ResendEmailConfirmationViewModel { Email = email ?? string.Empty });
@@ -952,6 +995,7 @@ namespace HamaraCommerce.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [EnableRateLimiting("AuthPolicy")]
         public async Task<IActionResult> ResendEmailConfirmation(ResendEmailConfirmationViewModel model)
         {
             if (!ModelState.IsValid) return View(model);
@@ -964,7 +1008,7 @@ namespace HamaraCommerce.Controllers
                     var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
                     var callbackUrl = Url.Action("ConfirmEmail", "Account", new { userId = user.Id, code = token }, protocol: Request.Scheme)
                                       ?? $"{Request.Scheme}://{Request.Host}/Account/ConfirmEmail?userId={user.Id}&code={Uri.EscapeDataString(token)}";
-                    var emailBody = _emailTemplateService.GenerateAccountVerificationEmail(user.FullName, callbackUrl);
+                    var emailBody = _emailTemplateService.GenerateAccountVerificationEmail(user.FullName, UsePublicOrigin(callbackUrl));
                     if (_emailOutboxService != null)
                     {
                         await _emailOutboxService.QueueEmailAsync(

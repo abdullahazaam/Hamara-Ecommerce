@@ -259,6 +259,12 @@ namespace HamaraCommerce.Tests
             Assert.NotNull(idempotencyRecord);
             Assert.Equal(IdempotencyStatus.Completed, idempotencyRecord.Status);
             Assert.Equal(orders[0].OrderNumber, idempotencyRecord.OrderNumber);
+            using var replayContext = CreateTestDbContext();
+            var (replayController, replayPayment, _) = CreateController(replayContext, new CartData(), null, "alice@test.com");
+            var replay = await replayController.ProcessOrder(model1);
+            Assert.IsType<RedirectToActionResult>(replay);
+            replayPayment.Verify(p => p.ProcessPaymentAsync(It.IsAny<PaymentProcessingRequest>()), Times.Never);
+            Assert.Single(await replayContext.EmailOutboxMessages.Where(e => e.EventKey!.StartsWith("order-confirmation:")).ToListAsync());
         }
 
         [Fact]
@@ -556,6 +562,32 @@ namespace HamaraCommerce.Tests
             var createdOrder = await verifyCtx2.Orders.Include(o => o.Payments).FirstOrDefaultAsync(o => o.Id == finalRecord.OrderId.Value);
             Assert.NotNull(createdOrder);
             Assert.Equal("TXN-PAID-RECOVER-12345", createdOrder.Payments.First().ProviderTransactionId);
+        }
+
+        [Fact]
+        public async Task UncertainGatewayFailureDoesNotTriggerABlindSecondPayment()
+        {
+            var category = new Category { Name = "Recovery", Slug = "uncertain" };
+            _seedContext.Categories.Add(category); await _seedContext.SaveChangesAsync();
+            var product = new Product { Title = "Recovery Item", SKU = "UNCERTAIN", CategoryId = category.Id,
+                CategoryName = category.Name, Price = 100m, Stock = 5, Status = ProductStatus.Published };
+            _seedContext.Products.Add(product); await _seedContext.SaveChangesAsync();
+            var data = new CartData { Items = new List<CartItemData> { new() { ProductId = product.Id, Quantity = 1 } } };
+            var cart = await _seedPricingService.CalculateCartAsync(data, null, "Standard");
+            var model = new CheckoutFormViewModel { IdempotencyToken = Guid.NewGuid().ToString("N"),
+                CustomerName = "Recovery Buyer", CustomerEmail = "buyer@test.com", CustomerPhone = "03001234567",
+                StreetAddress = "123 Main Street", City = "Karachi", State = "Sindh", PostalCode = "74000",
+                Country = "Pakistan", ShippingMethod = "Standard", PaymentMethod = "SandboxCard", ExpectedGrandTotal = cart.GrandTotal };
+            using var first = CreateTestDbContext();
+            var (controller, payment, _) = CreateController(first, data);
+            payment.Setup(p => p.ProcessPaymentAsync(It.IsAny<PaymentProcessingRequest>())).ThrowsAsync(new TimeoutException("Ambiguous provider response"));
+            Assert.IsType<ConflictObjectResult>(await controller.ProcessOrder(model));
+            using var second = CreateTestDbContext();
+            var (retry, retryPayment, _) = CreateController(second, data);
+            Assert.IsType<ConflictObjectResult>(await retry.ProcessOrder(model));
+            retryPayment.Verify(p => p.ProcessPaymentAsync(It.IsAny<PaymentProcessingRequest>()), Times.Never);
+            Assert.Empty(await second.Orders.ToListAsync());
+            Assert.Equal(IdempotencyStatus.RecoveryRequired, (await second.CheckoutIdempotencyRecords.SingleAsync()).Status);
         }
 
         [Fact]

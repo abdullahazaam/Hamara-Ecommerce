@@ -49,6 +49,9 @@ namespace HamaraCommerce.Models
 
         public string? LastError { get; set; }
 
+        public string? LockToken { get; set; }
+        public DateTime? LockExpiresAt { get; set; }
+
         public string? MetadataJson { get; set; }
     }
 }
