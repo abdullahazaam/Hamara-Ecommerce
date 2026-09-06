@@ -1,90 +1,101 @@
-# Hamara Commerce — Production ASP.NET Core MVC .NET 9 E-Commerce Platform
+# Hamara Commerce
 
-**Hamara Commerce** is a production-grade, highly secure, full-stack ASP.NET Core MVC e-commerce platform architected for modern retail in Pakistan and international markets.
+An ASP.NET Core MVC e-commerce portfolio project built around a Pakistan-focused catalogue, secure customer accounts, server-authoritative pricing, and operational admin workflows.
 
----
+> **Project status:** actively developed portfolio application. It demonstrates production-oriented patterns, but it is not presented as a hosted commercial marketplace or a PCI-certified payment system.
 
-## Key Highlights & Architecture
+## What it demonstrates
 
-- **Framework**: .NET 9.0 (C# 13, ASP.NET Core MVC)
-- **Database Architecture**: Entity Framework Core 9.0 with Persistent Microsoft SQL Server & Atomic Transactions (`IsolationLevel.ReadCommitted` with explicit database-level row locking for stock safety).
-- **Authentication & Security**:
-  - ASP.NET Core Identity with PBKDF2 password hashing and brute-force lockout.
-  - Role-Based Access Control (`Admin`, `Customer`) with `[Authorize(Roles = "Admin")]` strictly enforced across the management backoffice.
-  - Cryptographically secure public Order and Tracking Numbers (`HC-PK-...`, `TRK-...`) preventing internal sequential database key exposure and IDOR attacks.
-  - Global `AutoValidateAntiforgeryTokenAttribute` on all state-altering requests.
-  - Strict Content Security Policy (CSP), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and custom cache-control headers preventing caching on customer and admin routes.
-  - Client IP Rate Limiting for authentication, contact forms, newsletter, and order tracking.
-- **Server-Authoritative Pricing & Cart**:
-  - Real-time cart calculation loading product, variant, and pricing data directly from SQL Server on every calculation.
-  - Dynamic coupon validation with minimum order amounts, maximum discount caps, usage limit enforcement, and expiration checks.
-  - Concurrency-safe atomic checkout preventing stock overselling.
-- **Storefront & Admin Experience**:
-  - 2026 responsive design system with dark/light mode toggle (`[data-theme='dark']`), smooth animations, and WCAG AA contrast compliance.
-  - Dynamic live search modal with keyboard navigation (`Ctrl+K`).
-  - Comprehensive Admin management dashboard with real SQL database metrics, product CRUD, variant matrix, order processing, customer audit logs, and CSV exports.
-- **SEO & Performance**:
-  - Dynamic `/sitemap.xml` and `/robots.txt` generator reflecting published products and categories.
-  - Schema.org JSON-LD structured data (Organization, WebSite, Breadcrumbs, Product, and Offer).
-  - High-performance response compression (Brotli / Gzip) and client asset caching headers.
+- ASP.NET Core MVC on .NET 9 with C# and Razor views
+- Entity Framework Core with SQL Server migrations
+- ASP.NET Core Identity, email confirmation, role-based authorization, and account controls
+- Product catalogue, categories, variants, search, filters, cart, wishlist, coupons, checkout, and order tracking
+- Server-side totals, stock validation, checkout idempotency, and order-scoped guest access
+- Admin catalogue and order-management workflows
+- Transactional email outbox and recovery-oriented checkout records
+- Responsive light/dark storefront, structured metadata, sitemap, and asset caching
+- xUnit regression and SQL Server integration tests
 
----
+## Architecture
 
-## Environment Variables & Configuration
+```text
+Browser / Razor Views
+        |
+ASP.NET Core MVC Controllers
+        |
+Application Services (cart, pricing, payments, email)
+        |
+Entity Framework Core
+        |
+SQL Server
+```
 
-The application can be configured via `appsettings.json` or system environment variables:
+The server remains the source of truth for price, discount, stock, ownership, and final order totals. Client-submitted totals are not trusted.
 
-| Environment Variable | Description | Default / Example |
-|---|---|---|
-| `ConnectionStrings__DefaultConnection` | SQL Server Connection String | `Server=(localdb)\mssqllocaldb;Database=HamaraCommerceDb;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True` |
-| `AdminSeed:Email` | Seeded Master Admin Email | `admin@hamaracommerce.pk` |
-| `AdminSeed:Password` | Seeded Master Admin Initial Password | `Admin@123!` |
-| `Smtp:Host` | SMTP Host for Customer Notifications | *(Optional — Falls back to truthful dev logging if omitted)* |
-| `Smtp:Port` | SMTP Port | `587` |
-| `Smtp:Username` | SMTP Username | `smtp-user` |
-| `Smtp:Password` | SMTP Password | `smtp-pass` |
+## Repository layout
 
----
+| Path | Purpose |
+| --- | --- |
+| `Controllers/` | Storefront, account, checkout, and admin request handling |
+| `Services/` | Pricing, cart, payment, email, and supporting business logic |
+| `Models/` | Domain entities and view models |
+| `Data/` | EF Core context, initialisation, and catalogue data |
+| `Migrations/` | Additive SQL Server schema migrations |
+| `Views/` | Razor storefront and back-office UI |
+| `wwwroot/` | CSS, JavaScript, and local product assets |
+| `Tests/HamaraCommerce.Tests/` | xUnit regression and integration tests |
 
-## Getting Started & Exact Run Commands
+## Run locally
 
-### 1. Restore & Build
-```powershell
+### Requirements
+
+- .NET 9 SDK
+- SQL Server or SQL Server LocalDB
+- EF Core CLI (`dotnet tool install --global dotnet-ef`)
+
+### Setup
+
+```bash
+git clone https://github.com/abdullahazaam/Hamara-Ecommerce.git
+cd Hamara-Ecommerce
 dotnet restore
-dotnet build
-```
-
-### 2. Apply Database Migrations & Initial Seed
-```powershell
 dotnet ef database update
+dotnet run
 ```
-*Note: The application automatically applies pending migrations and seeds initial admin/product catalog upon startup.*
 
-### 3. Run Automated Tests
+The default development connection targets SQL Server LocalDB. Override it without committing secrets:
+
 ```powershell
-dotnet test
+$env:ConnectionStrings__DefaultConnection="Server=(localdb)\MSSQLLocalDB;Database=HamaraCommerceDb;Trusted_Connection=True;TrustServerCertificate=True"
 ```
 
-### 4. Run the Web Application
-```powershell
-dotnet run --launch-profile http
+ASP.NET Core maps nested environment keys with double underscores, for example `Smtp__Host`, `Smtp__Username`, and `Smtp__Password`.
+
+## Tests
+
+```bash
+dotnet build HamaraCommerce.sln
+dotnet test HamaraCommerce.sln
 ```
-Navigate to: `http://localhost:5071` (or `https://localhost:7146` via https profile)
 
----
+Some concurrency and recovery tests require an actual SQL Server instance. Configure the test connection expected by `TestDbContextFactory`; do not treat an in-memory provider as proof of SQL locking behaviour.
 
-## Seeded Default Accounts (Verified & Tested)
+## Development accounts
 
-The following accounts are seeded by `DbInitializer.Initialize` and verified via automated authentication tests:
+Demo accounts are created only by the development seed path. Treat them as local demonstration credentials and replace or disable seeded credentials before any deployment.
 
-- **Administrator**:
-  - Email: `admin@hamaracommerce.pk`
-  - Password: `Admin@123!`
-  - Role: `Admin` (Strictly enforced via `[Authorize(Roles = "Admin")]`)
-  - Redirection: Default sign-in automatically redirects directly to `/Admin` backoffice (while honoring specific deep-linked return URLs).
-  - Safety & Idempotency: In `Development` mode, the password is reset to `Admin@123!` if altered and any lockout/access-failed counts are cleared; in `Production`, passwords are never overwritten on startup.
-- **Customer**:
-  - Email: `customer@hamaracommerce.pk`
-  - Password: `Customer@123!`
-  - Role: `Customer`
-  - Redirection: Standard customer redirect to `/` (or specified `returnUrl` such as `/Account`, `/Checkout`).
+## Security and deployment notes
+
+- Keep connection strings, SMTP credentials, signing keys, and payment credentials outside tracked configuration.
+- Apply migrations to a backed-up database; never replace a database containing real customer/order data with seed data.
+- Only configured payment providers should be exposed to customers.
+- Production deployment still requires HTTPS, secret management, monitoring, backups, an SMTP provider, and payment-provider reconciliation.
+
+## Portfolio focus
+
+The most important engineering work in this repository is not the catalogue size. It is the treatment of identity, order ownership, pricing, stock contention, checkout replay safety, coupon consistency, and recoverable email/payment workflows.
+
+## Author
+
+**Abdullah Azaam** — junior web developer focused on ASP.NET Core, C#, SQL Server, PHP, and Laravel.
+

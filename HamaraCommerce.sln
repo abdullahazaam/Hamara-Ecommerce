@@ -7,7 +7,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HamaraCommerce", "HamaraCom
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HamaraCommerce.Tests", "tests\HamaraCommerce.Tests\HamaraCommerce.Tests.csproj", "{8E604ECB-D683-4213-88BF-B14050593783}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HamaraCommerce.Tests", "Tests\HamaraCommerce.Tests\HamaraCommerce.Tests.csproj", "{8E604ECB-D683-4213-88BF-B14050593783}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

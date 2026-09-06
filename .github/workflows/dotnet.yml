@@ -1,0 +1,25 @@
+name: .NET build
+
+on:
+  push:
+    branches: ["checkpoint/repair-prompt-3", "main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Restore
+        run: dotnet restore HamaraCommerce.sln
+      - name: Build
+        run: dotnet build HamaraCommerce.sln --configuration Release --no-restore
+      - name: Test note
+        run: echo "SQL Server integration tests are intentionally run in the configured SQL Server verification environment."
+
