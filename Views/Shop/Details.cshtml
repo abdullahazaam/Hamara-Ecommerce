@@ -30,6 +30,7 @@
                      alt="@p.Title" 
                      class="img-fluid mx-auto" 
                      data-tilt-z="stage"
+                     onerror="this.onerror=null;this.src='/images/placeholder-product.svg';"
                      style="max-height: 460px; object-fit: contain; width: 100%; transition: opacity 0.3s ease, transform 0.4s var(--ease-spring);" />
             </div>
 
@@ -38,12 +39,12 @@
             {
                 <div class="d-flex gap-2 overflow-x-auto pb-2">
                     <button type="button" class="btn p-0 border rounded-3 overflow-hidden gallery-thumb-btn border-primary shadow-sm" data-img-src="@p.MainImage" style="width: 70px; height: 70px; flex-shrink: 0;">
-                        <img src="@p.MainImage" class="w-100 h-100 object-fit-cover" alt="Main View" />
+                        <img src="@p.MainImage" class="w-100 h-100 object-fit-cover" onerror="this.onerror=null;this.src='/images/placeholder-product.svg';" alt="Main View" />
                     </button>
                     @foreach (var img in p.Images)
                     {
                         <button type="button" class="btn p-0 border rounded-3 overflow-hidden gallery-thumb-btn" data-img-src="@img.ImageUrl" style="width: 70px; height: 70px; flex-shrink: 0; border-color:var(--border-default) !important;">
-                            <img src="@img.ImageUrl" class="w-100 h-100 object-fit-cover" alt="@img.AltText" />
+                            <img src="@img.ImageUrl" class="w-100 h-100 object-fit-cover" onerror="this.onerror=null;this.src='/images/placeholder-product.svg';" alt="@img.AltText" />
                         </button>
                     }
                 </div>

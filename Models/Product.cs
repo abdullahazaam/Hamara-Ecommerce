@@ -41,7 +41,7 @@ namespace HamaraCommerce.Models
                 var mainFromList = Images?.FirstOrDefault(i => i.IsMain)?.ImageUrl;
                 if (!string.IsNullOrEmpty(mainFromList)) return mainFromList;
                 if (!string.IsNullOrEmpty(_mainImage)) return _mainImage;
-                return Images?.FirstOrDefault()?.ImageUrl ?? "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80";
+                return Images?.FirstOrDefault()?.ImageUrl ?? "/images/placeholder-product.svg";
             }
             set => _mainImage = value;
         }
@@ -77,6 +77,12 @@ namespace HamaraCommerce.Models
         public bool IsBestSeller { get; set; }
         public bool IsFlashDeal { get; set; }
         public DateTime? FlashDealEnd { get; set; }
+
+        // Source & Provenance Metadata
+        public string? SourceRetailer { get; set; }
+        public string? SourceProductUrl { get; set; }
+        public string? ImageSourceUrl { get; set; }
+        public DateTime? PriceCheckedAt { get; set; }
         
         // Audit Timestamps & Concurrency Token
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

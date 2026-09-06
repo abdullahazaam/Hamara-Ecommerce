@@ -31,6 +31,7 @@
                      loading="lazy"
                      width="400"
                      height="400"
+                     onerror="this.onerror=null;this.src='/images/placeholder-product.svg';"
                      itemprop="image" />
             }
             else
@@ -135,26 +136,35 @@
         </a>
 
         <!-- Star Rating -->
-        <div class="d-flex align-items-center gap-1.5 mt-auto pt-1" aria-label="Rating: @Model.Rating.ToString("F1") out of 5">
-            <div class="d-inline-flex text-warning small" style="font-size:0.8rem;">
-                @for (int s = 1; s <= 5; s++)
-                {
-                    if (s <= (int)Math.Floor(Model.Rating))
+        @if (Model.ReviewCount > 0 && Model.Rating > 0)
+        {
+            <div class="d-flex align-items-center gap-1.5 mt-auto pt-1" aria-label="Rating: @Model.Rating.ToString("F1") out of 5">
+                <div class="d-inline-flex text-warning small" style="font-size:0.8rem;">
+                    @for (int s = 1; s <= 5; s++)
                     {
-                        <i class="fa-solid fa-star" aria-hidden="true"></i>
+                        if (s <= (int)Math.Floor(Model.Rating))
+                        {
+                            <i class="fa-solid fa-star" aria-hidden="true"></i>
+                        }
+                        else if (s - 0.5 <= Model.Rating)
+                        {
+                            <i class="fa-solid fa-star-half-stroke" aria-hidden="true"></i>
+                        }
+                        else
+                        {
+                            <i class="fa-regular fa-star opacity-40" aria-hidden="true"></i>
+                        }
                     }
-                    else if (s - 0.5 <= Model.Rating)
-                    {
-                        <i class="fa-solid fa-star-half-stroke" aria-hidden="true"></i>
-                    }
-                    else
-                    {
-                        <i class="fa-regular fa-star opacity-40" aria-hidden="true"></i>
-                    }
-                }
+                </div>
+                <span class="text-xs fw-semibold" style="color:var(--text-muted);">(@Model.ReviewCount)</span>
             </div>
-            <span class="text-xs fw-semibold" style="color:var(--text-muted);">(@(Model.ReviewCount > 0 ? Model.ReviewCount.ToString() : "4.9"))</span>
-        </div>
+        }
+        else
+        {
+            <div class="d-flex align-items-center gap-1.5 mt-auto pt-1">
+                <span class="text-xs" style="color:var(--text-muted);font-style:italic;">No reviews yet</span>
+            </div>
+        }
 
         <!-- Price Section (Level 2.5 Prominent Elevation) -->
         <div class="product-card-price" itemprop="offers" itemscope itemtype="https://schema.org/Offer" data-tilt-z="price">

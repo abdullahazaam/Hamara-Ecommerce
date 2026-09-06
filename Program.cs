@@ -178,6 +178,7 @@ builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>();
 builder.Services.AddScoped<IEmailOutboxService, EmailOutboxService>();
 builder.Services.AddHostedService<EmailOutboxBackgroundService>();
 builder.Services.AddScoped<ISeoService, SeoService>();
+builder.Services.AddScoped<ICatalogueImporter, CatalogueImporter>();
 
 if (builder.Environment.IsProduction())
 {
@@ -205,6 +206,34 @@ using (var scope = app.Services.CreateScope())
         var config = services.GetRequiredService<IConfiguration>();
 
         context.Database.Migrate();
+
+        if (args.Contains("--import-catalogue") || args.Contains("--seed-catalogue"))
+        {
+            logger.LogInformation("Executing CLI catalogue import...");
+            var importer = services.GetRequiredService<ICatalogueImporter>();
+            var report = importer.ImportCatalogueAsync().GetAwaiter().GetResult();
+            Console.WriteLine("=================================================");
+            Console.WriteLine("REAL PAKISTANI CATALOGUE IMPORT REPORT");
+            Console.WriteLine("=================================================");
+            Console.WriteLine($"Published Products: {report.PublishedProductCount}");
+            Console.WriteLine($"Total Processed:    {report.TotalProcessed}");
+            Console.WriteLine($"Total Categories:   {report.CategoryCounts.Count}");
+            foreach (var kvp in report.CategoryCounts.OrderBy(k => k.Key))
+            {
+                var (min, max) = report.CategoryPriceRanges[kvp.Key];
+                Console.WriteLine($"  - {kvp.Key,-24}: {kvp.Value} items (PKR {min:N0} - {max:N0})");
+            }
+            Console.WriteLine($"Duplicate SKUs:     {report.DuplicateSkus}");
+            Console.WriteLine($"Duplicate Slugs:    {report.DuplicateSlugs}");
+            Console.WriteLine($"Missing Images:     {report.MissingImages}");
+            Console.WriteLine($"Missing Source URLs:{report.MissingSourceUrls}");
+            Console.WriteLine($"Invalid Prices:     {report.InvalidPrices}");
+            Console.WriteLine($"Legacy Published:   {report.LegacyPublishedProducts}");
+            Console.WriteLine($"Fake Seeded Reviews:{report.FakeSeededReviews}");
+            Console.WriteLine("=================================================");
+            return;
+        }
+
         DbInitializer.Initialize(context, userManager, roleManager, config, isDevelopment: app.Environment.IsDevelopment());
     }
     catch (Exception ex)

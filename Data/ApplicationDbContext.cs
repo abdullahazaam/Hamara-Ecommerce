@@ -121,6 +121,9 @@ namespace HamaraCommerce.Data
                 entity.Property(p => p.DeliveryEstimate).HasMaxLength(100);
                 entity.Property(p => p.ReturnPolicy).HasMaxLength(250);
                 entity.Property(p => p.Warranty).HasMaxLength(100);
+                entity.Property(p => p.SourceRetailer).HasMaxLength(100);
+                entity.Property(p => p.SourceProductUrl).HasMaxLength(1000);
+                entity.Property(p => p.ImageSourceUrl).HasMaxLength(1000);
 
                 // Decimal Precision
                 entity.Property(p => p.Price).HasPrecision(18, 2);
@@ -141,6 +144,7 @@ namespace HamaraCommerce.Data
                 // Indexes & Unique Constraints
                 entity.HasIndex(p => p.Slug).IsUnique();
                 entity.HasIndex(p => p.SKU).IsUnique();
+                entity.HasIndex(p => p.CategoryId);
                 entity.HasIndex(p => p.Title);
                 entity.HasIndex(p => p.CategoryName);
                 entity.HasIndex(p => p.Brand);
