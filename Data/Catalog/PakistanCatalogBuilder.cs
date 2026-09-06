@@ -16,6 +16,7 @@ namespace HamaraCommerce.Data.Catalog
             list.AddRange(CatalogPart3.GetItems());
             list.AddRange(CatalogPart4.GetItems());
             list.AddRange(CatalogPart5.GetItems());
+            list.AddRange(CatalogPart6.GetItems());
             return list;
         }
 
@@ -42,7 +43,11 @@ namespace HamaraCommerce.Data.Catalog
                 new Category { Name = "Kids & Babies", Slug = "kids-babies", Icon = "fa-baby", Description = "Foldable strollers, anti-colic feeding bottles & organic rompers", DisplayOrder = 17, IsFeatured = true },
                 new Category { Name = "Toys & Games", Slug = "toys-games", Icon = "fa-gamepad", Description = "Diecast model cars, Lego building sets & family board games", DisplayOrder = 18, IsFeatured = true },
                 new Category { Name = "Sports & Fitness", Slug = "sports-fitness", Icon = "fa-dumbbell", Description = "English Willow cricket bats, leather balls & gym gear", DisplayOrder = 19, IsFeatured = true },
-                new Category { Name = "Books & Stationery", Slug = "books-stationery", Icon = "fa-book", Description = "Bestselling Urdu & English literature, pens & hardbound journals", DisplayOrder = 20, IsFeatured = true }
+                new Category { Name = "Books & Stationery", Slug = "books-stationery", Icon = "fa-book", Description = "Bestselling Urdu & English literature, pens & hardbound journals", DisplayOrder = 20, IsFeatured = true },
+                new Category { Name = "Car Accessories", Slug = "car-accessories", Icon = "fa-car", Description = "Car covers, floor mats, tyre inflators & emergency tools", DisplayOrder = 21, IsFeatured = true },
+                new Category { Name = "Oils & Car Care", Slug = "car-care-oils", Icon = "fa-oil-can", Description = "Synthetic engine oils, waxes, washes & lubricants", DisplayOrder = 22, IsFeatured = true },
+                new Category { Name = "Car Electronics", Slug = "car-electronics", Icon = "fa-car-battery", Description = "Touchscreen multimedia head units, dash cams & vacuums", DisplayOrder = 23, IsFeatured = true },
+                new Category { Name = "Motorcycle Accessories", Slug = "motorcycle-accessories", Icon = "fa-motorcycle", Description = "Helmets, riding gloves, locks, chains & sprockets", DisplayOrder = 24, IsFeatured = true }
             };
         }
 

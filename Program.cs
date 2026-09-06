@@ -180,6 +180,7 @@ builder.Services.AddHostedService<EmailOutboxBackgroundService>();
 builder.Services.AddScoped<ISeoService, SeoService>();
 builder.Services.AddScoped<ICatalogueImporter, CatalogueImporter>();
 builder.Services.AddScoped<ICatalogueImageRepairService, CatalogueImageRepairService>();
+builder.Services.AddScoped<MarketplaceCatalogueService>();
 
 if (builder.Environment.IsProduction())
 {
@@ -207,6 +208,17 @@ using (var scope = app.Services.CreateScope())
         var config = services.GetRequiredService<IConfiguration>();
 
         context.Database.Migrate();
+
+        if (args.Contains("--marketplace-transform") || args.Contains("--seed-marketplace"))
+        {
+            logger.LogInformation("Executing CLI marketplace catalogue transformation...");
+            var marketService = services.GetRequiredService<MarketplaceCatalogueService>();
+            marketService.RunAsync().GetAwaiter().GetResult();
+            Console.WriteLine("=================================================");
+            Console.WriteLine("MARKETPLACE CATALOGUE TRANSFORMATION COMPLETE");
+            Console.WriteLine("=================================================");
+            return;
+        }
 
         if (args.Contains("--import-catalogue") || args.Contains("--seed-catalogue"))
         {

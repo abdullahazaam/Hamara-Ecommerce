@@ -100,6 +100,12 @@ namespace HamaraCommerce.Data
                 entity.HasIndex(c => c.Slug).IsUnique();
                 entity.HasIndex(c => c.Name);
                 entity.HasIndex(c => c.DisplayOrder);
+                entity.HasIndex(c => c.ParentCategoryId);
+
+                entity.HasOne(c => c.ParentCategory)
+                    .WithMany(c => c.SubCategories)
+                    .HasForeignKey(c => c.ParentCategoryId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
             // ==========================================
@@ -156,6 +162,7 @@ namespace HamaraCommerce.Data
                 entity.HasIndex(p => p.IsFlashDeal);
                 entity.HasIndex(p => p.IsBestSeller);
                 entity.HasIndex(p => p.IsNewArrival);
+                entity.HasIndex(p => p.StorefrontRank);
 
                 entity.HasOne(p => p.Category)
                     .WithMany(c => c.Products)

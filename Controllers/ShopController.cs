@@ -35,9 +35,11 @@ namespace HamaraCommerce.Controllers
         public async Task<IActionResult> Index(
             string? search, string? category, string? brand, 
             decimal? minPrice, decimal? maxPrice, double? minRating, 
-            string? sort, bool inStock = false, bool onSale = false, bool flashDeal = false,
+            string? sort, string? sortBy, bool inStock = false, bool onSale = false, bool flashDeal = false,
             int page = 1, CancellationToken cancellationToken = default)
         {
+            sort = !string.IsNullOrEmpty(sortBy) ? sortBy : sort;
+
             var query = _context.Products
                 .Include(p => p.Category)
                 .Include(p => p.Images)
@@ -56,8 +58,28 @@ namespace HamaraCommerce.Controllers
             if (!string.IsNullOrWhiteSpace(category))
             {
                 var catStr = category.ToLower().Trim();
-                query = query.Where(p => p.CategoryName.ToLower() == catStr || 
-                                         p.Category!.Slug.ToLower() == catStr);
+                var matchedCat = await _context.Categories
+                    .Include(c => c.SubCategories)
+                    .FirstOrDefaultAsync(c => c.Slug.ToLower() == catStr || c.Name.ToLower() == catStr, cancellationToken);
+
+                if (matchedCat != null)
+                {
+                    if (matchedCat.ParentCategoryId == null && matchedCat.SubCategories.Any())
+                    {
+                        var childCatIds = matchedCat.SubCategories.Select(sc => sc.Id).ToList();
+                        childCatIds.Add(matchedCat.Id);
+                        query = query.Where(p => childCatIds.Contains(p.CategoryId));
+                    }
+                    else
+                    {
+                        query = query.Where(p => p.CategoryId == matchedCat.Id);
+                    }
+                }
+                else
+                {
+                    query = query.Where(p => p.CategoryName.ToLower() == catStr || 
+                                             p.Category!.Slug.ToLower() == catStr);
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(brand))
@@ -75,20 +97,27 @@ namespace HamaraCommerce.Controllers
 
             query = sort switch
             {
-                "price_asc" => query.OrderBy(p => p.Price),
-                "price_desc" => query.OrderByDescending(p => p.Price),
-                "rating" => query.OrderByDescending(p => p.Rating),
-                "popular" => query.OrderByDescending(p => p.ReviewCount),
-                "discount" => query.OrderByDescending(p => p.DiscountPercentage),
-                "newest" => query.OrderByDescending(p => p.CreatedAt),
-                _ => query.OrderByDescending(p => p.IsFeatured).ThenByDescending(p => p.Rating)
+                "price_asc" => query.OrderBy(p => p.Price).ThenBy(p => p.Id),
+                "price_desc" => query.OrderByDescending(p => p.Price).ThenBy(p => p.Id),
+                "rating" or "customer_rated" => query.OrderByDescending(p => p.ReviewCount > 0 ? 1 : 0)
+                                                    .ThenByDescending(p => p.Rating)
+                                                    .ThenByDescending(p => p.ReviewCount)
+                                                    .ThenBy(p => p.Id),
+                "discount" => query.OrderByDescending(p => p.DiscountPercentage).ThenBy(p => p.Id),
+                "newest" => query.OrderByDescending(p => p.CreatedAt).ThenBy(p => p.Id),
+                "recommended" or _ => query.OrderBy(p => p.StorefrontRank.HasValue ? p.StorefrontRank.Value : 999999)
+                                           .ThenBy(p => p.Id)
             };
 
             int pageSize = 12;
             int totalItems = await query.CountAsync(cancellationToken);
             var products = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
 
-            var categories = await _context.Categories.OrderBy(c => c.DisplayOrder).ToListAsync(cancellationToken);
+            var categories = await _context.Categories
+                .Include(c => c.SubCategories)
+                .OrderBy(c => c.DisplayOrder)
+                .ToListAsync(cancellationToken);
+
             var brands = await _context.Products
                 .Where(p => p.Status == ProductStatus.Published && !string.IsNullOrEmpty(p.Brand))
                 .Select(p => p.Brand)
@@ -110,7 +139,7 @@ namespace HamaraCommerce.Controllers
                 InStockOnly = inStock,
                 OnSaleOnly = onSale,
                 FlashDealOnly = flashDeal,
-                SortBy = sort,
+                SortBy = string.IsNullOrEmpty(sort) ? "recommended" : sort,
                 CurrentPage = page,
                 PageSize = pageSize,
                 TotalItems = totalItems

@@ -83,6 +83,7 @@ namespace HamaraCommerce.Models
         public string? SourceProductUrl { get; set; }
         public string? ImageSourceUrl { get; set; }
         public DateTime? PriceCheckedAt { get; set; }
+        public int? StorefrontRank { get; set; }
         
         // Audit Timestamps & Concurrency Token
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

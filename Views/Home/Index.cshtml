@@ -1,20 +1,21 @@
 @{
-    ViewData["Title"] = "Discover Quality & Genuine Products";
+    ViewData["Title"] = "HamaraCommerce | Pakistan's Premier Online Marketplace";
     var categories = ViewBag.Categories as List<HamaraCommerce.Models.Category> ?? new();
-    var featuredProducts = ViewBag.FeaturedProducts as List<HamaraCommerce.Models.Product> ?? new();
-    var trendingProducts = ViewBag.TrendingProducts as List<HamaraCommerce.Models.Product> ?? new();
+    var everydayLowPrices = ViewBag.EverydayLowPrices as List<HamaraCommerce.Models.Product> ?? new();
+    var budgetDeals = ViewBag.BudgetDeals as List<HamaraCommerce.Models.Product> ?? new();
+    var mobileAccessories = ViewBag.MobileAccessories as List<HamaraCommerce.Models.Product> ?? new();
+    var beautyPersonalCare = ViewBag.BeautyPersonalCare as List<HamaraCommerce.Models.Product> ?? new();
+    var homeEssentials = ViewBag.HomeEssentials as List<HamaraCommerce.Models.Product> ?? new();
+    var fashionPicks = ViewBag.FashionPicks as List<HamaraCommerce.Models.Product> ?? new();
+    var electronics = ViewBag.Electronics as List<HamaraCommerce.Models.Product> ?? new();
     var newArrivals = ViewBag.NewArrivals as List<HamaraCommerce.Models.Product> ?? new();
-    var bestSellers = ViewBag.BestSellers as List<HamaraCommerce.Models.Product> ?? new();
-    var flashDeals = ViewBag.FlashDeals as List<HamaraCommerce.Models.Product> ?? new();
+    var heroProduct = ViewBag.HeroProduct as HamaraCommerce.Models.Product ?? everydayLowPrices.FirstOrDefault();
 
-    // Select dynamic hero product and secondary product from real database data
-    var heroProduct = flashDeals.FirstOrDefault() ?? featuredProducts.FirstOrDefault() ?? trendingProducts.FirstOrDefault();
-    var secondaryProduct = featuredProducts.Skip(1).FirstOrDefault() ?? trendingProducts.Skip(1).FirstOrDefault() ?? bestSellers.FirstOrDefault();
     string heroImg = !string.IsNullOrEmpty(heroProduct?.MainImage) 
         ? heroProduct.MainImage 
-        : "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80";
-    string heroTitle = heroProduct?.Title ?? "Wireless Noise-Cancelling Headphones";
-    decimal heroPrice = heroProduct?.Price ?? 14999;
+        : "/images/hero-showcase.webp";
+    string heroTitle = heroProduct?.Title ?? "Anker 511 GaN Fast Charger";
+    decimal heroPrice = heroProduct?.Price ?? 4799;
     string heroSlug = heroProduct?.Slug ?? heroProduct?.Id.ToString() ?? "";
 }
 
@@ -27,50 +28,50 @@
         <div class="col-lg-6" style="min-width:0;">
             <div class="hero-trust-badge">
                 <span>🇵🇰</span>
-                Pakistan E-Commerce Portfolio &amp; Retail Demo
+                Pakistan's Verified Multi-Department Marketplace
             </div>
 
             <h1 id="heroHeading" class="hero-heading">
-                Elevate Your Lifestyle with<br>
-                <span class="text-sapphire">Genuine Products</span>
+                Shop Everything You Love at<br>
+                <span class="text-sapphire">HamaraCommerce</span>
             </h1>
 
             <p class="hero-lead">
-                Browse authentic Pakistani electronics, fashion collections, and daily essentials with verified market pricing, transparent stock statuses, and nationwide cash on delivery.
+                Over 1,200 genuine Pakistani products across 12 major departments. Enjoy verified market pricing, transparent stock, and nationwide cash on delivery.
             </p>
 
             <div class="d-flex flex-wrap gap-3 mb-4">
                 <a asp-controller="Shop" asp-action="Index"
                    class="btn btn-primary-custom px-4 py-2.5 rounded-pill shadow-sm">
                     <i class="fa-solid fa-bag-shopping"></i>
-                    <span>Explore Catalog</span>
+                    <span>Explore All Departments</span>
                     <i class="fa-solid fa-arrow-right cta-arrow ms-1"></i>
                 </a>
-                <a asp-controller="Shop" asp-action="Index" asp-route-flashDeal="true"
+                <a asp-controller="Shop" asp-action="Index" asp-route-sortBy="recommended"
                    class="btn btn-hero-secondary px-4 py-2.5 rounded-pill">
-                    <i class="fa-solid fa-bolt text-warning me-1"></i>
-                    <span>Flash Deals</span>
+                    <i class="fa-solid fa-thumbs-up text-primary me-1"></i>
+                    <span>Recommended Picks</span>
                 </a>
             </div>
 
             <!-- Trust micro-stats -->
             <div class="d-flex flex-wrap gap-3">
                 <div class="hero-stat-badge">
-                    <div class="hero-stat-num hero-stat-num--blue">1,000+</div>
-                    <div class="hero-stat-label">Catalogue<br>Products</div>
+                    <div class="hero-stat-num hero-stat-num--blue">1,200+</div>
+                    <div class="hero-stat-label">Published<br>Products</div>
                 </div>
                 <div class="hero-stat-badge">
-                    <div class="hero-stat-num hero-stat-num--green">20</div>
-                    <div class="hero-stat-label">Product<br>Categories</div>
+                    <div class="hero-stat-num hero-stat-num--green">12</div>
+                    <div class="hero-stat-label">Major<br>Departments</div>
                 </div>
                 <div class="hero-stat-badge d-none d-sm-inline-flex">
                     <div class="hero-stat-num hero-stat-num--gold">PKR</div>
-                    <div class="hero-stat-label">Market<br>Pricing</div>
+                    <div class="hero-stat-label">Real Local<br>Pricing</div>
                 </div>
             </div>
         </div>
 
-        <!-- Right: Layered 3D Product Showcase with Parallax -->
+        <!-- Right: Hero Product Showcase -->
         <div class="col-lg-6">
             <div class="hero-3d-stage" data-tilt="hero">
                 <!-- Glare overlay -->
@@ -93,26 +94,14 @@
 
                 <!-- 3D Composition with Image & Badges -->
                 <div class="hero-3d-composition">
-                    <!-- Secondary Product Backdrop (Layered Z-Depth) -->
-                    @if (secondaryProduct != null && secondaryProduct.Id != heroProduct?.Id)
-                    {
-                        <div class="hero-backdrop-stage" aria-hidden="true">
-                            <img src="@(secondaryProduct.MainImage ?? heroImg)" alt="" class="hero-backdrop-img" onerror="this.onerror=null;this.src='/images/placeholder-product.svg';" />
-                            <div class="hero-backdrop-pill">
-                                <span class="text-xs fw-bold hero-backdrop-title">@(secondaryProduct.Title?.Length > 16 ? secondaryProduct.Title.Substring(0, 14) + "..." : secondaryProduct.Title)</span>
-                                <span class="text-xs hero-backdrop-price">Rs. @secondaryProduct.Price.ToString("N0")</span>
-                            </div>
-                        </div>
-                    }
-
                     <!-- Main Product Image Stage -->
                     <a href="@(!string.IsNullOrEmpty(heroSlug) ? $"/Shop/Details/{heroSlug}" : "/Shop")" class="hero-img-container text-decoration-none" data-tilt-z="stage">
                         <img src="@heroImg"
                              alt="@heroTitle"
-                             class="hero-img-main"
+                             class="hero-img-main rounded-4"
                              width="320"
                              height="320"
-                             onerror="this.onerror=null;this.src='/images/placeholder-product.svg';" />
+                             onerror="this.onerror=null;this.src='/images/hero-showcase.webp';" />
                     </a>
 
                     <!-- Soft Floor Shadow -->
@@ -120,7 +109,7 @@
 
                     <!-- Floating Glass Badges -->
                     <div class="hero-floating-badge hero-badge--price" data-tilt-z="badge">
-                        <div class="text-xs text-uppercase fw-bold badge-subtitle-blue">Featured Deal</div>
+                        <div class="text-xs text-uppercase fw-bold badge-subtitle-blue">Recommended Deal</div>
                         <div class="fw-extrabold font-heading hero-badge-value">Rs. @heroPrice.ToString("N0")</div>
                     </div>
 
@@ -129,15 +118,15 @@
                             <i class="fa-solid fa-truck-fast text-primary"></i>
                             <div>
                                 <div class="text-xs text-uppercase fw-bold badge-subtitle-green">Nationwide Delivery</div>
-                                <div class="text-xs hero-badge-muted">Across All Major Cities</div>
+                                <div class="text-xs hero-badge-muted">Karachi, Lahore, Islamabad &amp; More</div>
                             </div>
                         </div>
                     </div>
 
                     <div class="hero-floating-badge hero-badge--rating" data-tilt-z="badge">
-                        <i class="fa-solid fa-layer-group text-primary"></i>
-                        <span class="fw-bold hero-badge-value">20</span>
-                        <span class="text-xs hero-badge-muted">Categories</span>
+                        <i class="fa-solid fa-certificate text-primary"></i>
+                        <span class="fw-bold hero-badge-value">100%</span>
+                        <span class="text-xs hero-badge-muted">Genuine Items</span>
                     </div>
                 </div>
             </div>
@@ -146,7 +135,7 @@
 </section>
 
 <!-- ================================================================
-     2. TRUST & VALUE PROPOSITION CARDS (3D Capsules)
+     2. TRUST & VALUE PROPOSITION CARDS
      ================================================================ -->
 <section class="row g-3 mb-5" aria-label="Shopping guarantees">
     <div class="col-md-3 col-6 reveal-on-scroll reveal-delay-1">
@@ -154,8 +143,8 @@
             <div class="value-prop-icon" aria-hidden="true">
                 <i class="fa-solid fa-truck-fast"></i>
             </div>
-            <h2 class="fs-6 fw-bold mb-1">Free Shipping</h2>
-            <p class="text-xs mb-0" style="color:var(--text-muted);">Nationwide on orders over Rs. 5,000</p>
+            <h2 class="fs-6 fw-bold mb-1">Nationwide Delivery</h2>
+            <p class="text-xs mb-0" style="color:var(--text-muted);">Express tracked shipping across Pakistan</p>
         </div>
     </div>
     <div class="col-md-3 col-6 reveal-on-scroll reveal-delay-2">
@@ -164,7 +153,7 @@
                 <i class="fa-solid fa-money-bill-wave"></i>
             </div>
             <h2 class="fs-6 fw-bold mb-1">Cash on Delivery</h2>
-            <p class="text-xs mb-0" style="color:var(--text-muted);">Pay securely right at your doorstep</p>
+            <p class="text-xs mb-0" style="color:var(--text-muted);">Pay comfortably upon physical parcel arrival</p>
         </div>
     </div>
     <div class="col-md-3 col-6 reveal-on-scroll reveal-delay-3">
@@ -172,8 +161,8 @@
             <div class="value-prop-icon" aria-hidden="true">
                 <i class="fa-solid fa-arrows-rotate"></i>
             </div>
-            <h2 class="fs-6 fw-bold mb-1">30-Day Returns</h2>
-            <p class="text-xs mb-0" style="color:var(--text-muted);">Hassle-free money-back guarantee</p>
+            <h2 class="fs-6 fw-bold mb-1">7-Day Easy Returns</h2>
+            <p class="text-xs mb-0" style="color:var(--text-muted);">Simple claim process for defect protection</p>
         </div>
     </div>
     <div class="col-md-3 col-6 reveal-on-scroll reveal-delay-4">
@@ -181,40 +170,42 @@
             <div class="value-prop-icon" aria-hidden="true">
                 <i class="fa-solid fa-headset"></i>
             </div>
-            <h2 class="fs-6 fw-bold mb-1">Customer Support</h2>
-            <p class="text-xs mb-0" style="color:var(--text-muted);">Dedicated assistance for all orders</p>
+            <h2 class="fs-6 fw-bold mb-1">Direct Support</h2>
+            <p class="text-xs mb-0" style="color:var(--text-muted);">Dedicated assistance for your orders</p>
         </div>
     </div>
 </section>
 
 <!-- ================================================================
-     3. INTERACTIVE CATEGORY CARDS
+     3. POPULAR CATEGORIES (12 Major Marketplace Departments)
      ================================================================ -->
 @if (categories.Any())
 {
-    <section class="mb-5 reveal-on-scroll" aria-labelledby="categoriesHeading">
+    <section class="mb-5 reveal-on-scroll" aria-labelledby="departmentsHeading">
         <div class="section-header-row">
             <div>
-                <span class="section-eyebrow bg-primary-subtle text-primary border border-primary">Explore Departments</span>
-                <h2 id="categoriesHeading" class="section-title">Shop by Category</h2>
-                <p class="section-subtitle">Curated collections across Pakistan's most in-demand essentials</p>
+                <span class="section-eyebrow bg-primary-subtle text-primary border border-primary">Marketplace Categories</span>
+                <h2 id="departmentsHeading" class="section-title">Popular Categories</h2>
+                <p class="section-subtitle">Explore 12 flagship departments covering tech, fashion, essentials, and home</p>
             </div>
             <a asp-controller="Shop" asp-action="Index" class="btn btn-glass btn-sm rounded-pill px-3">
-                View All Categories <i class="fa-solid fa-arrow-right ms-1"></i>
+                View All Departments <i class="fa-solid fa-arrow-right ms-1"></i>
             </a>
         </div>
 
         <div class="row g-3">
-            @foreach (var (cat, idx) in categories.Take(6).Select((c, i) => (c, i)))
+            @foreach (var (dept, idx) in categories.Select((c, i) => (c, i)))
             {
-                <div class="col-lg-2 col-md-4 col-6 reveal-on-scroll" style="transition-delay: @(idx * 70)ms">
-                    <a asp-controller="Shop" asp-action="Index" asp-route-category="@cat.Slug"
-                       class="category-card glass-card" data-tilt="subtle">
-                        <div class="category-card-icon" aria-hidden="true">
-                            <i class="fa-solid @(string.IsNullOrEmpty(cat.Icon) ? "fa-box" : (cat.Icon.StartsWith("fa-") ? cat.Icon : $"fa-{cat.Icon}"))"></i>
+                <div class="col-xl-2 col-lg-3 col-md-4 col-6 reveal-on-scroll" style="transition-delay: @(idx * 40)ms">
+                    <a asp-controller="Shop" asp-action="Index" asp-route-category="@dept.Slug"
+                       class="category-card glass-card text-decoration-none d-flex flex-column align-items-center justify-content-center p-3 rounded-4 h-100 text-center"
+                       data-tilt="subtle" style="border: 1px solid var(--border-subtle); background: var(--bg-surface-elevated);">
+                        <div class="category-card-icon mb-2 d-flex align-items-center justify-content-center rounded-circle"
+                             style="width: 50px; height: 50px; background: var(--bg-surface); color: var(--brand-primary); font-size: 1.25rem;">
+                            <i class="fa-solid @dept.Icon"></i>
                         </div>
-                        <span class="category-card-name">@cat.Name</span>
-                        <span class="category-card-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+                        <span class="category-card-name fw-bold small mb-1" style="color: var(--text-primary); font-size: 0.85rem;">@dept.Name</span>
+                        <span class="badge rounded-pill" style="background: var(--bg-secondary); color: var(--text-muted); font-size: 0.7rem;">@dept.ProductCount items</span>
                     </a>
                 </div>
             }
@@ -222,67 +213,27 @@
     </section>
 }
 
-@{
-    var earliestFlashEnd = flashDeals
-        .Where(d => d.FlashDealEnd.HasValue && d.FlashDealEnd.Value > DateTime.UtcNow)
-        .OrderBy(d => d.FlashDealEnd)
-        .Select(d => d.FlashDealEnd)
-        .FirstOrDefault() ?? DateTime.UtcNow.AddHours(24);
-}
-@if (flashDeals.Any())
-{
-    <section class="section-surface section-surface--flash reveal-on-scroll" aria-labelledby="flashDealsHeading">
-        <div class="section-header-row">
-            <div>
-                <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-                    <span class="badge-tag badge-flash" aria-hidden="true">
-                        <i class="fa-solid fa-bolt"></i>Flash Deals
-                    </span>
-                    <div id="flashCountdown" class="badge rounded-pill bg-dark text-warning border border-warning px-3 py-1 font-monospace small" data-end-time="@earliestFlashEnd.ToString("o")">
-                        <i class="fa-regular fa-clock me-1"></i>Ends in: <span id="flashTimerDisplay">Calculating...</span>
-                    </div>
-                </div>
-                <h2 id="flashDealsHeading" class="section-title">Limited-Time Discounts</h2>
-                <p class="section-subtitle">Special promo prices on hot trending electronics &amp; lifestyle gadgets</p>
-            </div>
-            <a asp-controller="Shop" asp-action="Index" asp-route-flashDeal="true"
-               class="btn btn-danger-custom btn-sm rounded-pill px-3">
-                See All Flash Deals <i class="fa-solid fa-arrow-right ms-1"></i>
-            </a>
-        </div>
-
-        <div class="row g-3">
-            @foreach (var (product, idx) in flashDeals.Take(4).Select((p, i) => (p, i)))
-            {
-                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 80)ms">
-                    @await Html.PartialAsync("_ProductCard", product)
-                </div>
-            }
-        </div>
-    </section>
-}
-
 <!-- ================================================================
-     5. TRENDING & FEATURED PRODUCTS (Sapphire/Violet Surface)
+     4. EVERYDAY LOW PRICES (< PKR 3,500)
      ================================================================ -->
-@if (featuredProducts.Any())
+@if (everydayLowPrices.Any())
 {
-    <section class="section-surface section-surface--trending reveal-on-scroll" aria-labelledby="featuredHeading">
+    <section class="section-surface mb-5 reveal-on-scroll" aria-labelledby="everydayHeading">
         <div class="section-header-row">
             <div>
-                <span class="section-eyebrow bg-primary-subtle text-primary border border-primary">Customer Favorites</span>
-                <h2 id="featuredHeading" class="section-title">Trending &amp; Featured</h2>
-                <p class="section-subtitle">Top-rated best products customers are buying this week</p>
+                <span class="section-eyebrow bg-success-subtle text-success border border-success">Pantry &amp; Daily Staples</span>
+                <h2 id="everydayHeading" class="section-title">Everyday Low Prices</h2>
+                <p class="section-subtitle">Essential grocery packs, tea blends, spices, and household must-haves under Rs. 3,500</p>
             </div>
-            <a asp-controller="Shop" asp-action="Index" class="btn btn-primary-custom btn-sm rounded-pill px-3">
-                Explore Catalog <i class="fa-solid fa-arrow-right ms-1"></i>
+            <a asp-controller="Shop" asp-action="Index" asp-route-maxPrice="3500" class="btn btn-glass btn-sm rounded-pill px-3">
+                See More Low Prices <i class="fa-solid fa-arrow-right ms-1"></i>
             </a>
         </div>
 
         <div class="row g-3">
-            @foreach (var (product, idx) in featuredProducts.Take(8).Select((p, i) => (p, i)))
+            @foreach (var (product, idx) in everydayLowPrices.Take(4).Select((p, i) => (p, i)))
             {
-                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 70)ms">
+                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
                     @await Html.PartialAsync("_ProductCard", product)
                 </div>
             }
@@ -291,18 +242,186 @@
 }
 
 <!-- ================================================================
-     6. NEW ARRIVALS (Emerald Surface)
+     5. BUDGET DEALS
+     ================================================================ -->
+@if (budgetDeals.Any())
+{
+    <section class="section-surface section-surface--flash mb-5 reveal-on-scroll" aria-labelledby="budgetHeading">
+        <div class="section-header-row">
+            <div>
+                <span class="badge-tag badge-flash mb-2 d-inline-block"><i class="fa-solid fa-tags"></i>Smart Savings</span>
+                <h2 id="budgetHeading" class="section-title">Budget Deals</h2>
+                <p class="section-subtitle">Verified discounts and price cuts across popular Pakistani brands</p>
+            </div>
+            <a asp-controller="Shop" asp-action="Index" asp-route-sortBy="discount" class="btn btn-danger-custom btn-sm rounded-pill px-3">
+                Explore All Deals <i class="fa-solid fa-arrow-right ms-1"></i>
+            </a>
+        </div>
+
+        <div class="row g-3">
+            @foreach (var (product, idx) in budgetDeals.Take(4).Select((p, i) => (p, i)))
+            {
+                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
+                    @await Html.PartialAsync("_ProductCard", product)
+                </div>
+            }
+        </div>
+    </section>
+}
+
+<!-- ================================================================
+     6. MOBILE ACCESSORIES
+     ================================================================ -->
+@if (mobileAccessories.Any())
+{
+    <section class="section-surface mb-5 reveal-on-scroll" aria-labelledby="accessoriesHeading">
+        <div class="section-header-row">
+            <div>
+                <span class="section-eyebrow bg-primary-subtle text-primary border border-primary">High-Speed Tech</span>
+                <h2 id="accessoriesHeading" class="section-title">Mobile Accessories</h2>
+                <p class="section-subtitle">Original GaN fast chargers, 20000mAh power banks, braided cables, and audio gear</p>
+            </div>
+            <a asp-controller="Shop" asp-action="Index" asp-route-category="mobile-accessories" class="btn btn-glass btn-sm rounded-pill px-3">
+                All Accessories <i class="fa-solid fa-arrow-right ms-1"></i>
+            </a>
+        </div>
+
+        <div class="row g-3">
+            @foreach (var (product, idx) in mobileAccessories.Take(4).Select((p, i) => (p, i)))
+            {
+                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
+                    @await Html.PartialAsync("_ProductCard", product)
+                </div>
+            }
+        </div>
+    </section>
+}
+
+<!-- ================================================================
+     7. BEAUTY & PERSONAL CARE
+     ================================================================ -->
+@if (beautyPersonalCare.Any())
+{
+    <section class="section-surface mb-5 reveal-on-scroll" aria-labelledby="beautyHeading">
+        <div class="section-header-row">
+            <div>
+                <span class="section-eyebrow bg-info-subtle text-info border border-info">Skincare &amp; Wellness</span>
+                <h2 id="beautyHeading" class="section-title">Beauty &amp; Personal Care</h2>
+                <p class="section-subtitle">Dermatologist-tested skincare, herbal remedies, body mists, and authentic fragrances</p>
+            </div>
+            <a asp-controller="Shop" asp-action="Index" asp-route-category="health-beauty" class="btn btn-glass btn-sm rounded-pill px-3">
+                Browse Health &amp; Beauty <i class="fa-solid fa-arrow-right ms-1"></i>
+            </a>
+        </div>
+
+        <div class="row g-3">
+            @foreach (var (product, idx) in beautyPersonalCare.Take(4).Select((p, i) => (p, i)))
+            {
+                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
+                    @await Html.PartialAsync("_ProductCard", product)
+                </div>
+            }
+        </div>
+    </section>
+}
+
+<!-- ================================================================
+     8. HOME ESSENTIALS
+     ================================================================ -->
+@if (homeEssentials.Any())
+{
+    <section class="section-surface mb-5 reveal-on-scroll" aria-labelledby="homeHeading">
+        <div class="section-header-row">
+            <div>
+                <span class="section-eyebrow bg-warning-subtle text-warning border border-warning">Lifestyle &amp; Kitchen</span>
+                <h2 id="homeHeading" class="section-title">Home Essentials</h2>
+                <p class="section-subtitle">Luxury cotton bed sheets, air fryers, food processors, and cozy home accessories</p>
+            </div>
+            <a asp-controller="Shop" asp-action="Index" asp-route-category="home-lifestyle" class="btn btn-glass btn-sm rounded-pill px-3">
+                All Home Essentials <i class="fa-solid fa-arrow-right ms-1"></i>
+            </a>
+        </div>
+
+        <div class="row g-3">
+            @foreach (var (product, idx) in homeEssentials.Take(4).Select((p, i) => (p, i)))
+            {
+                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
+                    @await Html.PartialAsync("_ProductCard", product)
+                </div>
+            }
+        </div>
+    </section>
+}
+
+<!-- ================================================================
+     9. FASHION PICKS
+     ================================================================ -->
+@if (fashionPicks.Any())
+{
+    <section class="section-surface mb-5 reveal-on-scroll" aria-labelledby="fashionHeading">
+        <div class="section-header-row">
+            <div>
+                <span class="section-eyebrow bg-danger-subtle text-danger border border-danger">Apparel &amp; Footwear</span>
+                <h2 id="fashionHeading" class="section-title">Fashion Picks</h2>
+                <p class="section-subtitle">Designer embroidered lawn suits, stitched cotton kurtas, and durable leather footwear</p>
+            </div>
+            <a asp-controller="Shop" asp-action="Index" asp-route-category="mens-fashion-dept" class="btn btn-glass btn-sm rounded-pill px-3">
+                View All Fashion <i class="fa-solid fa-arrow-right ms-1"></i>
+            </a>
+        </div>
+
+        <div class="row g-3">
+            @foreach (var (product, idx) in fashionPicks.Take(4).Select((p, i) => (p, i)))
+            {
+                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
+                    @await Html.PartialAsync("_ProductCard", product)
+                </div>
+            }
+        </div>
+    </section>
+}
+
+<!-- ================================================================
+     10. ELECTRONICS
+     ================================================================ -->
+@if (electronics.Any())
+{
+    <section class="section-surface mb-5 reveal-on-scroll" aria-labelledby="electronicsHeading">
+        <div class="section-header-row">
+            <div>
+                <span class="section-eyebrow bg-primary-subtle text-primary border border-primary">Flagship Hardware</span>
+                <h2 id="electronicsHeading" class="section-title">Electronics</h2>
+                <p class="section-subtitle">PTA-approved smartphones, M-series MacBooks, gaming laptops, and 4K Google Smart TVs</p>
+            </div>
+            <a asp-controller="Shop" asp-action="Index" asp-route-category="electronic-devices" class="btn btn-primary-custom btn-sm rounded-pill px-3">
+                Explore Electronics <i class="fa-solid fa-arrow-right ms-1"></i>
+            </a>
+        </div>
+
+        <div class="row g-3">
+            @foreach (var (product, idx) in electronics.Take(4).Select((p, i) => (p, i)))
+            {
+                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
+                    @await Html.PartialAsync("_ProductCard", product)
+                </div>
+            }
+        </div>
+    </section>
+}
+
+<!-- ================================================================
+     11. NEW ARRIVALS
      ================================================================ -->
 @if (newArrivals.Any())
 {
-    <section class="section-surface section-surface--arrivals reveal-on-scroll" aria-labelledby="newArrivalsHeading">
+    <section class="section-surface section-surface--arrivals mb-5 reveal-on-scroll" aria-labelledby="arrivalsHeading">
         <div class="section-header-row">
             <div>
-                <span class="section-eyebrow bg-success-subtle text-success border border-success">Just Dropped</span>
-                <h2 id="newArrivalsHeading" class="section-title">New Arrivals</h2>
-                <p class="section-subtitle">The freshest gadget releases and lifestyle additions to our catalog</p>
+                <span class="section-eyebrow bg-success-subtle text-success border border-success">Fresh Releases</span>
+                <h2 id="arrivalsHeading" class="section-title">New Arrivals</h2>
+                <p class="section-subtitle">The latest models, verified spare parts, and newest lifestyle items</p>
             </div>
-            <a asp-controller="Shop" asp-action="Index" asp-route-sort="newest" class="btn btn-glass btn-sm rounded-pill px-3">
+            <a asp-controller="Shop" asp-action="Index" asp-route-sortBy="newest" class="btn btn-glass btn-sm rounded-pill px-3">
                 View All New <i class="fa-solid fa-arrow-right ms-1"></i>
             </a>
         </div>
@@ -310,7 +429,7 @@
         <div class="row g-3">
             @foreach (var (product, idx) in newArrivals.Take(4).Select((p, i) => (p, i)))
             {
-                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 80)ms">
+                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
                     @await Html.PartialAsync("_ProductCard", product)
                 </div>
             }
@@ -319,49 +438,21 @@
 }
 
 <!-- ================================================================
-     7. BEST SELLERS (Gold Surface)
-     ================================================================ -->
-@if (bestSellers.Any())
-{
-    <section class="section-surface section-surface--bestsellers reveal-on-scroll" aria-labelledby="bestSellersHeading">
-        <div class="section-header-row">
-            <div>
-                <span class="section-eyebrow bg-warning-subtle text-warning border border-warning">Top Selections</span>
-                <h2 id="bestSellersHeading" class="section-title">Best Sellers</h2>
-                <p class="section-subtitle">Popular essentials across all major categories</p>
-            </div>
-            <a asp-controller="Shop" asp-action="Index" class="btn btn-glass btn-sm rounded-pill px-3">
-                View All Best Sellers <i class="fa-solid fa-arrow-right ms-1"></i>
-            </a>
-        </div>
-
-        <div class="row g-3">
-            @foreach (var (product, idx) in bestSellers.Take(4).Select((p, i) => (p, i)))
-            {
-                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 80)ms">
-                    @await Html.PartialAsync("_ProductCard", product)
-                </div>
-            }
-        </div>
-    </section>
-}
-
-<!-- ================================================================
-     8. TRUST CTA BANNER
+     12. TRUST CTA BANNER
      ================================================================ -->
 <section class="reveal-on-scroll mb-2">
     <div class="card-glass p-4 p-md-5 text-center rounded-4 border-0"
          style="background:linear-gradient(135deg,rgba(37,99,235,0.12),rgba(124,58,237,0.08));border:1px solid var(--border-default) !important;">
         <div class="row align-items-center g-4">
             <div class="col-md-8 text-md-start">
-                <h2 class="h3 fw-bold mb-2">Explore the HamaraCommerce Platform</h2>
+                <h2 class="h3 fw-bold mb-2">Discover 1,200+ Products on HamaraCommerce</h2>
                 <p class="mb-0" style="color:var(--text-muted);font-size:1rem;">
-                    Discover over 1,000 products across 20 Pakistani categories with genuine market pricing and cash on delivery.
+                    From Karachi to Peshawar, browse verified Pakistani retail products with genuine PKR pricing, 0 fake claims, and reliable nationwide delivery.
                 </p>
             </div>
             <div class="col-md-4 text-md-end">
                 <a asp-controller="Shop" asp-action="Index" class="btn btn-primary-custom px-5 py-2.5 rounded-pill fs-6">
-                    <i class="fa-solid fa-bag-shopping me-2"></i>Start Shopping
+                    <i class="fa-solid fa-bag-shopping me-2"></i>Shop The Marketplace
                 </a>
             </div>
         </div>

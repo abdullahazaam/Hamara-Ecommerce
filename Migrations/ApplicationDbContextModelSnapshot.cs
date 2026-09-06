@@ -204,6 +204,9 @@ namespace HamaraCommerce.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int?>("ParentCategoryId")
+                        .HasColumnType("int");
+
                     b.Property<int>("ProductCount")
                         .HasColumnType("int");
 
@@ -217,6 +220,8 @@ namespace HamaraCommerce.Migrations
                     b.HasIndex("DisplayOrder");
 
                     b.HasIndex("Name");
+
+                    b.HasIndex("ParentCategoryId");
 
                     b.HasIndex("Slug")
                         .IsUnique();
@@ -1120,6 +1125,9 @@ namespace HamaraCommerce.Migrations
                     b.Property<int>("Stock")
                         .HasColumnType("int");
 
+                    b.Property<int?>("StorefrontRank")
+                        .HasColumnType("int");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(250)
@@ -1166,6 +1174,8 @@ namespace HamaraCommerce.Migrations
                         .IsUnique();
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("StorefrontRank");
 
                     b.HasIndex("Title");
 
@@ -1598,6 +1608,16 @@ namespace HamaraCommerce.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("HamaraCommerce.Models.Category", b =>
+                {
+                    b.HasOne("HamaraCommerce.Models.Category", "ParentCategory")
+                        .WithMany("SubCategories")
+                        .HasForeignKey("ParentCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ParentCategory");
+                });
+
             modelBuilder.Entity("HamaraCommerce.Models.Coupon", b =>
                 {
                     b.HasOne("HamaraCommerce.Models.Category", "ApplicableCategory")
@@ -1820,6 +1840,8 @@ namespace HamaraCommerce.Migrations
             modelBuilder.Entity("HamaraCommerce.Models.Category", b =>
                 {
                     b.Navigation("Products");
+
+                    b.Navigation("SubCategories");
                 });
 
             modelBuilder.Entity("HamaraCommerce.Models.Order", b =>

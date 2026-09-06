@@ -38,48 +38,103 @@ namespace HamaraCommerce.Controllers
         [HttpGet]
         public async Task<IActionResult> Index(CancellationToken cancellationToken = default)
         {
+            // 1. Popular Categories (12 Major Marketplace Departments)
             var categories = await _context.Categories
                 .AsNoTracking()
+                .Where(c => c.ParentCategoryId == null)
                 .OrderBy(c => c.DisplayOrder)
-                .Take(8)
                 .ToListAsync(cancellationToken);
 
-            var featuredProducts = await _context.Products
+            // 2. Everyday Low Prices (< PKR 3,500)
+            var everydayLowPrices = await _context.Products
                 .AsNoTracking()
-                .Where(p => p.Status == ProductStatus.Published && p.IsFeatured)
-                .Take(8)
-                .ToListAsync(cancellationToken);
-
-            var trendingProducts = await _context.Products
-                .AsNoTracking()
-                .Where(p => p.Status == ProductStatus.Published && p.IsTrending)
-                .Take(8)
-                .ToListAsync(cancellationToken);
-
-            var newArrivals = await _context.Products
-                .AsNoTracking()
-                .Where(p => p.Status == ProductStatus.Published && p.IsNewArrival)
-                .Take(8)
-                .ToListAsync(cancellationToken);
-
-            var bestSellers = await _context.Products
-                .AsNoTracking()
-                .Where(p => p.Status == ProductStatus.Published && p.IsBestSeller)
-                .Take(8)
-                .ToListAsync(cancellationToken);
-
-            var flashDeals = await _context.Products
-                .AsNoTracking()
-                .Where(p => p.Status == ProductStatus.Published && p.IsFlashDeal)
+                .Include(p => p.Images)
+                .Where(p => p.Status == ProductStatus.Published && p.Price < 3500)
+                .OrderBy(p => p.StorefrontRank.HasValue ? p.StorefrontRank.Value : 999999)
+                .ThenBy(p => p.Price)
                 .Take(4)
                 .ToListAsync(cancellationToken);
 
+            // 3. Budget Deals (discounted items)
+            var budgetDeals = await _context.Products
+                .AsNoTracking()
+                .Include(p => p.Images)
+                .Where(p => p.Status == ProductStatus.Published && (p.OldPrice > p.Price || p.IsFlashDeal))
+                .OrderByDescending(p => p.DiscountPercentage)
+                .Take(4)
+                .ToListAsync(cancellationToken);
+
+            // 4. Mobile Accessories
+            var mobileAccessories = await _context.Products
+                .AsNoTracking()
+                .Include(p => p.Images)
+                .Where(p => p.Status == ProductStatus.Published && (p.CategoryName == "Mobile Accessories" || p.Category!.Slug == "mobile-accessories"))
+                .OrderBy(p => p.Price)
+                .Take(4)
+                .ToListAsync(cancellationToken);
+
+            // 5. Beauty & Personal Care
+            var beautyPersonalCare = await _context.Products
+                .AsNoTracking()
+                .Include(p => p.Images)
+                .Where(p => p.Status == ProductStatus.Published && (p.CategoryName == "Beauty & Personal Care" || p.CategoryName == "Health & Wellness" || p.Category!.Slug == "beauty-personal-care"))
+                .OrderBy(p => p.Price)
+                .Take(4)
+                .ToListAsync(cancellationToken);
+
+            // 6. Home Essentials
+            var homeEssentials = await _context.Products
+                .AsNoTracking()
+                .Include(p => p.Images)
+                .Where(p => p.Status == ProductStatus.Published && (p.CategoryName == "Home & Living" || p.CategoryName == "Kitchen Appliances" || p.CategoryName == "Grocery & Beverages"))
+                .OrderBy(p => p.Price)
+                .Take(4)
+                .ToListAsync(cancellationToken);
+
+            // 7. Fashion Picks
+            var fashionPicks = await _context.Products
+                .AsNoTracking()
+                .Include(p => p.Images)
+                .Where(p => p.Status == ProductStatus.Published && (p.CategoryName == "Men's Fashion" || p.CategoryName == "Women's Fashion" || p.CategoryName == "Shoes & Footwear"))
+                .OrderBy(p => p.Price)
+                .Take(4)
+                .ToListAsync(cancellationToken);
+
+            // 8. Electronics
+            var electronics = await _context.Products
+                .AsNoTracking()
+                .Include(p => p.Images)
+                .Where(p => p.Status == ProductStatus.Published && (p.CategoryName == "Mobile Phones" || p.CategoryName == "Laptops & Computers" || p.CategoryName == "TVs & Entertainment"))
+                .OrderBy(p => p.Price)
+                .Take(4)
+                .ToListAsync(cancellationToken);
+
+            // 9. New Arrivals
+            var newArrivals = await _context.Products
+                .AsNoTracking()
+                .Include(p => p.Images)
+                .Where(p => p.Status == ProductStatus.Published)
+                .OrderByDescending(p => p.CreatedAt)
+                .Take(4)
+                .ToListAsync(cancellationToken);
+
+            var heroProduct = await _context.Products
+                .AsNoTracking()
+                .Include(p => p.Images)
+                .Where(p => p.Status == ProductStatus.Published && p.StorefrontRank == 4) // Anker Charger or Flagship
+                .FirstOrDefaultAsync(cancellationToken)
+                ?? await _context.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Status == ProductStatus.Published, cancellationToken);
+
             ViewBag.Categories = categories;
-            ViewBag.FeaturedProducts = featuredProducts;
-            ViewBag.TrendingProducts = trendingProducts;
+            ViewBag.EverydayLowPrices = everydayLowPrices;
+            ViewBag.BudgetDeals = budgetDeals;
+            ViewBag.MobileAccessories = mobileAccessories;
+            ViewBag.BeautyPersonalCare = beautyPersonalCare;
+            ViewBag.HomeEssentials = homeEssentials;
+            ViewBag.FashionPicks = fashionPicks;
+            ViewBag.Electronics = electronics;
             ViewBag.NewArrivals = newArrivals;
-            ViewBag.BestSellers = bestSellers;
-            ViewBag.FlashDeals = flashDeals;
+            ViewBag.HeroProduct = heroProduct;
 
             ViewData["SeoMetadata"] = new PageSeoMetadata
             {

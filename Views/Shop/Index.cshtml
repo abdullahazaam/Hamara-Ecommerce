@@ -49,12 +49,13 @@
                     <input type="hidden" name="flashDeal" value="@(Model.FlashDealOnly ? "true" : "")" />
 
                     <label for="sortSelect" class="small fw-semibold text-nowrap d-none d-sm-inline" style="color:var(--text-muted);">Sort by:</label>
-                    <select id="sortSelect" name="sortBy" class="form-select form-select-sm rounded-pill px-3" style="min-width: 160px;" onchange="document.getElementById('sortForm').submit();">
-                        <option value="popular" selected="@(Model.SortBy == "popular" || string.IsNullOrEmpty(Model.SortBy))">🔥 Most Popular</option>
-                        <option value="newest" selected="@(Model.SortBy == "newest")">✨ Newest Arrivals</option>
-                        <option value="price_asc" selected="@(Model.SortBy == "price_asc")">💵 Price: Low to High</option>
-                        <option value="price_desc" selected="@(Model.SortBy == "price_desc")">💎 Price: High to Low</option>
-                        <option value="rating" selected="@(Model.SortBy == "rating")">⭐ Highest Rated</option>
+                    <select id="sortSelect" name="sortBy" class="form-select form-select-sm rounded-pill px-3" style="min-width: 175px;" onchange="document.getElementById('sortForm').submit();">
+                        <option value="recommended" selected="@(Model.SortBy == "recommended" || string.IsNullOrEmpty(Model.SortBy))">Recommended</option>
+                        <option value="price_asc" selected="@(Model.SortBy == "price_asc")">Price: Low to High</option>
+                        <option value="price_desc" selected="@(Model.SortBy == "price_desc")">Price: High to Low</option>
+                        <option value="newest" selected="@(Model.SortBy == "newest")">Newest</option>
+                        <option value="discount" selected="@(Model.SortBy == "discount")">Best Discount</option>
+                        <option value="rating" selected="@(Model.SortBy == "rating" || Model.SortBy == "customer_rated")">Customer Rated</option>
                     </select>
                 </form>
             </div>
@@ -128,25 +129,62 @@
                 <input type="hidden" name="sortBy" value="@Model.SortBy" />
                 <input type="hidden" name="search" value="@Model.SearchQuery" />
 
-                <!-- Categories -->
+                <!-- Departments & Categories -->
                 <div class="mb-4">
                     <label class="form-label small fw-bold text-uppercase" style="color:var(--text-muted); font-size: 0.725rem; letter-spacing:0.05em;">Departments</label>
-                    <div class="d-flex flex-column gap-2">
-                        <div class="form-check">
+                    <div class="d-flex flex-column gap-1.5" style="max-height: 480px; overflow-y: auto; padding-right: 4px;">
+                        <div class="form-check mb-1">
                             <input class="form-check-input" type="radio" name="category" value="" id="catAll" checked="@(string.IsNullOrEmpty(Model.Category))" onchange="this.form.submit()" />
-                            <label class="form-check-label small fw-semibold" for="catAll" style="color:var(--text-primary);">All Departments</label>
+                            <label class="form-check-label small fw-semibold" for="catAll" style="color:var(--text-primary); cursor:pointer;">
+                                <i class="fa-solid fa-layer-group me-1.5 text-primary"></i>All Departments
+                            </label>
                         </div>
-                        @foreach (var c in Model.Categories)
+                        @{
+                            var parentDepts = Model.Categories.Where(c => c.ParentCategoryId == null).OrderBy(c => c.DisplayOrder).ToList();
+                        }
+                        @foreach (var dept in parentDepts)
                         {
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="category" value="@c.Slug" id="cat_@c.Id" checked="@(Model.Category == c.Slug)" onchange="this.form.submit()" />
-                                <label class="form-check-label small d-flex justify-content-between align-items-center" for="cat_@c.Id" style="color:var(--text-secondary);">
-                                    <span>@c.Name</span>
-                                    @if (c.ProductCount > 0)
-                                    {
-                                        <span class="badge rounded-pill" style="background:var(--bg-surface-elevated); color:var(--text-muted); font-size:0.7rem;">@c.ProductCount</span>
-                                    }
-                                </label>
+                            var isDeptActive = Model.Category == dept.Slug;
+                            var childSlugs = dept.SubCategories.Select(sc => sc.Slug).ToHashSet();
+                            var isChildActive = !string.IsNullOrEmpty(Model.Category) && childSlugs.Contains(Model.Category);
+                            var isExpanded = isDeptActive || isChildActive;
+                            var collapseId = $"subcat_col_{dept.Id}";
+
+                            <div class="dept-box rounded-3 p-1.5 mb-1" style="background:var(--bg-surface-elevated); border:1px solid @(isExpanded ? "var(--brand-primary)" : "var(--border-subtle)");">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="form-check mb-0 flex-grow-1 text-truncate">
+                                        <input class="form-check-input" type="radio" name="category" value="@dept.Slug" id="dept_@dept.Id" checked="@isDeptActive" onchange="this.form.submit()" />
+                                        <label class="form-check-label small fw-semibold text-truncate @(isDeptActive ? "text-primary" : "")" for="dept_@dept.Id" style="cursor:pointer; color:var(--text-primary);" title="@dept.Name">
+                                            <i class="fa-solid @dept.Icon me-1.5 text-primary" style="font-size:0.8rem; width:14px;"></i>
+                                            @dept.Name
+                                        </label>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-1">
+                                        <span class="badge rounded-pill" style="background:var(--bg-secondary); color:var(--text-muted); font-size:0.68rem;">@dept.ProductCount</span>
+                                        @if (dept.SubCategories.Any())
+                                        {
+                                            <a class="btn btn-sm btn-link p-0 text-decoration-none text-muted" data-bs-toggle="collapse" href="#@collapseId" role="button" aria-expanded="@(isExpanded ? "true" : "false")" aria-controls="@collapseId">
+                                                <i class="fa-solid fa-chevron-down" style="font-size:0.65rem;"></i>
+                                            </a>
+                                        }
+                                    </div>
+                                </div>
+                                @if (dept.SubCategories.Any())
+                                {
+                                    <div class="collapse @(isExpanded ? "show" : "") mt-1 ps-3 pt-1 border-top" id="@collapseId" style="border-color:var(--border-subtle) !important;">
+                                        @foreach (var sub in dept.SubCategories.OrderBy(s => s.DisplayOrder))
+                                        {
+                                            var isSubActive = Model.Category == sub.Slug;
+                                            <div class="form-check py-0.5 mb-0">
+                                                <input class="form-check-input" type="radio" name="category" value="@sub.Slug" id="sub_@sub.Id" checked="@isSubActive" onchange="this.form.submit()" />
+                                                <label class="form-check-label small d-flex justify-content-between align-items-center @(isSubActive ? "fw-bold text-primary" : "text-muted")" for="sub_@sub.Id" style="cursor:pointer; font-size:0.75rem;">
+                                                    <span class="text-truncate">@sub.Name</span>
+                                                    <span class="badge rounded-pill bg-light text-secondary ms-1" style="font-size:0.62rem;">@sub.ProductCount</span>
+                                                </label>
+                                            </div>
+                                        }
+                                    </div>
+                                }
                             </div>
                         }
                     </div>
@@ -312,16 +350,54 @@
 
             <div class="mb-4">
                 <label class="form-label small fw-bold text-uppercase" style="color:var(--text-muted);">Departments</label>
-                <div class="d-flex flex-column gap-2">
+                <div class="d-flex flex-column gap-2" style="max-height: 360px; overflow-y: auto;">
                     <div class="form-check">
                         <input class="form-check-input" type="radio" name="category" value="" id="mCatAll" checked="@(string.IsNullOrEmpty(Model.Category))" />
-                        <label class="form-check-label small fw-semibold" for="mCatAll">All Departments</label>
+                        <label class="form-check-label small fw-semibold" for="mCatAll"><i class="fa-solid fa-layer-group me-1.5 text-primary"></i>All Departments</label>
                     </div>
-                    @foreach (var c in Model.Categories)
+                    @foreach (var dept in Model.Categories.Where(c => c.ParentCategoryId == null).OrderBy(c => c.DisplayOrder))
                     {
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="category" value="@c.Slug" id="mCat_@c.Id" checked="@(Model.Category == c.Slug)" />
-                            <label class="form-check-label small" for="mCat_@c.Id">@c.Name</label>
+                        var isDeptActive = Model.Category == dept.Slug;
+                        var mCollapseId = $"m_subcat_col_{dept.Id}";
+                        var childSlugs = dept.SubCategories.Select(sc => sc.Slug).ToHashSet();
+                        var isChildActive = !string.IsNullOrEmpty(Model.Category) && childSlugs.Contains(Model.Category);
+                        var isExpanded = isDeptActive || isChildActive;
+
+                        <div class="dept-box rounded-3 p-1.5" style="background:var(--bg-surface-elevated); border:1px solid var(--border-subtle);">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="form-check mb-0 flex-grow-1 text-truncate">
+                                    <input class="form-check-input" type="radio" name="category" value="@dept.Slug" id="mDept_@dept.Id" checked="@isDeptActive" />
+                                    <label class="form-check-label small fw-semibold text-truncate @(isDeptActive ? "text-primary" : "")" for="mDept_@dept.Id">
+                                        <i class="fa-solid @dept.Icon me-1 text-primary" style="font-size:0.8rem;"></i>
+                                        @dept.Name
+                                    </label>
+                                </div>
+                                <div class="d-flex align-items-center gap-1">
+                                    <span class="badge rounded-pill" style="background:var(--bg-secondary); color:var(--text-muted); font-size:0.68rem;">@dept.ProductCount</span>
+                                    @if (dept.SubCategories.Any())
+                                    {
+                                        <a class="btn btn-sm btn-link p-0 text-decoration-none text-muted" data-bs-toggle="collapse" href="#@mCollapseId" role="button" aria-expanded="@(isExpanded ? "true" : "false")" aria-controls="@mCollapseId">
+                                            <i class="fa-solid fa-chevron-down" style="font-size:0.65rem;"></i>
+                                        </a>
+                                    }
+                                </div>
+                            </div>
+                            @if (dept.SubCategories.Any())
+                            {
+                                <div class="collapse @(isExpanded ? "show" : "") mt-1 ps-3 pt-1 border-top" id="@mCollapseId" style="border-color:var(--border-subtle) !important;">
+                                    @foreach (var sub in dept.SubCategories.OrderBy(s => s.DisplayOrder))
+                                    {
+                                        var isSubActive = Model.Category == sub.Slug;
+                                        <div class="form-check py-0.5 mb-0">
+                                            <input class="form-check-input" type="radio" name="category" value="@sub.Slug" id="mSub_@sub.Id" checked="@isSubActive" />
+                                            <label class="form-check-label small d-flex justify-content-between align-items-center @(isSubActive ? "fw-bold text-primary" : "text-muted")" for="mSub_@sub.Id" style="font-size:0.75rem;">
+                                                <span>@sub.Name</span>
+                                                <span class="badge rounded-pill bg-light text-secondary ms-1" style="font-size:0.62rem;">@sub.ProductCount</span>
+                                            </label>
+                                        </div>
+                                    }
+                                </div>
+                            }
                         </div>
                     }
                 </div>
