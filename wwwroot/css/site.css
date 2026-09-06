@@ -2248,9 +2248,9 @@ main {
 
 /* Reveal on scroll */
 .reveal-on-scroll {
-    opacity: 0; transform: translateY(24px);
-    transition: opacity 0.6s ease, transform 0.6s ease;
-    will-change: opacity, transform;
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.4s ease, transform 0.4s ease;
 }
 .reveal-on-scroll.is-revealed { opacity: 1; transform: translateY(0); }
 
@@ -2650,4 +2650,47 @@ html:not(.js-active) .reveal-on-scroll {
     opacity: 1;
     pointer-events: auto;
 }
+
+/* ==========================================================================
+   BOUNDED PAGINATION & HORIZONTAL OVERFLOW PREVENTION SAFEGUARDS
+   ========================================================================== */
+html, body {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+.pagination-bounded {
+    max-width: 100% !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    gap: 0.25rem;
+    padding: 0;
+}
+
+.pagination-bounded .page-item {
+    display: inline-flex;
+}
+
+.pagination-bounded .page-link {
+    min-width: 38px;
+    height: 38px;
+    padding: 0 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+@media (max-width: 576px) {
+    .pagination-bounded .page-link {
+        min-width: 34px;
+        height: 34px;
+        padding: 0 0.5rem;
+        font-size: 0.8125rem;
+    }
+}
+
 

@@ -28,7 +28,7 @@
                     @(!string.IsNullOrEmpty(Model.Category) ? Model.Category : "Curated Collection")
                 </h1>
                 <p class="mb-0 small" style="color:var(--text-muted);">
-                    Showing <strong>@Model.Products.Count</strong> of <strong>@Model.TotalItems</strong> authentic verified products
+                    Showing <strong>@Model.Products.Count</strong> of <strong>@Model.TotalItems</strong> catalogue products
                 </p>
             </div>
 
@@ -225,8 +225,18 @@
 
             @if (Model.TotalPages > 1)
             {
-                <nav aria-label="Catalog pagination" class="mt-5 d-flex justify-content-center">
-                    <ul class="pagination">
+                int maxDesktop = 6;
+                int startPage = Math.Max(1, Model.CurrentPage - 2);
+                int endPage = Math.Min(Model.TotalPages, startPage + maxDesktop - 1);
+                startPage = Math.Max(1, endPage - maxDesktop + 1);
+
+                int maxMobile = 3;
+                int mobileStart = Math.Max(1, Model.CurrentPage - 1);
+                int mobileEnd = Math.Min(Model.TotalPages, mobileStart + maxMobile - 1);
+                mobileStart = Math.Max(1, mobileEnd - maxMobile + 1);
+
+                <nav aria-label="Catalog pagination" class="mt-5 d-flex justify-content-center w-100" style="max-width:100%; overflow:hidden;">
+                    <ul class="pagination pagination-bounded flex-wrap justify-content-center m-0" style="max-width:100%;">
                         <li class="page-item @(Model.CurrentPage <= 1 ? "disabled" : "")">
                             <a class="page-link rounded-pill me-1" asp-action="Index"
                                asp-route-page="@(Model.CurrentPage - 1)"
@@ -238,13 +248,17 @@
                                asp-route-maxPrice="@Model.MaxPrice"
                                asp-route-inStockOnly="@(Model.InStockOnly ? "true" : null)"
                                asp-route-onSaleOnly="@(Model.OnSaleOnly ? "true" : null)"
-                               asp-route-flashDeal="@(Model.FlashDealOnly ? "true" : null)">
+                               asp-route-flashDeal="@(Model.FlashDealOnly ? "true" : null)"
+                               aria-label="Previous Page"
+                               tabindex="@(Model.CurrentPage <= 1 ? -1 : null)"
+                               aria-disabled="@(Model.CurrentPage <= 1 ? "true" : null)">
                                 <i class="fa-solid fa-chevron-left me-1"></i>Prev
                             </a>
                         </li>
-                        @for (int i = 1; i <= Model.TotalPages; i++)
+                        @for (int i = startPage; i <= endPage; i++)
                         {
-                            <li class="page-item @(i == Model.CurrentPage ? "active" : "")">
+                            bool isMobileVisible = i >= mobileStart && i <= mobileEnd;
+                            <li class="page-item @(i == Model.CurrentPage ? "active" : "") @(isMobileVisible ? "" : "d-none d-md-inline-block")">
                                 <a class="page-link rounded-pill mx-1" asp-action="Index"
                                    asp-route-page="@i"
                                    asp-route-category="@Model.Category"
@@ -269,7 +283,10 @@
                                asp-route-maxPrice="@Model.MaxPrice"
                                asp-route-inStockOnly="@(Model.InStockOnly ? "true" : null)"
                                asp-route-onSaleOnly="@(Model.OnSaleOnly ? "true" : null)"
-                               asp-route-flashDeal="@(Model.FlashDealOnly ? "true" : null)">
+                               asp-route-flashDeal="@(Model.FlashDealOnly ? "true" : null)"
+                               aria-label="Next Page"
+                               tabindex="@(Model.CurrentPage >= Model.TotalPages ? -1 : null)"
+                               aria-disabled="@(Model.CurrentPage >= Model.TotalPages ? "true" : null)">
                                 Next<i class="fa-solid fa-chevron-right ms-1"></i>
                             </a>
                         </li>

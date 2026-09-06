@@ -27,7 +27,7 @@
         <div class="col-lg-6" style="min-width:0;">
             <div class="hero-trust-badge">
                 <span>🇵🇰</span>
-                Pakistan's Verified 3D Commerce Platform
+                Pakistan E-Commerce Portfolio &amp; Retail Demo
             </div>
 
             <h1 id="heroHeading" class="hero-heading">
@@ -36,7 +36,7 @@
             </h1>
 
             <p class="hero-lead">
-                Shop thousands of premium electronics, fashion collections, and daily essentials with verified official warranties, express same-day dispatch, and nationwide cash on delivery.
+                Browse authentic Pakistani electronics, fashion collections, and daily essentials with verified market pricing, transparent stock statuses, and nationwide cash on delivery.
             </p>
 
             <div class="d-flex flex-wrap gap-3 mb-4">
@@ -56,16 +56,16 @@
             <!-- Trust micro-stats -->
             <div class="d-flex flex-wrap gap-3">
                 <div class="hero-stat-badge">
-                    <div class="hero-stat-num hero-stat-num--blue">50K+</div>
-                    <div class="hero-stat-label">Happy<br>Customers</div>
+                    <div class="hero-stat-num hero-stat-num--blue">1,000+</div>
+                    <div class="hero-stat-label">Catalogue<br>Products</div>
                 </div>
                 <div class="hero-stat-badge">
-                    <div class="hero-stat-num hero-stat-num--green">100%</div>
-                    <div class="hero-stat-label">Verified<br>Authentic</div>
+                    <div class="hero-stat-num hero-stat-num--green">20</div>
+                    <div class="hero-stat-label">Product<br>Categories</div>
                 </div>
                 <div class="hero-stat-badge d-none d-sm-inline-flex">
-                    <div class="hero-stat-num hero-stat-num--gold">4.9★</div>
-                    <div class="hero-stat-label">Average<br>Store Rating</div>
+                    <div class="hero-stat-num hero-stat-num--gold">PKR</div>
+                    <div class="hero-stat-label">Market<br>Pricing</div>
                 </div>
             </div>
         </div>
@@ -97,7 +97,7 @@
                     @if (secondaryProduct != null && secondaryProduct.Id != heroProduct?.Id)
                     {
                         <div class="hero-backdrop-stage" aria-hidden="true">
-                            <img src="@(secondaryProduct.MainImage ?? heroImg)" alt="" class="hero-backdrop-img" />
+                            <img src="@(secondaryProduct.MainImage ?? heroImg)" alt="" class="hero-backdrop-img" onerror="this.onerror=null;this.src='/images/placeholder-product.svg';" />
                             <div class="hero-backdrop-pill">
                                 <span class="text-xs fw-bold hero-backdrop-title">@(secondaryProduct.Title?.Length > 16 ? secondaryProduct.Title.Substring(0, 14) + "..." : secondaryProduct.Title)</span>
                                 <span class="text-xs hero-backdrop-price">Rs. @secondaryProduct.Price.ToString("N0")</span>
@@ -111,7 +111,8 @@
                              alt="@heroTitle"
                              class="hero-img-main"
                              width="320"
-                             height="320" />
+                             height="320"
+                             onerror="this.onerror=null;this.src='/images/placeholder-product.svg';" />
                     </a>
 
                     <!-- Soft Floor Shadow -->
@@ -125,18 +126,18 @@
 
                     <div class="hero-floating-badge hero-badge--delivery" data-tilt-z="badge">
                         <div class="d-flex align-items-center gap-2">
-                            <i class="fa-solid fa-bolt text-warning"></i>
+                            <i class="fa-solid fa-truck-fast text-primary"></i>
                             <div>
-                                <div class="text-xs text-uppercase fw-bold badge-subtitle-green">Same-Day Dispatch</div>
-                                <div class="text-xs hero-badge-muted">Lahore, Karachi, Islamabad</div>
+                                <div class="text-xs text-uppercase fw-bold badge-subtitle-green">Nationwide Delivery</div>
+                                <div class="text-xs hero-badge-muted">Across All Major Cities</div>
                             </div>
                         </div>
                     </div>
 
                     <div class="hero-floating-badge hero-badge--rating" data-tilt-z="badge">
-                        <i class="fa-solid fa-star text-warning"></i>
-                        <span class="fw-bold hero-badge-value">4.9</span>
-                        <span class="text-xs hero-badge-muted">(1.2k+ reviews)</span>
+                        <i class="fa-solid fa-layer-group text-primary"></i>
+                        <span class="fw-bold hero-badge-value">20</span>
+                        <span class="text-xs hero-badge-muted">Categories</span>
                     </div>
                 </div>
             </div>
@@ -180,8 +181,8 @@
             <div class="value-prop-icon" aria-hidden="true">
                 <i class="fa-solid fa-headset"></i>
             </div>
-            <h2 class="fs-6 fw-bold mb-1">24/7 Live Support</h2>
-            <p class="text-xs mb-0" style="color:var(--text-muted);">Dedicated customer assistance anytime</p>
+            <h2 class="fs-6 fw-bold mb-1">Customer Support</h2>
+            <p class="text-xs mb-0" style="color:var(--text-muted);">Dedicated assistance for all orders</p>
         </div>
     </div>
 </section>
@@ -325,9 +326,9 @@
     <section class="section-surface section-surface--bestsellers reveal-on-scroll" aria-labelledby="bestSellersHeading">
         <div class="section-header-row">
             <div>
-                <span class="section-eyebrow bg-warning-subtle text-warning border border-warning">Top Verified Purchases</span>
+                <span class="section-eyebrow bg-warning-subtle text-warning border border-warning">Top Selections</span>
                 <h2 id="bestSellersHeading" class="section-title">Best Sellers</h2>
-                <p class="section-subtitle">Most trusted, frequently reordered products across all major categories</p>
+                <p class="section-subtitle">Popular essentials across all major categories</p>
             </div>
             <a asp-controller="Shop" asp-action="Index" class="btn btn-glass btn-sm rounded-pill px-3">
                 View All Best Sellers <i class="fa-solid fa-arrow-right ms-1"></i>
@@ -353,9 +354,9 @@
          style="background:linear-gradient(135deg,rgba(37,99,235,0.12),rgba(124,58,237,0.08));border:1px solid var(--border-default) !important;">
         <div class="row align-items-center g-4">
             <div class="col-md-8 text-md-start">
-                <h2 class="h3 fw-bold mb-2">Ready to Experience Premium 3D Commerce?</h2>
+                <h2 class="h3 fw-bold mb-2">Explore the HamaraCommerce Platform</h2>
                 <p class="mb-0" style="color:var(--text-muted);font-size:1rem;">
-                    Join 50,000+ satisfied customers enjoying 100% genuine products, same-day dispatch, and 24/7 dedicated support.
+                    Discover over 1,000 products across 20 Pakistani categories with genuine market pricing and cash on delivery.
                 </p>
             </div>
             <div class="col-md-4 text-md-end">

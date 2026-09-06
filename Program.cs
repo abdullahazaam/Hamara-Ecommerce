@@ -179,6 +179,7 @@ builder.Services.AddScoped<IEmailOutboxService, EmailOutboxService>();
 builder.Services.AddHostedService<EmailOutboxBackgroundService>();
 builder.Services.AddScoped<ISeoService, SeoService>();
 builder.Services.AddScoped<ICatalogueImporter, CatalogueImporter>();
+builder.Services.AddScoped<ICatalogueImageRepairService, CatalogueImageRepairService>();
 
 if (builder.Environment.IsProduction())
 {
@@ -230,6 +231,22 @@ using (var scope = app.Services.CreateScope())
             Console.WriteLine($"Invalid Prices:     {report.InvalidPrices}");
             Console.WriteLine($"Legacy Published:   {report.LegacyPublishedProducts}");
             Console.WriteLine($"Fake Seeded Reviews:{report.FakeSeededReviews}");
+            Console.WriteLine("=================================================");
+            return;
+        }
+
+        if (args.Contains("--repair-images") || args.Contains("--repair-storefront"))
+        {
+            logger.LogInformation("Executing CLI catalogue image and storefront repair...");
+            var repairService = services.GetRequiredService<ICatalogueImageRepairService>();
+            var repairReport = repairService.RepairImagesAndSignalsAsync().GetAwaiter().GetResult();
+            Console.WriteLine("=================================================");
+            Console.WriteLine("STOREFRONT & IMAGE REPAIR REPORT");
+            Console.WriteLine("=================================================");
+            Console.WriteLine($"Total Processed:         {repairReport.TotalProcessed}");
+            Console.WriteLine($"Successfully Repaired:   {repairReport.RepairedCount}");
+            Console.WriteLine($"Archived (Unrepairable): {repairReport.ArchivedCount}");
+            Console.WriteLine($"Duplicate Hashes Flagged:{repairReport.DuplicateHashesCount}");
             Console.WriteLine("=================================================");
             return;
         }

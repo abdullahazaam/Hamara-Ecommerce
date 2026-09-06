@@ -1038,10 +1038,15 @@
                         obs.unobserve(entry.target);
                     }
                 });
-            }, { rootMargin: '0px 0px -40px 0px', threshold: 0.08 });
+            }, { rootMargin: '100px 0px 50px 0px', threshold: 0.01 });
 
             document.querySelectorAll('.reveal-on-scroll').forEach(el => {
-                revealObserver.observe(el);
+                const rect = el.getBoundingClientRect();
+                if (rect.top < window.innerHeight + 100 && rect.bottom > -100) {
+                    el.classList.add('is-revealed');
+                } else {
+                    revealObserver.observe(el);
+                }
             });
         } else {
             document.querySelectorAll('.reveal-on-scroll').forEach(el => el.classList.add('is-revealed'));
