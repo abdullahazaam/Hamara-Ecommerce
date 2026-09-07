@@ -26,24 +26,35 @@ namespace HamaraCommerce.Services
 
         public async Task<int> CleanLegacyDemoDataAsync(CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Starting cleanup of legacy demo data...");
+            var dtos = PakistanCatalogBuilder.GetAllProducts();
+            var canonicalSkus = dtos.Select(d => d.SKU).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return await CleanLegacyDemoDataAsync(canonicalSkus, cancellationToken);
+        }
 
-            // Find all products that do not belong to the genuine Pakistani catalog (missing SourceProductUrl or legacy SKU prefixes)
-            var allLegacyProducts = await _context.Products
+        public async Task<int> CleanLegacyDemoDataAsync(ISet<string> canonicalSkus, CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation("Starting cleanup of non-canonical catalog products...");
+
+            var allDbProducts = await _context.Products
                 .Include(p => p.OrderItems)
                 .Include(p => p.Images)
                 .Include(p => p.Variants)
                 .Include(p => p.InventoryMovements)
                 .Include(p => p.Reviews)
                 .Include(p => p.Questions)
-                .Where(p => string.IsNullOrEmpty(p.SourceProductUrl) || !p.SKU.StartsWith("PK-"))
                 .ToListAsync(cancellationToken);
 
             int archivedCount = 0;
             int deletedCount = 0;
 
-            foreach (var product in allLegacyProducts)
+            foreach (var product in allDbProducts)
             {
+                if (canonicalSkus.Contains(product.SKU))
+                {
+                    // Belongs to the 342 canonical catalogue; keep for update/publish
+                    continue;
+                }
+
                 // Check if product is referenced in orders
                 bool hasOrders = product.OrderItems.Any() ||
                                  await _context.OrderItems.AnyAsync(oi => oi.ProductId == product.Id, cancellationToken);
@@ -65,7 +76,7 @@ namespace HamaraCommerce.Services
                     if (product.Questions.Any()) _context.QuestionAnswers.RemoveRange(product.Questions);
 
                     archivedCount++;
-                    _logger.LogInformation("Archived legacy ordered product ID {Id}: {Title} ({SKU})", product.Id, product.Title, product.SKU);
+                    _logger.LogInformation("Archived historical ordered product ID {Id}: {Title} ({SKU})", product.Id, product.Title, product.SKU);
                 }
                 else
                 {
@@ -102,7 +113,7 @@ namespace HamaraCommerce.Services
             }
 
             await _context.SaveChangesAsync(cancellationToken);
-            _logger.LogInformation("Legacy cleanup finished: {Archived} archived, {Deleted} deleted, {FakeReviews} fake reviews removed.",
+            _logger.LogInformation("Non-canonical cleanup finished: {Archived} archived, {Deleted} deleted, {FakeReviews} fake reviews removed.",
                 archivedCount, deletedCount, fakeReviews.Count);
 
             return deletedCount;
@@ -110,42 +121,16 @@ namespace HamaraCommerce.Services
 
         public async Task SyncCategoriesAsync(CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Synchronizing 20 Pakistani e-commerce categories...");
+            _logger.LogInformation("Synchronizing 15 Pakistani e-commerce categories...");
 
             var officialCategories = PakistanCatalogBuilder.GetOfficialCategories();
             var existingCategories = await _context.Categories.ToListAsync(cancellationToken);
-
-            // Legacy slug mappings to align existing DB records with the 20 official categories
-            var slugMapping = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                { "electronics", "tvs-entertainment" },
-                { "laptops", "laptops-computers" },
-                { "fashion", "mens-fashion" },
-                { "shoes", "shoes-footwear" },
-                { "watches", "watches-jewellery" },
-                { "beauty", "beauty-personal-care" },
-                { "home-kitchen", "kitchen-appliances" },
-                { "gaming", "toys-games" },
-                { "furniture", "furniture-decor" },
-                { "grocery", "grocery-beverages" },
-                { "sports", "sports-fitness" },
-                { "books", "books-stationery" },
-                { "automotive", "home-appliances" },
-                { "pet-supplies", "mobile-accessories" },
-                { "mobile-phones", "mobile-phones" }
-            };
+            var officialMap = officialCategories.ToDictionary(c => c.Slug.ToLower(), c => c);
 
             // 1. Update existing categories
             foreach (var existing in existingCategories)
             {
-                string targetSlug = existing.Slug;
-                if (slugMapping.TryGetValue(existing.Slug, out var mapped))
-                {
-                    targetSlug = mapped;
-                }
-
-                var official = officialCategories.FirstOrDefault(c => c.Slug.Equals(targetSlug, StringComparison.OrdinalIgnoreCase));
-                if (official != null)
+                if (officialMap.TryGetValue(existing.Slug.ToLower(), out var official))
                 {
                     existing.Name = official.Name;
                     existing.Slug = official.Slug;
@@ -153,14 +138,23 @@ namespace HamaraCommerce.Services
                     existing.Description = official.Description;
                     existing.DisplayOrder = official.DisplayOrder;
                     existing.IsFeatured = official.IsFeatured;
+                    existing.IsActive = true;
+                    existing.ParentCategoryId = null;
+                }
+                else
+                {
+                    // Deactivate categories outside the official 15 taxonomy
+                    existing.IsActive = false;
+                    existing.IsFeatured = false;
+                    existing.ParentCategoryId = null;
                 }
             }
 
             // 2. Add missing categories
-            var currentSlugs = existingCategories.Select(c => c.Slug.ToLower()).ToHashSet();
+            var existingSlugs = existingCategories.Select(c => c.Slug.ToLower()).ToHashSet();
             foreach (var official in officialCategories)
             {
-                if (!currentSlugs.Contains(official.Slug.ToLower()))
+                if (!existingSlugs.Contains(official.Slug.ToLower()))
                 {
                     _context.Categories.Add(new Category
                     {
@@ -170,25 +164,26 @@ namespace HamaraCommerce.Services
                         Description = official.Description,
                         DisplayOrder = official.DisplayOrder,
                         IsFeatured = official.IsFeatured,
+                        IsActive = true,
+                        ParentCategoryId = null,
                         ProductCount = 0
                     });
-                    currentSlugs.Add(official.Slug.ToLower());
                 }
             }
 
             await _context.SaveChangesAsync(cancellationToken);
-            _logger.LogInformation("Categories synchronized. Total active categories: {Count}", currentSlugs.Count);
+            _logger.LogInformation("Categories synchronized. Total official categories: {Count}", officialCategories.Count);
         }
 
         public async Task<CatalogueImportReport> ImportCatalogueAsync(string? jsonFilePath = null, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Beginning catalogue import...");
+            _logger.LogInformation("Beginning canonical 342-product catalogue import...");
 
             // Resolve JSON path
-            string path = jsonFilePath ?? Path.Combine(Directory.GetCurrentDirectory(), "Data", "Catalog", "pakistan-products-2026.json");
+            string path = jsonFilePath ?? PakistanCatalogBuilder.ResolveJsonFilePath();
             if (!File.Exists(path))
             {
-                _logger.LogInformation("Catalogue JSON file not found at {Path}. Generating from catalogue builder...", path);
+                _logger.LogInformation("Catalogue JSON file not found at {Path}. Generating from canonical builder...", path);
                 path = PakistanCatalogBuilder.EnsureJsonFileGenerated(path);
             }
 
@@ -198,13 +193,14 @@ namespace HamaraCommerce.Services
 
             _logger.LogInformation("Loaded {Count} items from JSON catalogue.", dtos.Count);
 
-            // Ensure categories are synced
+            // 1. Ensure 15 categories are synced
             await SyncCategoriesAsync(cancellationToken);
 
-            // Clean legacy demo items
-            await CleanLegacyDemoDataAsync(cancellationToken);
+            // 2. Clean non-canonical items, preserving historical orders
+            var canonicalSkus = dtos.Select(d => d.SKU).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            await CleanLegacyDemoDataAsync(canonicalSkus, cancellationToken);
 
-            var categories = await _context.Categories.ToListAsync(cancellationToken);
+            var categories = await _context.Categories.Where(c => c.IsActive).ToListAsync(cancellationToken);
             var catMap = categories.ToDictionary(c => c.Slug.ToLower(), c => c);
 
             var existingProducts = await _context.Products.ToDictionaryAsync(p => p.SKU, p => p, cancellationToken);
@@ -248,6 +244,7 @@ namespace HamaraCommerce.Services
                     existing.DiscountPercentage = discount;
                     existing.Stock = dto.Stock;
                     existing.ShortDescription = dto.ShortDescription;
+                    existing.FullDescription = dto.ShortDescription;
                     existing.MainImage = dto.MainImage;
                     existing.ImageSourceUrl = dto.ImageSourceUrl;
                     existing.SourceRetailer = dto.SourceRetailer;
@@ -256,6 +253,8 @@ namespace HamaraCommerce.Services
                     existing.Status = ProductStatus.Published;
                     existing.IsFeatured = dto.IsFeatured;
                     existing.IsFlashDeal = dto.IsFlashDeal;
+                    existing.FlashDealEnd = dto.IsFlashDeal ? DateTime.UtcNow.AddDays(7) : null;
+                    existing.StorefrontRank = count + 1;
                     existing.UpdatedAt = DateTime.UtcNow;
                     updated++;
                 }
@@ -287,6 +286,7 @@ namespace HamaraCommerce.Services
                         IsFeatured = dto.IsFeatured,
                         IsFlashDeal = dto.IsFlashDeal,
                         FlashDealEnd = dto.IsFlashDeal ? DateTime.UtcNow.AddDays(7) : null,
+                        StorefrontRank = count + 1,
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
                     };
@@ -315,7 +315,8 @@ namespace HamaraCommerce.Services
             await _context.SaveChangesAsync(cancellationToken);
 
             // Update category product counts
-            foreach (var cat in categories)
+            var allDbCats = await _context.Categories.ToListAsync(cancellationToken);
+            foreach (var cat in allDbCats)
             {
                 cat.ProductCount = await _context.Products
                     .CountAsync(p => p.CategoryId == cat.Id && p.Status == ProductStatus.Published, cancellationToken);
@@ -341,7 +342,7 @@ namespace HamaraCommerce.Services
             report.TotalArchived = await _context.Products.CountAsync(p => p.Status == ProductStatus.Archived, cancellationToken);
 
             // Category counts and price ranges
-            var groups = publishedProducts.GroupBy(p => p.CategoryName ?? p.Category?.Name ?? "Uncategorized");
+            var groups = publishedProducts.GroupBy(p => p.Category?.Slug ?? p.CategoryName?.ToLower() ?? "uncategorized");
             foreach (var g in groups)
             {
                 report.CategoryCounts[g.Key] = g.Count();
@@ -366,7 +367,7 @@ namespace HamaraCommerce.Services
             report.MissingSourceUrls = publishedProducts.Count(p => string.IsNullOrWhiteSpace(p.SourceProductUrl));
             report.InvalidPrices = publishedProducts.Count(p => p.Price <= 0);
 
-            report.LegacyPublishedProducts = publishedProducts.Count(p => !p.SKU.StartsWith("PK-"));
+            report.LegacyPublishedProducts = publishedProducts.Count(p => !p.SKU.StartsWith("PK-DJ-") && !p.SKU.StartsWith("PK-MU-"));
 
             var fakeReviewers = new[] { "Sarah Jenkins", "David Miller", "Marcus Vance", "Elena Rostova", "Jake Coleman" };
             report.FakeSeededReviews = await _context.Reviews.CountAsync(r => fakeReviewers.Contains(r.UserName), cancellationToken);

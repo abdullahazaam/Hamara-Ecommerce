@@ -17,6 +17,8 @@
     string heroTitle = heroProduct?.Title ?? "Anker 511 GaN Fast Charger";
     decimal heroPrice = heroProduct?.Price ?? 4799;
     string heroSlug = heroProduct?.Slug ?? heroProduct?.Id.ToString() ?? "";
+    int publishedCount = ViewBag.PublishedProductCount ?? 342;
+    int categoryCount = ViewBag.TotalCategoriesCount ?? (categories.Count > 0 ? categories.Count : 15);
 }
 
 <!-- ================================================================
@@ -37,7 +39,7 @@
             </h1>
 
             <p class="hero-lead">
-                Over 1,200 genuine Pakistani products across 12 major departments. Enjoy verified market pricing, transparent stock, and nationwide cash on delivery.
+                Over @publishedCount.ToString("N0") genuine Pakistani products across @categoryCount major departments. Enjoy verified market pricing, transparent stock, and nationwide cash on delivery.
             </p>
 
             <div class="d-flex flex-wrap gap-3 mb-4">
@@ -57,11 +59,11 @@
             <!-- Trust micro-stats -->
             <div class="d-flex flex-wrap gap-3">
                 <div class="hero-stat-badge">
-                    <div class="hero-stat-num hero-stat-num--blue">1,200+</div>
+                    <div class="hero-stat-num hero-stat-num--blue">@publishedCount.ToString("N0")</div>
                     <div class="hero-stat-label">Published<br>Products</div>
                 </div>
                 <div class="hero-stat-badge">
-                    <div class="hero-stat-num hero-stat-num--green">12</div>
+                    <div class="hero-stat-num hero-stat-num--green">@categoryCount</div>
                     <div class="hero-stat-label">Major<br>Departments</div>
                 </div>
                 <div class="hero-stat-badge d-none d-sm-inline-flex">
@@ -186,7 +188,7 @@
             <div>
                 <span class="section-eyebrow bg-primary-subtle text-primary border border-primary">Marketplace Categories</span>
                 <h2 id="departmentsHeading" class="section-title">Popular Categories</h2>
-                <p class="section-subtitle">Explore 12 flagship departments covering tech, fashion, essentials, and home</p>
+                <p class="section-subtitle">Explore @categoryCount flagship departments covering tech, fashion, essentials, and home</p>
             </div>
             <a asp-controller="Shop" asp-action="Index" class="btn btn-glass btn-sm rounded-pill px-3">
                 View All Departments <i class="fa-solid fa-arrow-right ms-1"></i>
@@ -445,7 +447,7 @@
          style="background:linear-gradient(135deg,rgba(37,99,235,0.12),rgba(124,58,237,0.08));border:1px solid var(--border-default) !important;">
         <div class="row align-items-center g-4">
             <div class="col-md-8 text-md-start">
-                <h2 class="h3 fw-bold mb-2">Discover 1,200+ Products on HamaraCommerce</h2>
+                <h2 class="h3 fw-bold mb-2">Discover @publishedCount.ToString("N0") Products on HamaraCommerce</h2>
                 <p class="mb-0" style="color:var(--text-muted);font-size:1rem;">
                     From Karachi to Peshawar, browse verified Pakistani retail products with genuine PKR pricing, 0 fake claims, and reliable nationwide delivery.
                 </p>

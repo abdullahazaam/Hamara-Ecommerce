@@ -38,12 +38,16 @@ namespace HamaraCommerce.Controllers
         [HttpGet]
         public async Task<IActionResult> Index(CancellationToken cancellationToken = default)
         {
-            // 1. Popular Categories (12 Major Marketplace Departments)
+            // 1. Popular Categories (15 Major Marketplace Departments)
             var categories = await _context.Categories
                 .AsNoTracking()
-                .Where(c => c.ParentCategoryId == null)
+                .Where(c => c.ParentCategoryId == null && c.IsActive)
                 .OrderBy(c => c.DisplayOrder)
                 .ToListAsync(cancellationToken);
+
+            var publishedProductCount = await _context.Products
+                .CountAsync(p => p.Status == ProductStatus.Published, cancellationToken);
+            var totalCategoriesCount = categories.Count;
 
             // 2. Everyday Low Prices (< PKR 3,500)
             var everydayLowPrices = await _context.Products
@@ -135,6 +139,8 @@ namespace HamaraCommerce.Controllers
             ViewBag.Electronics = electronics;
             ViewBag.NewArrivals = newArrivals;
             ViewBag.HeroProduct = heroProduct;
+            ViewBag.PublishedProductCount = publishedProductCount;
+            ViewBag.TotalCategoriesCount = totalCategoriesCount;
 
             ViewData["SeoMetadata"] = new PageSeoMetadata
             {

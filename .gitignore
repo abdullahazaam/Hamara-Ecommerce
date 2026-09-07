@@ -42,3 +42,7 @@ $RECYCLE.BIN/
 TestResults/
 coverage/
 *.trx
+
+## Tool caches
+.cache/
+tools/.cache/

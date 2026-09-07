@@ -12,24 +12,69 @@ namespace HamaraCommerce.Data
         {
             // Database migrated via EF Core Migrations
 
-            // 1. SEED CATEGORIES (20 Official Pakistani Categories)
-            if (!context.Categories.Any())
+            // 1. SEED CATEGORIES (15 Official Pakistani Categories)
+            var officialCategories = PakistanCatalogBuilder.GetOfficialCategories();
+            var existingCategories = context.Categories.ToList();
+            if (!existingCategories.Any())
             {
-                var categories = PakistanCatalogBuilder.GetOfficialCategories();
-                context.Categories.AddRange(categories);
+                context.Categories.AddRange(officialCategories);
                 context.SaveChanges();
+                existingCategories = context.Categories.ToList();
+            }
+            else
+            {
+                var officialMap = officialCategories.ToDictionary(c => c.Slug.ToLowerInvariant(), c => c);
+                foreach (var existing in existingCategories)
+                {
+                    if (officialMap.TryGetValue(existing.Slug.ToLowerInvariant(), out var official))
+                    {
+                        existing.Name = official.Name;
+                        existing.Icon = official.Icon;
+                        existing.Description = official.Description;
+                        existing.DisplayOrder = official.DisplayOrder;
+                        existing.IsFeatured = official.IsFeatured;
+                        existing.IsActive = true;
+                    }
+                    else
+                    {
+                        existing.IsActive = false;
+                        existing.IsFeatured = false;
+                    }
+                }
+                var existingSlugs = existingCategories.Select(c => c.Slug.ToLowerInvariant()).ToHashSet();
+                foreach (var official in officialCategories)
+                {
+                    if (!existingSlugs.Contains(official.Slug.ToLowerInvariant()))
+                    {
+                        context.Categories.Add(new Category
+                        {
+                            Name = official.Name,
+                            Slug = official.Slug,
+                            Icon = official.Icon,
+                            Description = official.Description,
+                            DisplayOrder = official.DisplayOrder,
+                            IsFeatured = official.IsFeatured,
+                            IsActive = true,
+                            ParentCategoryId = null,
+                            ProductCount = 0
+                        });
+                    }
+                }
+                context.SaveChanges();
+                existingCategories = context.Categories.ToList();
             }
 
-            // 2. SEED 1,000+ REAL PAKISTANI PRODUCTS
+            // 2. SEED CANONICAL 342 REAL PAKISTANI PRODUCTS
             if (!context.Products.Any(p => p.Status == ProductStatus.Published))
             {
                 var dtos = PakistanCatalogBuilder.GetAllProducts();
-                var catMap = context.Categories.ToDictionary(c => c.Slug.ToLower(), c => c);
+                var catMap = existingCategories.ToDictionary(c => c.Slug.ToLowerInvariant(), c => c);
                 var products = new List<Product>();
+                int rank = 1;
 
                 foreach (var dto in dtos)
                 {
-                    if (!catMap.TryGetValue(dto.Category.ToLower(), out var cat))
+                    if (!catMap.TryGetValue(dto.Category.ToLowerInvariant(), out var cat))
                     {
                         continue;
                     }
@@ -39,6 +84,10 @@ namespace HamaraCommerce.Data
                     {
                         discount = Math.Round((double)((dto.OldPrice - dto.Price) / dto.OldPrice) * 100, 1);
                     }
+
+                    DateTime priceChecked = DateTime.TryParse(dto.PriceCheckedAt, out var dt)
+                        ? DateTime.SpecifyKind(dt, DateTimeKind.Utc)
+                        : DateTime.UtcNow;
 
                     var p = new Product
                     {
@@ -61,9 +110,10 @@ namespace HamaraCommerce.Data
                         ImageSourceUrl = dto.ImageSourceUrl,
                         SourceRetailer = dto.SourceRetailer,
                         SourceProductUrl = dto.SourceProductUrl,
-                        PriceCheckedAt = DateTime.UtcNow,
+                        PriceCheckedAt = priceChecked,
                         IsFeatured = dto.IsFeatured,
                         IsFlashDeal = dto.IsFlashDeal,
+                        StorefrontRank = rank++,
                         FlashDealEnd = dto.IsFlashDeal ? DateTime.UtcNow.AddDays(7) : null,
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
