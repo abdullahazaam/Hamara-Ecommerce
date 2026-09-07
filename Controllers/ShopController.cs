@@ -149,7 +149,7 @@ namespace HamaraCommerce.Controllers
             ViewData["SeoMetadata"] = new PageSeoMetadata
             {
                 Title = !string.IsNullOrEmpty(category) ? $"{category.ToUpperInvariant()} - Buy Online | Hamara Commerce" : "Shop Collection - Hamara Commerce",
-                Description = "Explore thousands of authentic products across Pakistan with genuine manufacturer warranty, express shipping, and cash on delivery.",
+                Description = "Explore products across Pakistan with manufacturer warranty, express shipping, and cash on delivery.",
                 Robots = isSearchQuery ? "noindex, follow" : "index, follow"
             };
 

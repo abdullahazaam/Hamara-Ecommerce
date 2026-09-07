@@ -1,63 +1,144 @@
 # Hamara Commerce
 
-Hamara Commerce is the main ASP.NET Core project in my portfolio. I started it as an e-commerce store and kept expanding it so I could work through more than basic product management. The project now covers customer accounts, shopping, checkout, orders and several admin workflows.
+Hamara Commerce is a full-featured e-commerce and retail platform demonstration built with ASP.NET Core MVC on .NET 9 and Microsoft SQL Server. Developed as an in-depth software engineering portfolio project, it demonstrates realistic system architecture beyond basic CRUD operations: concurrency-safe inventory adjustments, idempotent checkout processing, multi-stage returns and refund governance, transactional email outbox recovery, and a modern customer storefront.
 
-## What is included
+---
 
-- Product catalogue with categories, brands, search, filters and pagination
-- Product details, variants, stock information and image galleries
-- Customer registration, email confirmation and account management
-- Cart and wishlist
-- Guest and signed-in checkout flows
-- Orders, coupons, pricing calculations and order tracking
-- Admin screens for products, orders and store operations
-- Transactional email queue with retry handling
-- Automated tests for important account, pricing and checkout behaviour
+## Visual Tour
 
-## Technology
+### Storefront Homepage
+![Storefront Homepage](docs/screenshots/homepage.png)
+*Homepage with category navigation, department highlights, real local pricing in PKR, and transparent stock counts.*
 
-- ASP.NET Core MVC on .NET 9
-- C# and Entity Framework Core
-- SQL Server
-- ASP.NET Core Identity
-- Razor views, Bootstrap, CSS and JavaScript
-- xUnit for tests
-- GitHub Actions for build and test checks
+### Product Catalogue & Search
+![Product Catalogue](docs/screenshots/catalogue.png)
+*Faceted filtering by category, brand, rating, and stock status with server-side pagination.*
 
-## Areas I focused on
+### Product Details & Customer Feedback
+![Product Details](docs/screenshots/product-details.png)
+*Comprehensive product specifications, variant selection, delivery estimates, customer reviews, and moderated Q&A.*
 
-The most useful part of this project was working through problems that do not appear in a simple CRUD store. These included checking who can access an order, keeping displayed and saved prices consistent, updating stock safely, preventing repeated checkout submissions and recovering queued email work after an interruption.
+### Multi-Step Secure Checkout
+![Checkout Process](docs/screenshots/checkout.png)
+*Checkout flow featuring pre-filled customer address details, real-time GST and shipping calculation, and idempotency protection.*
 
-## Running the project
+### Mobile Responsive Experience
+![Mobile Storefront](docs/screenshots/mobile.png)
+*Fully responsive storefront optimized for handheld devices and mobile viewports.*
 
-You will need the .NET 9 SDK and SQL Server.
+### Operations & Administration Dashboard
+![Admin Dashboard](docs/screenshots/admin.png)
+*Executive dashboard providing sales trends, low-stock notifications, audit logs, and catalog control.*
 
-1. Clone the repository.
-2. Set the SQL Server connection string in local configuration or user secrets.
-3. Restore packages and apply the migrations:
+---
+
+## Core System Highlights
+
+- **Concurrency-Safe Inventory & Checkout**: Prevents overselling under high-contention concurrent checkouts using database locking, stock reservation, and idempotency tokens.
+- **Return & Refund Governance**: Explicit multi-state return workflow (`Requested` &rarr; `Approved` &rarr; `Inspected` &rarr; `RefundPending` &rarr; `Completed`). Requires authentic remittance references, restocks inventory idempotently, and prohibits arbitrary automatic balance adjustments.
+- **Operational Recovery & Email Outbox**: Reliable asynchronous messaging using the Transactional Outbox Pattern. Atomic leasing prevents duplicate sends, while administrator-supervised recovery handles failed or stalled dispatches.
+- **Review & Question Moderation**: New product reviews and customer inquiries enter moderation before publication. Verified-purchase badges strictly require an order owned by that customer with confirmed payment.
+- **Category Hierarchy Safety**: Prevents self-parenting and ancestor cycles during tree manipulation, paired with optimized grouped queries that eliminate N+1 database roundtrips.
+- **Customer Privacy & IDOR Prevention**: Comprehensive authorization barriers protecting order history, PDF invoices, saved shipping addresses, and personal account details.
+
+---
+
+## Technology Stack
+
+- **Backend**: ASP.NET Core 9 (MVC Architecture)
+- **Language**: C# 13
+- **Data Access**: Entity Framework Core 9 (Code-First with Additive Migrations)
+- **Database**: Microsoft SQL Server / LocalDB
+- **Authentication**: ASP.NET Core Identity with role-based authorization
+- **Frontend**: Razor Views, Bootstrap 5, Custom CSS Design System, Vanilla JavaScript
+- **Testing**: xUnit, Moq, Microsoft.AspNetCore.Mvc.Testing, VSTest
+- **Continuous Integration**: GitHub Actions (separating environment-independent and real SQL Server integration test jobs)
+
+---
+
+## Getting Started
+
+### Prerequisites
+- [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- Microsoft SQL Server 2019+ or Windows LocalDB (included with Visual Studio)
+
+### Installation & Setup
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/abdullahazaam/Hamara-Ecommerce.git
+   cd Hamara-Ecommerce
+   ```
+
+2. **Configure Database Connection**:
+   By default, the application connects to Windows LocalDB:
+   ```json
+   "ConnectionStrings": {
+     "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=HamaraCommerceDb;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True"
+   }
+   ```
+   To use a custom SQL Server instance, set the connection string using .NET User Secrets or environment variables (see table below).
+
+3. **Restore and Build**:
+   ```bash
+   dotnet restore
+   dotnet build --configuration Release
+   ```
+
+4. **Apply Database Migrations & Initial Seed**:
+   Database migrations apply automatically on application startup. To apply them manually:
+   ```bash
+   dotnet ef database update
+   ```
+
+5. **Run the Application**:
+   ```bash
+   dotnet run
+   ```
+   Open `http://localhost:5000` (or the URL displayed in the console) in your web browser.
+
+---
+
+## Environment Variables & Configuration
+
+Configuration settings can be provided via `appsettings.json`, environment variables, or `.NET User Secrets`:
+
+| Variable / Key | Description | Default / Example |
+| :--- | :--- | :--- |
+| `ConnectionStrings__DefaultConnection` | Primary SQL Server connection string | `Server=(localdb)\mssqllocaldb;Database=HamaraCommerceDb;...` |
+| `HAMARA_TEST_SQL_CONNECTION` | Connection string for real SQL integration tests | Defaults to `DefaultConnection` if omitted |
+| `PublicSiteUrl` | Canonical HTTPS public site URL (required in Production) | `https://example.com` |
+| `AdminSeed:Email` | Seeded development administrator email | `admin@hamaracommerce.pk` |
+| `AdminSeed:Password` | Seeded development administrator password | `Admin@123!` |
+| `Smtp:Host` | Outgoing SMTP server hostname | `smtp.example.com` (falls back to logger if omitted) |
+| `Smtp:Port` | Outgoing SMTP server port | `587` |
+| `Smtp:User` | Outgoing SMTP username | `noreply@hamaracommerce.pk` |
+| `Smtp:Password` | Outgoing SMTP password | User secret |
+
+---
+
+## Running Automated Tests
+
+The test suite is divided into environment-independent tests (which run in any environment) and real SQL Server integration tests (which verify concurrency and transactional rollback against a real database instance):
 
 ```bash
-dotnet restore
-dotnet ef database update
+# Run entire test suite (118 tests)
+dotnet test --configuration Release
+
+# Run only environment-independent tests (107 tests)
+dotnet test --configuration Release --filter "Category!=Integration"
+
+# Run only SQL Server integration tests (11 tests)
+dotnet test --configuration Release --filter "Category=Integration"
 ```
 
-4. Start the application:
+For complete test logs and reproducibility details, refer to [docs/VERIFICATION.md](docs/VERIFICATION.md).
 
-```bash
-dotnet run
-```
+---
 
-Do not commit production connection strings, SMTP credentials or payment credentials. Use user secrets or environment variables for local development.
+## Limitations & Scope
 
-## Tests
-
-```bash
-dotnet test HamaraCommerce.sln
-```
-
-Some checkout and concurrency tests require SQL Server. They should not be treated as passing if the required database is unavailable.
-
-## Project status
-
-This is a portfolio project, not a live commercial marketplace. COD and test payment flows are available for demonstration, but a real deployment would still need production payment, email, monitoring and operational configuration.
-
+- **Portfolio Demonstration**: This repository is developed as a technical portfolio project rather than a live commercial service.
+- **Payment Processing**: The checkout engine supports sandbox test cards and Cash on Delivery (COD). No real credit card charges are processed, and refund recording represents internal financial accounting.
+- **Email Delivery**: When SMTP credentials are not configured, transactional emails are queued in the outbox table and recorded to application logs rather than dispatched to public mail servers.
+- **Warranty and Returns**: Policies described in storefront copy demonstrate business workflows and do not constitute actual legal warranties or delivery guarantees.

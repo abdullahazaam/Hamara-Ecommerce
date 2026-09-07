@@ -144,9 +144,9 @@ namespace HamaraCommerce.Controllers
 
             ViewData["SeoMetadata"] = new PageSeoMetadata
             {
-                Title = "Hamara Commerce | Pakistan's Premier Online Marketplace",
-                Description = "Discover authentic consumer electronics, fashion, lifestyle, and home goods with nationwide cash on delivery, 30-day easy returns, and guaranteed genuine quality.",
-                Keywords = "online shopping pakistan, cash on delivery lahore, electronics karachi, buy verified gadgets, hamara commerce"
+                Title = "Hamara Commerce | Online Shopping in Pakistan",
+                Description = "Discover consumer electronics, fashion, lifestyle, and home goods with nationwide cash on delivery and easy returns.",
+                Keywords = "online shopping pakistan, cash on delivery lahore, electronics karachi, gadgets, hamara commerce"
             };
 
             return View();
@@ -187,7 +187,7 @@ namespace HamaraCommerce.Controllers
             ViewData["SeoMetadata"] = new PageSeoMetadata
             {
                 Title = "Contact Support & Help Desk - Hamara Commerce",
-                Description = "Get in touch with Hamara Commerce's dedicated 24/7 customer support team for order assistance, warranty claims, and corporate inquiries."
+                Description = "Get in touch with Hamara Commerce's customer support team for order assistance, warranty claims, and corporate inquiries."
             };
             return View();
         }
@@ -370,8 +370,8 @@ namespace HamaraCommerce.Controllers
         {
             ViewData["SeoMetadata"] = new PageSeoMetadata
             {
-                Title = "30-Day Return & Refund Policy - Hamara Commerce",
-                Description = "Details on our 30-day money-back guarantee, doorstep returns process, and rapid refund timelines."
+                Title = "Return & Refund Policy - Hamara Commerce",
+                Description = "Details on our returns policy, doorstep pickup process, and refund procedure."
             };
             return View();
         }
@@ -382,7 +382,7 @@ namespace HamaraCommerce.Controllers
             ViewData["SeoMetadata"] = new PageSeoMetadata
             {
                 Title = "Frequently Asked Questions (FAQs) - Hamara Commerce",
-                Description = "Find instant answers to common questions about genuine warranty, cash on delivery, courier tracking, and order cancellations."
+                Description = "Find answers to common questions about product warranty, cash on delivery, courier tracking, and order cancellations."
             };
             return View();
         }

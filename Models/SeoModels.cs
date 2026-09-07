@@ -4,8 +4,8 @@ namespace HamaraCommerce.Models
 {
     public class PageSeoMetadata
     {
-        public string Title { get; set; } = "Hamara Commerce | Pakistan's Premier Marketplace";
-        public string Description { get; set; } = "Shop authentic electronics, fashion, lifestyle, and home goods with nationwide cash on delivery, guaranteed genuine quality, and easy returns.";
+        public string Title { get; set; } = "Hamara Commerce | Online Shopping in Pakistan";
+        public string Description { get; set; } = "Shop electronics, fashion, lifestyle, and home goods with nationwide cash on delivery and easy returns.";
         public string Keywords { get; set; } = "ecommerce pakistan, online shopping lahore, karachi electronics, buy online pakistan, cash on delivery";
         public string? CanonicalUrl { get; set; }
         public string Robots { get; set; } = "index, follow";

@@ -1,5 +1,5 @@
 @{
-    ViewData["Title"] = "HamaraCommerce | Pakistan's Premier Online Marketplace";
+    ViewData["Title"] = "HamaraCommerce | Online Store";
     var categories = ViewBag.Categories as List<HamaraCommerce.Models.Category> ?? new();
     var everydayLowPrices = ViewBag.EverydayLowPrices as List<HamaraCommerce.Models.Product> ?? new();
     var budgetDeals = ViewBag.BudgetDeals as List<HamaraCommerce.Models.Product> ?? new();
@@ -30,7 +30,7 @@
         <div class="col-lg-6" style="min-width:0;">
             <div class="hero-trust-badge">
                 <span>🇵🇰</span>
-                Pakistan's Verified Multi-Department Marketplace
+                Online Shopping in Pakistan
             </div>
 
             <h1 id="heroHeading" class="hero-heading">
@@ -39,7 +39,7 @@
             </h1>
 
             <p class="hero-lead">
-                Over @publishedCount.ToString("N0") genuine Pakistani products across @categoryCount major departments. Enjoy verified market pricing, transparent stock, and nationwide cash on delivery.
+                Browse @publishedCount.ToString("N0") products across @categoryCount major departments with transparent stock and nationwide cash on delivery.
             </p>
 
             <div class="d-flex flex-wrap gap-3 mb-4">
@@ -128,7 +128,7 @@
                     <div class="hero-floating-badge hero-badge--rating" data-tilt-z="badge">
                         <i class="fa-solid fa-certificate text-primary"></i>
                         <span class="fw-bold hero-badge-value">100%</span>
-                        <span class="text-xs hero-badge-muted">Genuine Items</span>
+                        <span class="text-xs hero-badge-muted">Curated Items</span>
                     </div>
                 </div>
             </div>
@@ -449,7 +449,7 @@
             <div class="col-md-8 text-md-start">
                 <h2 class="h3 fw-bold mb-2">Discover @publishedCount.ToString("N0") Products on HamaraCommerce</h2>
                 <p class="mb-0" style="color:var(--text-muted);font-size:1rem;">
-                    From Karachi to Peshawar, browse verified Pakistani retail products with genuine PKR pricing, 0 fake claims, and reliable nationwide delivery.
+                    From Karachi to Peshawar, browse products across Pakistan with cash on delivery and reliable nationwide shipping.
                 </p>
             </div>
             <div class="col-md-4 text-md-end">
