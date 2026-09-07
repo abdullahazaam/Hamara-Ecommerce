@@ -1,47 +1,17 @@
 @model List<HamaraCommerce.Models.Product>
 @{
     ViewData["Title"] = "Admin Inventory & Stock Control";
+    Layout = "_AdminLayout";
     var recentMovements = ViewBag.RecentMovements as List<HamaraCommerce.Models.InventoryMovement> ?? new();
     var categories = ViewBag.Categories as List<HamaraCommerce.Models.Category> ?? new();
 }
 
-<div class="admin-wrapper">
-    <div class="admin-sidebar">
-        <div class="brand-title fs-5 mb-4 text-center">
-            <i class="fa-solid fa-gauge-high text-primary me-2"></i>Hamara<span>Admin</span>
-        </div>
-        <nav class="d-flex flex-column gap-1">
-            <a asp-controller="Admin" asp-action="Index" class="admin-menu-link">
-                <i class="fa-solid fa-chart-pie me-2"></i>Dashboard
-            </a>
-            <a asp-controller="Admin" asp-action="Products" class="admin-menu-link">
-                <i class="fa-solid fa-box-open me-2"></i>Products
-            </a>
-            <a asp-controller="Admin" asp-action="Categories" class="admin-menu-link">
-                <i class="fa-solid fa-tags me-2"></i>Categories
-            </a>
-            <a asp-controller="Admin" asp-action="Orders" class="admin-menu-link">
-                <i class="fa-solid fa-cart-flatbed me-2"></i>Orders
-            </a>
-            <a asp-controller="Admin" asp-action="Customers" class="admin-menu-link">
-                <i class="fa-solid fa-users me-2"></i>Customers
-            </a>
-            <a asp-controller="Admin" asp-action="Coupons" class="admin-menu-link">
-                <i class="fa-solid fa-ticket me-2"></i>Coupons
-            </a>
-            <a asp-controller="Admin" asp-action="Inventory" class="admin-menu-link active">
-                <i class="fa-solid fa-warehouse me-2"></i>Inventory
-            </a>
-        </nav>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="h4 font-heading fw-bold mb-1">Inventory &amp; Stock Movement History</h2>
+        <p class="text-muted small mb-0">Track real-time inventory levels, restocks, adjustments &amp; order deductions</p>
     </div>
-
-    <div class="admin-content">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h2 class="h3 font-heading fw-bold mb-1">Inventory & Stock Movement History</h2>
-                <p class="text-muted mb-0">Track real-time inventory levels, restocks, adjustments & order deductions</p>
-            </div>
-        </div>
+</div>
 
         <!-- FILTER & SUMMARY -->
         <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
@@ -208,8 +178,6 @@
                 </div>
             }
         </div>
-    </div>
-</div>
 
 <!-- ADJUST STOCK MODAL -->
 <div class="modal fade" id="adjustStockModal" tabindex="-1" aria-hidden="true">

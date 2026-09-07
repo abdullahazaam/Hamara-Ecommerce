@@ -190,19 +190,14 @@ namespace HamaraCommerce.Controllers
         [ValidateAntiForgeryToken]
         [EnableRateLimiting("ContactPolicy")]
         public async Task<IActionResult> SubmitContact(
-            [FromForm] string name,
-            [FromForm] string email,
-            [FromForm] string? phoneNumber,
-            [FromForm] string subject,
-            [FromForm] string message,
-            [FromForm] string? honeypot,
+            [FromForm] ContactFormViewModel model,
             CancellationToken cancellationToken = default)
         {
-            // Honeypot spam bot check
             bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
                           Request.Headers["Accept"].ToString().Contains("application/json");
 
-            if (!string.IsNullOrEmpty(honeypot))
+            // Honeypot spam bot check
+            if (!string.IsNullOrEmpty(model.Honeypot))
             {
                 _logger.LogWarning("Spam bot detected via contact honeypot field from IP: {Ip}", HttpContext.Connection.RemoteIpAddress);
                 if (isAjax)
@@ -213,31 +208,32 @@ namespace HamaraCommerce.Controllers
                 return RedirectToAction(nameof(Contact));
             }
 
-            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(message))
+            if (!ModelState.IsValid)
             {
+                var errorMsg = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage));
                 if (isAjax)
                 {
-                    return Json(new { success = false, message = "Please fill in all required fields (Name, Email, Subject, and Message)." });
+                    return Json(new { success = false, message = errorMsg });
                 }
-                TempData["ErrorMessage"] = "Please fill in all required fields (Name, Email, Subject, and Message).";
+                TempData["ErrorMessage"] = errorMsg;
                 return RedirectToAction(nameof(Contact));
             }
 
             var contactMessage = new ContactMessage
             {
-                Name = name.Trim(),
-                Email = email.Trim().ToLowerInvariant(),
-                PhoneNumber = phoneNumber?.Trim(),
-                Subject = subject.Trim(),
-                Message = message.Trim(),
+                Name = model.Name.Trim(),
+                Email = model.Email.Trim().ToLowerInvariant(),
+                PhoneNumber = model.PhoneNumber?.Trim(),
+                Subject = model.Subject.Trim(),
+                Message = model.Message.Trim(),
                 IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
                 CreatedAt = DateTime.UtcNow,
                 IsRead = false
             };
 
             _context.ContactMessages.Add(contactMessage);
-            var inquiryEmailBody = $"<p><strong>From:</strong> {System.Net.WebUtility.HtmlEncode(name)} ({System.Net.WebUtility.HtmlEncode(email)})</p><p><strong>Phone:</strong> {System.Net.WebUtility.HtmlEncode(phoneNumber ?? "N/A")}</p><p><strong>Subject:</strong> {System.Net.WebUtility.HtmlEncode(subject)}</p><p><strong>Message:</strong><br />{System.Net.WebUtility.HtmlEncode(message)}</p>";
-            var notificationSubject = $"[Support Desk] New Inquiry: {subject.Trim()}";
+            var inquiryEmailBody = $"<p><strong>From:</strong> {System.Net.WebUtility.HtmlEncode(model.Name)} ({System.Net.WebUtility.HtmlEncode(model.Email)})</p><p><strong>Phone:</strong> {System.Net.WebUtility.HtmlEncode(model.PhoneNumber ?? "N/A")}</p><p><strong>Subject:</strong> {System.Net.WebUtility.HtmlEncode(model.Subject)}</p><p><strong>Message:</strong><br />{System.Net.WebUtility.HtmlEncode(model.Message)}</p>";
+            var notificationSubject = $"[Support Desk] New Inquiry: {model.Subject.Trim()}";
             if (notificationSubject.Length > 255) notificationSubject = notificationSubject[..255];
             _context.EmailOutboxMessages.Add(EmailOutboxService.CreateMessage("support@hamaracommerce.pk",
                 notificationSubject, inquiryEmailBody, eventKey: $"contact-form:{Guid.NewGuid():N}"));
@@ -254,15 +250,16 @@ namespace HamaraCommerce.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> SubscribeNewsletter([FromForm] string email, CancellationToken cancellationToken = default)
+        public async Task<IActionResult> SubscribeNewsletter([FromForm] NewsletterSubscriptionViewModel model, CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
+            if (!ModelState.IsValid)
             {
-                TempData["ErrorMessage"] = "Please provide a valid email address to subscribe.";
+                var errorMsg = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage));
+                TempData["ErrorMessage"] = errorMsg;
                 return RedirectToAction(nameof(Index));
             }
 
-            var cleanEmail = email.Trim().ToLowerInvariant();
+            var cleanEmail = model.Email.Trim().ToLowerInvariant();
             var existing = await _context.NewsletterSubscriptions
                 .FirstOrDefaultAsync(n => n.Email == cleanEmail, cancellationToken);
 

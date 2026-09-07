@@ -1,0 +1,283 @@
+@model HamaraCommerce.Models.AdminRecoveryViewModel
+@{
+    ViewData["Title"] = "Operational Recovery & System Health";
+    Layout = "_AdminLayout";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h2 class="h4 font-heading fw-bold mb-1">Operational Recovery &amp; System Health</h2>
+        <p class="text-muted small mb-0">Reconcile uncertain payments, inspect outbox email delivery failures, and monitor dangling checkout transactions.</p>
+    </div>
+    <a asp-controller="Admin" asp-action="OperationalRecovery" class="btn btn-outline-secondary rounded-pill px-3">
+        <i class="fa-solid fa-rotate me-1"></i>Refresh Status
+    </a>
+</div>
+
+<!-- KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm rounded-4 p-4 bg-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="text-muted small fw-semibold text-uppercase">Payment Idempotency Issues</div>
+                    <div class="fs-2 fw-bold mt-1 @(Model.FlaggedIdempotencyRecords.Any() ? "text-danger" : "text-success")">
+                        @Model.FlaggedIdempotencyRecords.Count
+                    </div>
+                </div>
+                <div class="p-3 rounded-circle bg-danger-subtle text-danger">
+                    <i class="fa-solid fa-credit-card fs-4"></i>
+                </div>
+            </div>
+            <div class="small text-muted mt-2">
+                @(Model.FlaggedIdempotencyRecords.Any() ? "Requires reconciliation or manual review" : "All checkout payments cleanly aligned")
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm rounded-4 p-4 bg-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="text-muted small fw-semibold text-uppercase">Outbox Email Alerts</div>
+                    <div class="fs-2 fw-bold mt-1 @(Model.ProblematicEmails.Any() ? "text-warning" : "text-success")">
+                        @Model.ProblematicEmails.Count
+                    </div>
+                </div>
+                <div class="p-3 rounded-circle bg-warning-subtle text-warning">
+                    <i class="fa-solid fa-envelope fs-4"></i>
+                </div>
+            </div>
+            <div class="small text-muted mt-2">
+                @(Model.ProblematicEmails.Any() ? "Failed, blocked or stale lock outbox emails" : "Outbox dispatcher healthy & clean")
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm rounded-4 p-4 bg-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="text-muted small fw-semibold text-uppercase">Stale Pending Orders</div>
+                    <div class="fs-2 fw-bold mt-1 @(Model.UnresolvedOrders.Any() ? "text-info" : "text-success")">
+                        @Model.UnresolvedOrders.Count
+                    </div>
+                </div>
+                <div class="p-3 rounded-circle bg-info-subtle text-info">
+                    <i class="fa-solid fa-clock fs-4"></i>
+                </div>
+            </div>
+            <div class="small text-muted mt-2">
+                Pending checkout orders older than 24 hours
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SECTION 1: PAYMENT IDEMPOTENCY RECOVERY -->
+<div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden bg-card">
+    <div class="card-header bg-transparent border-bottom p-4">
+        <h5 class="fw-bold font-heading mb-1">
+            <i class="fa-solid fa-shield-halved text-danger me-2"></i>Checkout Payment Idempotency &amp; Uncertainty Queue
+        </h5>
+        <p class="text-muted small mb-0">Records flagged for RecoveryRequired or failed after payment reference assignment.</p>
+    </div>
+    @if (!Model.FlaggedIdempotencyRecords.Any())
+    {
+        <div class="text-center py-5">
+            <i class="fa-solid fa-circle-check fs-1 text-success mb-3 d-block"></i>
+            <h6 class="fw-semibold">No payment recovery anomalies detected</h6>
+            <p class="text-muted small mb-0">All payment authorizations and order finalization transactions are in consistent state.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light small text-muted text-uppercase">
+                    <tr>
+                        <th class="ps-4">Idempotency Key</th>
+                        <th>Customer</th>
+                        <th>Payment Ref</th>
+                        <th>Status</th>
+                        <th>Amount</th>
+                        <th>Failure / Stalled Reason</th>
+                        <th class="text-end pe-4">Reconciliation</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Model.FlaggedIdempotencyRecords)
+                    {
+                        <tr>
+                            <td class="ps-4 font-monospace small">
+                                <strong>@r.IdempotencyKey[..Math.Min(16, r.IdempotencyKey.Length)]...</strong>
+                                <div class="text-muted" style="font-size: 0.75rem;">Created: @r.CreatedAt.ToString("MMM dd HH:mm")</div>
+                            </td>
+                            <td>
+                                <div>@r.CustomerEmail</div>
+                                @if (r.OrderId.HasValue)
+                                {
+                                    <span class="badge bg-primary-subtle text-primary small">Order #@r.OrderNumber</span>
+                                }
+                            </td>
+                            <td class="font-monospace small">
+                                @(r.PaymentReference ?? "N/A")
+                            </td>
+                            <td>
+                                <span class="badge bg-danger-subtle text-danger border border-danger">@r.Status</span>
+                            </td>
+                            <td class="fw-bold">
+                                @(r.PaymentAmount.HasValue ? $"Rs. {r.PaymentAmount.Value:N2}" : "N/A")
+                            </td>
+                            <td class="small text-danger" style="max-width:250px;">
+                                @(r.FailureReason ?? "Payment completed but transaction interrupted prior to commit.")
+                            </td>
+                            <td class="text-end pe-4">
+                                <div class="d-flex justify-content-end gap-1">
+                                    <form asp-controller="Admin" asp-action="ReconcilePayment" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@r.Id" />
+                                        <input type="hidden" name="action" value="MarkResolved" />
+                                        <button type="submit" class="btn btn-sm btn-outline-success rounded-pill px-2" title="Mark Resolved">
+                                            <i class="fa-solid fa-check me-1"></i>Resolve
+                                        </button>
+                                    </form>
+                                    <form asp-controller="Admin" asp-action="ReconcilePayment" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@r.Id" />
+                                        <input type="hidden" name="action" value="CancelRecord" />
+                                        <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-2" title="Cancel/Refund Record">
+                                            <i class="fa-solid fa-xmark me-1"></i>Cancel
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- SECTION 2: OUTBOX EMAIL STALLED / FAILED MESSAGES -->
+<div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden bg-card">
+    <div class="card-header bg-transparent border-bottom p-4">
+        <h5 class="fw-bold font-heading mb-1">
+            <i class="fa-solid fa-envelope-circle-check text-warning me-2"></i>Email Outbox Delivery Issues
+        </h5>
+        <p class="text-muted small mb-0">Transactional emails that failed delivery or exceeded maximum retry limits.</p>
+    </div>
+    @if (!Model.ProblematicEmails.Any())
+    {
+        <div class="text-center py-5">
+            <i class="fa-solid fa-circle-check fs-1 text-success mb-3 d-block"></i>
+            <h6 class="fw-semibold">All transactional outbox emails delivered cleanly</h6>
+            <p class="text-muted small mb-0">No queued messages are stalled, failing, or exceeding retry caps.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light small text-muted text-uppercase">
+                    <tr>
+                        <th class="ps-4">ID</th>
+                        <th>Recipient</th>
+                        <th>Subject</th>
+                        <th>Status</th>
+                        <th>Attempts</th>
+                        <th>Last Error</th>
+                        <th class="text-end pe-4">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var e in Model.ProblematicEmails)
+                    {
+                        <tr>
+                            <td class="ps-4 font-monospace small">#@e.Id</td>
+                            <td class="fw-semibold">@e.ToEmail</td>
+                            <td class="small">@e.Subject</td>
+                            <td>
+                                <span class="badge @(e.Status == HamaraCommerce.Models.EmailOutboxStatus.Failed ? "bg-danger-subtle text-danger" : "bg-warning-subtle text-warning") rounded-pill">
+                                    @e.Status
+                                </span>
+                            </td>
+                            <td>@e.AttemptCount / @e.MaxAttempts</td>
+                            <td class="small text-danger" style="max-width:260px;">
+                                @(e.LastError ?? "Stale lock or exceeded attempt limit")
+                            </td>
+                            <td class="text-end pe-4">
+                                <form asp-controller="Admin" asp-action="RetryOutboxEmail" method="post" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@e.Id" />
+                                    <button type="submit" class="btn btn-sm btn-primary-custom rounded-pill px-3">
+                                        <i class="fa-solid fa-rotate-right me-1"></i>Retry Now
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- SECTION 3: UNRESOLVED STALE ORDERS -->
+<div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-card">
+    <div class="card-header bg-transparent border-bottom p-4">
+        <h5 class="fw-bold font-heading mb-1">
+            <i class="fa-solid fa-clock-rotate-left text-info me-2"></i>Stale Pending Orders
+        </h5>
+        <p class="text-muted small mb-0">Orders placed over 24 hours ago that remain in Pending payment/status.</p>
+    </div>
+    @if (!Model.UnresolvedOrders.Any())
+    {
+        <div class="text-center py-5">
+            <i class="fa-solid fa-circle-check fs-1 text-success mb-3 d-block"></i>
+            <h6 class="fw-semibold">No stale pending orders</h6>
+            <p class="text-muted small mb-0">All pending orders are fresh within normal payment processing windows.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light small text-muted text-uppercase">
+                    <tr>
+                        <th class="ps-4">Order Ref</th>
+                        <th>Customer</th>
+                        <th>Order Date</th>
+                        <th>Status</th>
+                        <th>Total Amount</th>
+                        <th class="text-end pe-4">Fulfillment</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var o in Model.UnresolvedOrders)
+                    {
+                        <tr>
+                            <td class="ps-4 font-monospace fw-bold">
+                                <a asp-controller="Admin" asp-action="OrderDetails" asp-route-id="@o.Id">#@o.OrderNumber</a>
+                            </td>
+                            <td>
+                                <div>@o.CustomerName</div>
+                                <div class="small text-muted">@o.CustomerEmail</div>
+                            </td>
+                            <td class="small">@o.OrderDate.ToString("MMM dd, yyyy HH:mm")</td>
+                            <td>
+                                <span class="badge bg-warning-subtle text-warning border border-warning">@o.Status</span>
+                                <span class="badge bg-secondary-subtle text-secondary border">@o.PaymentStatus</span>
+                            </td>
+                            <td class="fw-bold">Rs. @o.TotalAmount.ToString("N2")</td>
+                            <td class="text-end pe-4">
+                                <a asp-controller="Admin" asp-action="OrderDetails" asp-route-id="@o.Id" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
+                                    Review
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

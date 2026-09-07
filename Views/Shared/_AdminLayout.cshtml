@@ -512,9 +512,21 @@
                class="admin-nav-link @(currentAction == "Orders" || currentAction == "OrderDetails" ? "active" : "")">
                 <i class="fa-solid fa-cart-shopping"></i>Orders
             </a>
+            <a asp-controller="Admin" asp-action="Returns"
+               class="admin-nav-link @(currentAction == "Returns" ? "active" : "")">
+                <i class="fa-solid fa-rotate-left"></i>Returns &amp; Refunds
+            </a>
             <a asp-controller="Admin" asp-action="Products"
                class="admin-nav-link @(currentAction is "Products" or "AddProduct" or "EditProduct" ? "active" : "")">
                 <i class="fa-solid fa-boxes-stacked"></i>Products
+            </a>
+            <a asp-controller="Admin" asp-action="Categories"
+               class="admin-nav-link @(currentAction == "Categories" ? "active" : "")">
+                <i class="fa-solid fa-layer-group"></i>Categories
+            </a>
+            <a asp-controller="Admin" asp-action="Inventory"
+               class="admin-nav-link @(currentAction == "Inventory" ? "active" : "")">
+                <i class="fa-solid fa-warehouse"></i>Inventory Control
             </a>
             <a asp-controller="Admin" asp-action="Customers"
                class="admin-nav-link @(currentAction == "Customers" || currentAction == "CustomerDetails" ? "active" : "")">
@@ -535,7 +547,11 @@
                 <i class="fa-solid fa-comments"></i>Q&amp;A Inquiries
             </a>
 
-            <div class="sidebar-section-label mt-2">System &amp; Audit</div>
+            <div class="sidebar-section-label mt-2">System &amp; Recovery</div>
+            <a asp-controller="Admin" asp-action="OperationalRecovery"
+               class="admin-nav-link @(currentAction == "OperationalRecovery" ? "active" : "")">
+                <i class="fa-solid fa-triangle-exclamation"></i>Recovery &amp; Health
+            </a>
             <a asp-controller="Admin" asp-action="AuditLogs"
                class="admin-nav-link @(currentAction == "AuditLogs" ? "active" : "")">
                 <i class="fa-solid fa-shield-halved"></i>Audit Logs

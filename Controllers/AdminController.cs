@@ -720,6 +720,260 @@ namespace HamaraCommerce.Controllers
         }
 
         // ==========================================
+        // 4B. CATEGORY MANAGEMENT
+        // ==========================================
+        public async Task<IActionResult> Categories()
+        {
+            var categories = await _context.Categories
+                .Include(c => c.ParentCategory)
+                .OrderBy(c => c.DisplayOrder)
+                .ThenBy(c => c.Name)
+                .ToListAsync();
+
+            // Refresh live product counts
+            foreach (var cat in categories)
+            {
+                cat.ProductCount = await _context.Products.CountAsync(p => p.CategoryId == cat.Id && p.Status == ProductStatus.Published);
+            }
+
+            return View(categories);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveCategory(string name, string? icon, string? description, int? id, int? parentCategoryId, int displayOrder = 0)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                TempData["ErrorMessage"] = "Category name is required.";
+                return RedirectToAction(nameof(Categories));
+            }
+
+            name = name.Trim();
+            icon = string.IsNullOrWhiteSpace(icon) ? "fa-box" : icon.Trim();
+            description = description?.Trim() ?? string.Empty;
+
+            if (id.HasValue && id.Value > 0)
+            {
+                var category = await _context.Categories.FindAsync(id.Value);
+                if (category == null) return NotFound();
+
+                category.Name = name;
+                category.Icon = icon;
+                category.Description = description;
+                category.ParentCategoryId = parentCategoryId;
+                category.DisplayOrder = displayOrder;
+                category.IsActive = true;
+
+                await LogAuditAsync("CategoryUpdated", "Category", category.Id.ToString(), $"Updated category '{category.Name}'");
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = $"Category '{category.Name}' updated successfully.";
+            }
+            else
+            {
+                string baseSlug = GenerateSlug(name);
+                string slug = baseSlug;
+                int suffix = 1;
+                while (await _context.Categories.AnyAsync(c => c.Slug == slug))
+                {
+                    slug = $"{baseSlug}-{suffix++}";
+                }
+
+                var category = new Category
+                {
+                    Name = name,
+                    Slug = slug,
+                    Icon = icon,
+                    Description = description,
+                    ParentCategoryId = parentCategoryId,
+                    DisplayOrder = displayOrder,
+                    IsActive = true,
+                    IsFeatured = true
+                };
+
+                _context.Categories.Add(category);
+                await _context.SaveChangesAsync();
+                await LogAuditAsync("CategoryCreated", "Category", category.Id.ToString(), $"Created category '{category.Name}'");
+                TempData["SuccessMessage"] = $"Category '{category.Name}' created successfully.";
+            }
+
+            return RedirectToAction(nameof(Categories));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ArchiveCategory(int id)
+        {
+            var category = await _context.Categories.FindAsync(id);
+            if (category != null)
+            {
+                category.IsActive = false;
+                await LogAuditAsync("CategoryArchived", "Category", category.Id.ToString(), $"Archived category '{category.Name}'");
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = $"Category '{category.Name}' has been archived.";
+            }
+            return RedirectToAction(nameof(Categories));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteCategory(int id)
+        {
+            var category = await _context.Categories.Include(c => c.Products).Include(c => c.SubCategories).FirstOrDefaultAsync(c => c.Id == id);
+            if (category == null) return NotFound();
+
+            if (category.Products.Any() || category.SubCategories.Any())
+            {
+                category.IsActive = false;
+                await _context.SaveChangesAsync();
+                TempData["WarningMessage"] = $"Category '{category.Name}' contains products or subcategories and cannot be deleted. It has been deactivated instead.";
+            }
+            else
+            {
+                _context.Categories.Remove(category);
+                await LogAuditAsync("CategoryDeleted", "Category", category.Id.ToString(), $"Deleted category '{category.Name}'");
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = $"Category '{category.Name}' deleted successfully.";
+            }
+            return RedirectToAction(nameof(Categories));
+        }
+
+        // ==========================================
+        // 4C. INVENTORY & STOCK MANAGEMENT
+        // ==========================================
+        public async Task<IActionResult> Inventory(string? search, int? categoryId, int page = 1)
+        {
+            var query = _context.Products
+                .Include(p => p.Variants)
+                .Include(p => p.Category)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.ToLower().Trim();
+                query = query.Where(p => p.Title.ToLower().Contains(s) ||
+                                         p.SKU.ToLower().Contains(s) ||
+                                         p.Brand.ToLower().Contains(s));
+            }
+
+            if (categoryId.HasValue && categoryId.Value > 0)
+            {
+                query = query.Where(p => p.CategoryId == categoryId.Value);
+            }
+
+            var products = await query
+                .OrderBy(p => p.Stock)
+                .ThenBy(p => p.Title)
+                .ToListAsync();
+
+            var recentMovements = await _context.InventoryMovements
+                .Include(m => m.Product)
+                .Include(m => m.Variant)
+                .OrderByDescending(m => m.CreatedAt)
+                .Take(25)
+                .ToListAsync();
+
+            ViewBag.RecentMovements = recentMovements;
+            ViewBag.Categories = await _context.Categories.OrderBy(c => c.DisplayOrder).ToListAsync();
+            ViewBag.CurrentSearch = search;
+            ViewBag.CurrentCategory = categoryId;
+
+            return View(products);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AdjustStock(int productId, int? variantId, InventoryMovementType movementType, int quantityChange, string reason)
+        {
+            if (quantityChange == 0)
+            {
+                TempData["ErrorMessage"] = "Quantity change cannot be 0.";
+                return RedirectToAction(nameof(Inventory));
+            }
+
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                TempData["ErrorMessage"] = "An audit reason is required for stock adjustment.";
+                return RedirectToAction(nameof(Inventory));
+            }
+
+            var product = await _context.Products.Include(p => p.Variants).FirstOrDefaultAsync(p => p.Id == productId);
+            if (product == null) return NotFound();
+
+            var user = await _userManager.GetUserAsync(User);
+            string adminName = user?.FullName ?? "Administrator";
+            string adminId = user?.Id ?? "System";
+
+            int oldStock;
+            int newStock;
+
+            if (variantId.HasValue && variantId.Value > 0)
+            {
+                var variant = product.Variants.FirstOrDefault(v => v.Id == variantId.Value);
+                if (variant == null) return NotFound("Variant not found.");
+
+                oldStock = variant.Stock;
+                newStock = oldStock + quantityChange;
+                if (newStock < 0)
+                {
+                    TempData["ErrorMessage"] = $"Adjustment would result in negative variant stock ({newStock}). Minimum is 0.";
+                    return RedirectToAction(nameof(Inventory));
+                }
+
+                variant.Stock = newStock;
+                // Also synchronize base product stock sum from all variants
+                product.Stock = product.Variants.Sum(v => v.Stock);
+
+                _context.InventoryMovements.Add(new InventoryMovement
+                {
+                    ProductId = product.Id,
+                    VariantId = variant.Id,
+                    MovementType = movementType,
+                    QuantityChange = quantityChange,
+                    OldStock = oldStock,
+                    NewStock = newStock,
+                    Reason = reason.Trim(),
+                    AdminUserId = adminId,
+                    AdminUserName = adminName,
+                    CreatedAt = DateTime.UtcNow
+                });
+
+                await LogAuditAsync("StockAdjusted", "ProductVariant", variant.SKU, $"Adjusted stock for variant '{variant.Name}' of '{product.Title}' by {quantityChange} ({oldStock}->{newStock}). Reason: {reason}");
+            }
+            else
+            {
+                oldStock = product.Stock;
+                newStock = oldStock + quantityChange;
+                if (newStock < 0)
+                {
+                    TempData["ErrorMessage"] = $"Adjustment would result in negative stock ({newStock}). Minimum is 0.";
+                    return RedirectToAction(nameof(Inventory));
+                }
+
+                product.Stock = newStock;
+
+                _context.InventoryMovements.Add(new InventoryMovement
+                {
+                    ProductId = product.Id,
+                    MovementType = movementType,
+                    QuantityChange = quantityChange,
+                    OldStock = oldStock,
+                    NewStock = newStock,
+                    Reason = reason.Trim(),
+                    AdminUserId = adminId,
+                    AdminUserName = adminName,
+                    CreatedAt = DateTime.UtcNow
+                });
+
+                await LogAuditAsync("StockAdjusted", "Product", product.SKU, $"Adjusted base stock for '{product.Title}' by {quantityChange} ({oldStock}->{newStock}). Reason: {reason}");
+            }
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = $"Stock for '{product.Title}' successfully updated.";
+            return RedirectToAction(nameof(Inventory));
+        }
+
+        // ==========================================
         // 5. COUPON MANAGEMENT
         // ==========================================
         public async Task<IActionResult> Coupons()
@@ -765,12 +1019,40 @@ namespace HamaraCommerce.Controllers
         public async Task<IActionResult> DeleteCoupon(int id)
         {
             var coupon = await _context.Coupons.FindAsync(id);
-            if (coupon != null)
+            if (coupon == null)
             {
-                _context.Coupons.Remove(coupon);
-                await LogAuditAsync("CouponDeleted", "Coupon", coupon.Code, $"Deleted coupon {coupon.Code}");
+                TempData["ErrorMessage"] = "Coupon not found.";
+                return RedirectToAction(nameof(Coupons));
+            }
+
+            bool hasRedemptions = await _context.CouponRedemptions.AnyAsync(r => r.CouponId == id || r.CouponCode == coupon.Code);
+            bool hasOrders = await _context.Orders.AnyAsync(o => o.CouponCode == coupon.Code);
+
+            if (hasRedemptions || hasOrders)
+            {
+                coupon.IsActive = false;
+                coupon.IsArchived = true;
+                await LogAuditAsync("CouponArchived", "Coupon", coupon.Code, $"Coupon {coupon.Code} has historical usage; deactivated and archived instead of hard deleted.");
                 await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = "Coupon removed.";
+                TempData["WarningMessage"] = $"Coupon '{coupon.Code}' has historical orders/redemptions and cannot be hard-deleted. It has been deactivated and archived instead.";
+            }
+            else
+            {
+                try
+                {
+                    _context.Coupons.Remove(coupon);
+                    await LogAuditAsync("CouponDeleted", "Coupon", coupon.Code, $"Deleted unused coupon {coupon.Code}");
+                    await _context.SaveChangesAsync();
+                    TempData["SuccessMessage"] = $"Coupon '{coupon.Code}' was safely removed.";
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to delete coupon {Code}", coupon.Code);
+                    coupon.IsActive = false;
+                    coupon.IsArchived = true;
+                    await _context.SaveChangesAsync();
+                    TempData["WarningMessage"] = $"Coupon '{coupon.Code}' could not be deleted due to database constraints and has been archived instead.";
+                }
             }
 
             return RedirectToAction(nameof(Coupons));
@@ -871,6 +1153,253 @@ namespace HamaraCommerce.Controllers
             }
 
             return RedirectToAction(nameof(Questions));
+        }
+
+        // ==========================================
+        // 6B. RETURNS & REFUNDS GOVERNANCE
+        // ==========================================
+        public async Task<IActionResult> Returns(string? status, int page = 1)
+        {
+            var query = _context.Orders
+                .Include(o => o.Items)
+                .Include(o => o.Payments)
+                .Where(o => o.ReturnRequestedAt != null || o.Status == OrderStatus.Refunded || o.RefundStatus != null)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                if (status.Equals("Pending", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(o => o.RefundStatus == null || o.RefundStatus == "Pending");
+                }
+                else if (status.Equals("Completed", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(o => o.RefundStatus == "Completed");
+                }
+                else if (status.Equals("Rejected", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(o => o.RefundStatus == "Rejected");
+                }
+            }
+
+            int pageSize = 10;
+            int totalCount = await query.CountAsync();
+            var orders = await query
+                .OrderByDescending(o => o.ReturnRequestedAt ?? o.OrderDate)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            var viewModel = new AdminReturnsViewModel
+            {
+                ReturnOrders = orders,
+                StatusFilter = status,
+                CurrentPage = page,
+                PageSize = pageSize,
+                TotalCount = totalCount,
+                TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+            };
+
+            return View(viewModel);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ProcessReturn(int orderId, string decision, string? inspectionState, bool restock, string? refundMethod, decimal? refundAmount, string? adminNotes)
+        {
+            var order = await _context.Orders
+                .Include(o => o.Items)
+                .Include(o => o.Payments)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
+
+            if (order == null) return NotFound();
+
+            if (decision.Equals("Approve", StringComparison.OrdinalIgnoreCase))
+            {
+                order.ReturnInspectionState = string.IsNullOrWhiteSpace(inspectionState) ? "PassedInspection" : inspectionState.Trim();
+                order.ReturnAdminNotes = adminNotes?.Trim();
+                order.ReturnProcessedAt = DateTime.UtcNow;
+                order.RefundMethod = string.IsNullOrWhiteSpace(refundMethod) ? order.PaymentMethod : refundMethod.Trim();
+                decimal finalRefund = refundAmount ?? order.TotalAmount;
+                order.RefundAmount = finalRefund;
+                order.RefundTransactionReference = $"REF-{Guid.NewGuid():N}"[..12].ToUpperInvariant();
+                order.RefundStatus = "Completed";
+                order.PaymentStatus = PaymentStatus.Refunded;
+                order.Status = OrderStatus.Refunded;
+
+                if (restock && !order.IsRestockedOnReturn)
+                {
+                    var user = await _userManager.GetUserAsync(User);
+                    string adminName = user?.FullName ?? "Administrator";
+                    string adminId = user?.Id ?? "System";
+
+                    foreach (var item in order.Items)
+                    {
+                        var product = await _context.Products.Include(p => p.Variants).FirstOrDefaultAsync(p => p.Id == item.ProductId);
+                        if (product != null)
+                        {
+                            int oldStock = product.Stock;
+                            int newStock = oldStock + item.Quantity;
+                            product.Stock = newStock;
+
+                            if (item.VariantId.HasValue)
+                            {
+                                var variant = product.Variants.FirstOrDefault(v => v.Id == item.VariantId.Value);
+                                if (variant != null)
+                                {
+                                    variant.Stock += item.Quantity;
+                                }
+                            }
+
+                            _context.InventoryMovements.Add(new InventoryMovement
+                            {
+                                ProductId = product.Id,
+                                VariantId = item.VariantId,
+                                OrderId = order.Id,
+                                MovementType = InventoryMovementType.ReturnRestoration,
+                                QuantityChange = item.Quantity,
+                                OldStock = oldStock,
+                                NewStock = newStock,
+                                Reason = $"Restocked from approved return of order #{order.OrderNumber}",
+                                AdminUserId = adminId,
+                                AdminUserName = adminName,
+                                CreatedAt = DateTime.UtcNow
+                            });
+                        }
+                    }
+                    order.IsRestockedOnReturn = true;
+                }
+
+                await _pricingService.RestoreCouponRedemptionAsync(order);
+
+                _context.PaymentTransactions.Add(new PaymentTransaction
+                {
+                    OrderId = order.Id,
+                    TransactionReference = order.RefundTransactionReference,
+                    Provider = order.RefundMethod,
+                    PaymentMethod = order.PaymentMethod,
+                    Amount = finalRefund,
+                    Currency = order.Currency,
+                    Status = PaymentStatus.Refunded,
+                    CreatedAt = DateTime.UtcNow
+                });
+
+                if (_emailOutboxService != null)
+                {
+                    await _emailOutboxService.QueueEmailAsync(
+                        order.CustomerEmail,
+                        $"Return Approved & Refund Processed - Order #{order.OrderNumber}",
+                        $"<p>Dear {order.CustomerName},</p><p>Your return request for order <strong>#{order.OrderNumber}</strong> has been approved and processed.</p><p>Refund Amount: <strong>Rs. {finalRefund:N2}</strong> via {order.RefundMethod} (Ref: {order.RefundTransactionReference}).</p>",
+                        eventKey: $"ReturnApproved_{order.OrderNumber}");
+                }
+
+                await LogAuditAsync("ReturnApproved", "Order", order.OrderNumber, $"Approved return for order #{order.OrderNumber}. Refund: Rs. {finalRefund}, Restocked: {restock}");
+                TempData["SuccessMessage"] = $"Return for order #{order.OrderNumber} approved and refund of Rs. {finalRefund:N2} recorded.";
+            }
+            else
+            {
+                order.ReturnInspectionState = string.IsNullOrWhiteSpace(inspectionState) ? "RejectedInspection" : inspectionState.Trim();
+                order.ReturnAdminNotes = adminNotes?.Trim();
+                order.RefundStatus = "Rejected";
+                order.ReturnProcessedAt = DateTime.UtcNow;
+
+                if (_emailOutboxService != null)
+                {
+                    await _emailOutboxService.QueueEmailAsync(
+                        order.CustomerEmail,
+                        $"Return Request Update - Order #{order.OrderNumber}",
+                        $"<p>Dear {order.CustomerName},</p><p>Your return request for order <strong>#{order.OrderNumber}</strong> has been reviewed and declined.</p><p>Reason: {order.ReturnAdminNotes}</p>",
+                        eventKey: $"ReturnRejected_{order.OrderNumber}");
+                }
+
+                await LogAuditAsync("ReturnRejected", "Order", order.OrderNumber, $"Declined return for order #{order.OrderNumber}. Reason: {order.ReturnAdminNotes}");
+                TempData["WarningMessage"] = $"Return request for order #{order.OrderNumber} has been rejected.";
+            }
+
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Returns));
+        }
+
+        // ==========================================
+        // 6C. OPERATIONAL RECOVERY & OUTBOX HEALTH
+        // ==========================================
+        public async Task<IActionResult> OperationalRecovery()
+        {
+            var flaggedIdempotency = await _context.CheckoutIdempotencyRecords
+                .Where(r => r.Status == IdempotencyStatus.RecoveryRequired ||
+                           (r.Status == IdempotencyStatus.Failed && r.PaymentReference != null))
+                .OrderByDescending(r => r.CreatedAt)
+                .Take(50)
+                .ToListAsync();
+
+            var problematicEmails = await _context.EmailOutboxMessages
+                .Where(e => e.Status == EmailOutboxStatus.Failed ||
+                            e.Status == EmailOutboxStatus.Blocked ||
+                           (e.Status == EmailOutboxStatus.Processing && e.LockExpiresAt < DateTime.UtcNow))
+                .OrderByDescending(e => e.CreatedAt)
+                .Take(50)
+                .ToListAsync();
+
+            var unresolvedOrders = await _context.Orders
+                .Where(o => o.Status == OrderStatus.Pending && o.PaymentStatus == PaymentStatus.Pending && o.OrderDate < DateTime.UtcNow.AddHours(-24))
+                .OrderByDescending(o => o.OrderDate)
+                .Take(50)
+                .ToListAsync();
+
+            var model = new AdminRecoveryViewModel
+            {
+                FlaggedIdempotencyRecords = flaggedIdempotency,
+                ProblematicEmails = problematicEmails,
+                UnresolvedOrders = unresolvedOrders
+            };
+
+            return View(model);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RetryOutboxEmail(long id)
+        {
+            var message = await _context.EmailOutboxMessages.FindAsync(id);
+            if (message != null)
+            {
+                message.Status = EmailOutboxStatus.Queued;
+                message.AttemptCount = 0;
+                message.NextAttemptAt = DateTime.UtcNow;
+                message.LockExpiresAt = null;
+                message.LockToken = null;
+                await LogAuditAsync("EmailOutboxReset", "EmailOutbox", message.Id.ToString(), $"Reset outbox message #{message.Id} to {message.ToEmail} for retry");
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = $"Outbox email #{id} reset to Queued status for immediate retry.";
+            }
+            return RedirectToAction(nameof(OperationalRecovery));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ReconcilePayment(int id, string action)
+        {
+            var record = await _context.CheckoutIdempotencyRecords.FindAsync(id);
+            if (record == null) return NotFound();
+
+            if (action.Equals("MarkResolved", StringComparison.OrdinalIgnoreCase))
+            {
+                record.Status = IdempotencyStatus.Completed;
+                record.FailureReason = $"Manually resolved by administrator: {record.FailureReason}";
+                await LogAuditAsync("PaymentReconciled", "CheckoutIdempotency", record.IdempotencyKey, $"Manually resolved payment record #{record.Id}");
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = $"Payment record #{id} marked as resolved.";
+            }
+            else if (action.Equals("CancelRecord", StringComparison.OrdinalIgnoreCase))
+            {
+                record.Status = IdempotencyStatus.Failed;
+                record.FailureReason = "Manually marked failed/refunded by administrator.";
+                await LogAuditAsync("PaymentRecordCancelled", "CheckoutIdempotency", record.IdempotencyKey, $"Marked failed #{record.Id}");
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = $"Payment record #{id} marked as cancelled.";
+            }
+
+            return RedirectToAction(nameof(OperationalRecovery));
         }
 
         // ==========================================

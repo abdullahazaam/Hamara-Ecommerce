@@ -353,11 +353,13 @@ namespace HamaraCommerce.Controllers
                 return RedirectToAction(nameof(Details), new { id = productId });
             }
 
-            // Real Verified Purchase verification in database
+            // Real Verified Purchase verification in database (Paid or Delivered orders only, not cancelled or refunded)
             var hasPurchased = await _context.Orders
                 .AnyAsync(o => (o.UserId == user.Id || (user.EmailConfirmed && o.UserId == null && o.CustomerEmail.ToLower() == (user.Email ?? "").ToLower())) &&
                                o.Items.Any(i => i.ProductId == productId) &&
-                               o.Status != OrderStatus.Cancelled);
+                               (o.PaymentStatus == PaymentStatus.Paid || o.Status == OrderStatus.Delivered) &&
+                               o.Status != OrderStatus.Cancelled &&
+                               o.Status != OrderStatus.Refunded);
 
             var review = new Review
             {
@@ -371,16 +373,24 @@ namespace HamaraCommerce.Controllers
                 Comment = HtmlEncoder(comment),
                 Date = DateTime.UtcNow,
                 IsVerifiedPurchase = hasPurchased,
-                IsApproved = true // Auto-approved
+                IsApproved = true
             };
 
-            _context.Reviews.Add(review);
-            await _context.SaveChangesAsync();
+            try
+            {
+                _context.Reviews.Add(review);
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                TempData["ErrorMessage"] = "You have already submitted a review for this product.";
+                return RedirectToAction(nameof(Details), new { id = productId });
+            }
 
-            // Recalculate rating & review count
+            // Recalculate rating & review count - unreviewed products show 0.0 stars
             var approvedReviews = await _context.Reviews.Where(r => r.ProductId == productId && r.IsApproved).ToListAsync();
             product.ReviewCount = approvedReviews.Count;
-            product.Rating = approvedReviews.Any() ? Math.Round(approvedReviews.Average(r => r.Rating), 1) : 5.0;
+            product.Rating = approvedReviews.Any() ? Math.Round(approvedReviews.Average(r => r.Rating), 1) : 0.0;
             await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = hasPurchased 

@@ -23,6 +23,8 @@ namespace HamaraCommerce.Services
         Task<(bool success, string message)> ApplyCouponAsync(string couponCode);
         Task<(bool success, string message)> RemoveCouponAsync();
         Task ClearCartAsync();
+        Task ClearSessionCartAsync();
+        Task RemovePurchasedItemsAsync(IEnumerable<OrderItem> items);
         Task MergeGuestCartAsync(string userId);
     }
 
@@ -352,6 +354,48 @@ namespace HamaraCommerce.Services
                     await _context.SaveChangesAsync();
                 }
             }
+        }
+
+        public Task ClearSessionCartAsync()
+        {
+            if (Session != null)
+            {
+                Session.Remove(CartSessionKey);
+            }
+            return Task.CompletedTask;
+        }
+
+        public async Task RemovePurchasedItemsAsync(IEnumerable<OrderItem> items)
+        {
+            if (items == null) return;
+            var purchasedList = items.ToList();
+            if (!purchasedList.Any()) return;
+
+            var rawCart = await GetRawCartDataAsync();
+            if (rawCart.Items == null || !rawCart.Items.Any()) return;
+
+            foreach (var purchased in purchasedList)
+            {
+                var existingItem = rawCart.Items.FirstOrDefault(i =>
+                    i.ProductId == purchased.ProductId &&
+                    i.VariantId == purchased.VariantId);
+
+                if (existingItem != null)
+                {
+                    existingItem.Quantity -= purchased.Quantity;
+                    if (existingItem.Quantity <= 0)
+                    {
+                        rawCart.Items.Remove(existingItem);
+                    }
+                }
+            }
+
+            if (!rawCart.Items.Any())
+            {
+                rawCart.AppliedCouponCode = null;
+            }
+
+            await PersistCartAsync(rawCart);
         }
 
         public async Task MergeGuestCartAsync(string userId)

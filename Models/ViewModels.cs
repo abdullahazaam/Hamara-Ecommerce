@@ -94,4 +94,38 @@ namespace HamaraCommerce.Models
         
         public string? PromoCode { get; set; }
     }
+
+    public class ContactFormViewModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Name is required.")]
+        [System.ComponentModel.DataAnnotations.StringLength(100, MinimumLength = 2, ErrorMessage = "Name must be between 2 and 100 characters.")]
+        public string Name { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Email address is required.")]
+        [System.ComponentModel.DataAnnotations.EmailAddress(ErrorMessage = "Please enter a valid email address.")]
+        [System.ComponentModel.DataAnnotations.StringLength(150, ErrorMessage = "Email cannot exceed 150 characters.")]
+        public string Email { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Phone(ErrorMessage = "Please enter a valid phone number.")]
+        [System.ComponentModel.DataAnnotations.StringLength(50, ErrorMessage = "Phone number cannot exceed 50 characters.")]
+        public string? PhoneNumber { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Subject is required.")]
+        [System.ComponentModel.DataAnnotations.StringLength(200, MinimumLength = 3, ErrorMessage = "Subject must be between 3 and 200 characters.")]
+        public string Subject { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Message is required.")]
+        [System.ComponentModel.DataAnnotations.StringLength(3000, MinimumLength = 10, ErrorMessage = "Message must be between 10 and 3,000 characters.")]
+        public string Message { get; set; } = string.Empty;
+
+        public string? Honeypot { get; set; }
+    }
+
+    public class NewsletterSubscriptionViewModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Email address is required.")]
+        [System.ComponentModel.DataAnnotations.EmailAddress(ErrorMessage = "Please enter a valid email address.")]
+        [System.ComponentModel.DataAnnotations.StringLength(150, ErrorMessage = "Email cannot exceed 150 characters.")]
+        public string Email { get; set; } = string.Empty;
+    }
 }

@@ -778,8 +778,8 @@ namespace HamaraCommerce.Controllers
                 return View("Index", model);
             }
 
-            // Post-Transaction Success Actions
-            await _cartService.ClearCartAsync();
+            // Post-Transaction Success Actions: remove only the exact purchased items/quantities
+            await _cartService.RemovePurchasedItemsAsync(createdOrder.Items);
             HttpContext.Session.Remove(IdempotencySessionKey);
 
             if (!string.IsNullOrEmpty(createdOrder.GuestAccessToken))

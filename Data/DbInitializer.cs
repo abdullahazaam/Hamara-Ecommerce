@@ -128,60 +128,102 @@ namespace HamaraCommerce.Data
                     }
                 }
 
-                // Seed Admin User (configured via appsettings / env var, with safe fallback)
-                string adminEmail = config?["AdminSeed:Email"] ?? config?["AdminUser:Email"] ?? Environment.GetEnvironmentVariable("ADMIN_EMAIL") ?? "admin@hamaracommerce.pk";
-                string adminPassword = config?["AdminSeed:Password"] ?? config?["AdminUser:Password"] ?? Environment.GetEnvironmentVariable("ADMIN_PASSWORD") ?? "Admin@123!";
-                string adminFullName = config?["AdminUser:FullName"] ?? "Hamara Administrator";
-
-                var admin = userManager.FindByEmailAsync(adminEmail).GetAwaiter().GetResult();
-                if (admin == null)
+                // Seed Admin User (configured via appsettings / env var, with safe fallback in development only)
+                if (!isDevelopment)
                 {
-                    admin = new ApplicationUser
+                    string? prodAdminEmail = config?["AdminSeed:Email"] ?? config?["AdminUser:Email"] ?? Environment.GetEnvironmentVariable("ADMIN_EMAIL") ?? Environment.GetEnvironmentVariable("HAMARA_ADMIN_EMAIL");
+                    string? prodAdminPassword = config?["AdminSeed:Password"] ?? config?["AdminUser:Password"] ?? Environment.GetEnvironmentVariable("ADMIN_PASSWORD") ?? Environment.GetEnvironmentVariable("HAMARA_ADMIN_PASSWORD");
+                    string prodAdminFullName = config?["AdminUser:FullName"] ?? "Hamara Administrator";
+
+                    if (string.IsNullOrWhiteSpace(prodAdminEmail) || string.IsNullOrWhiteSpace(prodAdminPassword) ||
+                        prodAdminEmail.Trim().Equals("admin@hamaracommerce.pk", StringComparison.OrdinalIgnoreCase) ||
+                        prodAdminPassword == "Admin@123!")
                     {
-                        UserName = adminEmail,
-                        Email = adminEmail,
-                        FullName = adminFullName,
-                        PhoneNumber = "+92 300 0000000",
-                        EmailConfirmed = true,
-                        IsActive = true,
-                        CreatedAt = DateTime.UtcNow
-                    };
-                    userManager.CreateAsync(admin, adminPassword).GetAwaiter().GetResult();
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("[CRITICAL ERROR] Production administrator credentials are not configured or match insecure development defaults. Admin seeding aborted. Set ADMIN_EMAIL and ADMIN_PASSWORD environment variables.");
+                        Console.ResetColor();
+                    }
+                    else
+                    {
+                        var admin = userManager.FindByEmailAsync(prodAdminEmail.Trim()).GetAwaiter().GetResult();
+                        if (admin == null)
+                        {
+                            admin = new ApplicationUser
+                            {
+                                UserName = prodAdminEmail.Trim(),
+                                Email = prodAdminEmail.Trim(),
+                                FullName = prodAdminFullName,
+                                PhoneNumber = "+92 300 0000000",
+                                EmailConfirmed = true,
+                                IsActive = true,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            var createRes = userManager.CreateAsync(admin, prodAdminPassword).GetAwaiter().GetResult();
+                            if (createRes.Succeeded)
+                            {
+                                userManager.AddToRoleAsync(admin, "Admin").GetAwaiter().GetResult();
+                            }
+                        }
+                        // In Production: Never reset existing admin password on normal startup.
+                        if (admin != null && !userManager.IsInRoleAsync(admin, "Admin").GetAwaiter().GetResult())
+                        {
+                            userManager.AddToRoleAsync(admin, "Admin").GetAwaiter().GetResult();
+                        }
+                    }
                 }
                 else
                 {
-                    if (isDevelopment)
+                    // Development environment admin seeding
+                    string devAdminEmail = config?["AdminSeed:Email"] ?? config?["AdminUser:Email"] ?? Environment.GetEnvironmentVariable("ADMIN_EMAIL") ?? "admin@hamaracommerce.pk";
+                    string devAdminPassword = config?["AdminSeed:Password"] ?? config?["AdminUser:Password"] ?? Environment.GetEnvironmentVariable("ADMIN_PASSWORD") ?? "Admin@123!";
+                    string devAdminFullName = config?["AdminUser:FullName"] ?? "Hamara Administrator";
+
+                    var admin = userManager.FindByEmailAsync(devAdminEmail).GetAwaiter().GetResult();
+                    if (admin == null)
+                    {
+                        admin = new ApplicationUser
+                        {
+                            UserName = devAdminEmail,
+                            Email = devAdminEmail,
+                            FullName = devAdminFullName,
+                            PhoneNumber = "+92 300 0000000",
+                            EmailConfirmed = true,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        userManager.CreateAsync(admin, devAdminPassword).GetAwaiter().GetResult();
+                    }
+                    else
                     {
                         var resetToken = userManager.GeneratePasswordResetTokenAsync(admin).GetAwaiter().GetResult();
-                        userManager.ResetPasswordAsync(admin, resetToken, adminPassword).GetAwaiter().GetResult();
-                    }
-                }
-
-                // Ensure Admin properties, role, and clear lockout/access-failed counts
-                if (admin != null)
-                {
-                    bool userUpdated = false;
-                    if (!admin.EmailConfirmed)
-                    {
-                        admin.EmailConfirmed = true;
-                        userUpdated = true;
-                    }
-                    if (!admin.IsActive)
-                    {
-                        admin.IsActive = true;
-                        userUpdated = true;
-                    }
-                    if (userUpdated)
-                    {
-                        userManager.UpdateAsync(admin).GetAwaiter().GetResult();
+                        userManager.ResetPasswordAsync(admin, resetToken, devAdminPassword).GetAwaiter().GetResult();
                     }
 
-                    userManager.SetLockoutEndDateAsync(admin, null).GetAwaiter().GetResult();
-                    userManager.ResetAccessFailedCountAsync(admin).GetAwaiter().GetResult();
-
-                    if (!userManager.IsInRoleAsync(admin, "Admin").GetAwaiter().GetResult())
+                    if (admin != null)
                     {
-                        userManager.AddToRoleAsync(admin, "Admin").GetAwaiter().GetResult();
+                        bool userUpdated = false;
+                        if (!admin.EmailConfirmed)
+                        {
+                            admin.EmailConfirmed = true;
+                            userUpdated = true;
+                        }
+                        if (!admin.IsActive)
+                        {
+                            admin.IsActive = true;
+                            userUpdated = true;
+                        }
+                        if (userUpdated)
+                        {
+                            userManager.UpdateAsync(admin).GetAwaiter().GetResult();
+                        }
+
+                        userManager.SetLockoutEndDateAsync(admin, null).GetAwaiter().GetResult();
+                        userManager.ResetAccessFailedCountAsync(admin).GetAwaiter().GetResult();
+
+                        if (!userManager.IsInRoleAsync(admin, "Admin").GetAwaiter().GetResult())
+                        {
+                            userManager.AddToRoleAsync(admin, "Admin").GetAwaiter().GetResult();
+                        }
                     }
                 }
 
@@ -218,8 +260,8 @@ namespace HamaraCommerce.Data
                 }
             }
 
-            // 5. SEED DEMO ORDERS (For Order Tracking & Admin Analytics)
-            if (!context.Orders.Any())
+            // 5. SEED DEMO ORDERS (Development only - For Order Tracking & Admin Analytics)
+            if (isDevelopment && !context.Orders.Any())
             {
                 var sonyProduct = context.Products.FirstOrDefault(p => p.SKU == "ELEC-SONY-001");
                 var iphoneProduct = context.Products.FirstOrDefault(p => p.SKU == "MOB-APPL-005");

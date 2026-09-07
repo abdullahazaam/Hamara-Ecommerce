@@ -1038,8 +1038,20 @@ namespace HamaraCommerce.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Logout()
         {
+            await _cartService.ClearSessionCartAsync();
+            HttpContext.Session.Clear();
             await _signInManager.SignOutAsync();
-            _logger.LogInformation("User logged out.");
+            _logger.LogInformation("User logged out and session cart isolated.");
+            return RedirectToAction("Index", "Home");
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> LogoutGet()
+        {
+            await _cartService.ClearSessionCartAsync();
+            HttpContext.Session.Clear();
+            await _signInManager.SignOutAsync();
+            _logger.LogInformation("User logged out via GET and session cart isolated.");
             return RedirectToAction("Index", "Home");
         }
 

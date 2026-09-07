@@ -174,4 +174,23 @@ namespace HamaraCommerce.Models
         public bool HasPreviousPage => CurrentPage > 1;
         public bool HasNextPage => CurrentPage < TotalPages;
     }
+
+    public class AdminReturnsViewModel
+    {
+        public List<Order> ReturnOrders { get; set; } = new();
+        public string? StatusFilter { get; set; }
+        public int CurrentPage { get; set; } = 1;
+        public int TotalPages { get; set; } = 1;
+        public int TotalCount { get; set; }
+        public int PageSize { get; set; } = 10;
+        public bool HasPreviousPage => CurrentPage > 1;
+        public bool HasNextPage => CurrentPage < TotalPages;
+    }
+
+    public class AdminRecoveryViewModel
+    {
+        public List<CheckoutIdempotencyRecord> FlaggedIdempotencyRecords { get; set; } = new();
+        public List<EmailOutboxMessage> ProblematicEmails { get; set; } = new();
+        public List<Order> UnresolvedOrders { get; set; } = new();
+    }
 }

@@ -63,6 +63,14 @@ namespace HamaraCommerce.Models
         public DateTime? DeliveredAt { get; set; }
         public DateTime? ReturnRequestedAt { get; set; }
         public string? ReturnReason { get; set; }
+        public string? ReturnAdminNotes { get; set; }
+        public string? ReturnInspectionState { get; set; }
+        public string? RefundMethod { get; set; }
+        public decimal? RefundAmount { get; set; }
+        public string? RefundTransactionReference { get; set; }
+        public string? RefundStatus { get; set; }
+        public bool IsRestockedOnReturn { get; set; } = false;
+        public DateTime? ReturnProcessedAt { get; set; }
         public DateTime EstimatedDeliveryDate { get; set; } = DateTime.UtcNow.AddDays(4);
 
         // Order Financial Summary (Calculated Authoritatively)

@@ -15,6 +15,7 @@ namespace HamaraCommerce.Models
         public DateTime StartDate { get; set; } = DateTime.UtcNow.AddDays(-1);
         public DateTime ExpiryDate { get; set; } = DateTime.UtcNow.AddMonths(1);
         public bool IsActive { get; set; } = true;
+        public bool IsArchived { get; set; } = false;
         
         public int UsageCount { get; set; } = 0;
         public int UsageLimit { get; set; } = 500;

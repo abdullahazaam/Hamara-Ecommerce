@@ -12,6 +12,7 @@ namespace HamaraCommerce.Models
         public string Description { get; set; } = string.Empty;
         public int DisplayOrder { get; set; }
         public bool IsFeatured { get; set; } = true;
+        public bool IsActive { get; set; } = true;
         public int ProductCount { get; set; }
         public int? ParentCategoryId { get; set; }
         public Category? ParentCategory { get; set; }

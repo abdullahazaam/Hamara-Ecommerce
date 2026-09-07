@@ -100,6 +100,7 @@ namespace HamaraCommerce.Data
                 entity.HasIndex(c => c.Slug).IsUnique();
                 entity.HasIndex(c => c.Name);
                 entity.HasIndex(c => c.DisplayOrder);
+                entity.HasIndex(c => c.IsActive);
                 entity.HasIndex(c => c.ParentCategoryId);
 
                 entity.HasOne(c => c.ParentCategory)
@@ -265,6 +266,9 @@ namespace HamaraCommerce.Data
 
                 entity.HasIndex(r => r.ProductId);
                 entity.HasIndex(r => r.UserId);
+                entity.HasIndex(r => new { r.ProductId, r.UserId })
+                    .IsUnique()
+                    .HasFilter("[UserId] IS NOT NULL");
                 entity.HasIndex(r => r.IsApproved);
                 entity.HasIndex(r => r.Rating);
                 entity.HasIndex(r => r.Date);
@@ -324,6 +328,12 @@ namespace HamaraCommerce.Data
                 entity.Property(o => o.CouponCode).HasMaxLength(50);
                 entity.Property(o => o.CustomerNotes).HasMaxLength(1000);
                 entity.Property(o => o.GuestAccessToken).HasMaxLength(64);
+                entity.Property(o => o.ReturnReason).HasMaxLength(500);
+                entity.Property(o => o.ReturnAdminNotes).HasMaxLength(1000);
+                entity.Property(o => o.ReturnInspectionState).HasMaxLength(100);
+                entity.Property(o => o.RefundMethod).HasMaxLength(100);
+                entity.Property(o => o.RefundTransactionReference).HasMaxLength(100);
+                entity.Property(o => o.RefundStatus).HasMaxLength(50);
 
                 // Decimal Precision
                 entity.Property(o => o.Subtotal).HasPrecision(18, 2);
@@ -331,6 +341,7 @@ namespace HamaraCommerce.Data
                 entity.Property(o => o.TaxAmount).HasPrecision(18, 2);
                 entity.Property(o => o.ShippingFee).HasPrecision(18, 2);
                 entity.Property(o => o.TotalAmount).HasPrecision(18, 2);
+                entity.Property(o => o.RefundAmount).HasPrecision(18, 2);
 
                 // Indexes & Unique Constraints
                 entity.HasIndex(o => o.OrderNumber).IsUnique();
@@ -340,6 +351,8 @@ namespace HamaraCommerce.Data
                 entity.HasIndex(o => o.OrderDate);
                 entity.HasIndex(o => o.Status);
                 entity.HasIndex(o => o.PaymentStatus);
+                entity.HasIndex(o => o.ReturnRequestedAt);
+                entity.HasIndex(o => o.RefundStatus);
                 entity.HasIndex(o => o.UserId);
 
                 entity.HasOne(o => o.User)
@@ -429,6 +442,7 @@ namespace HamaraCommerce.Data
 
                 entity.HasIndex(c => c.Code).IsUnique();
                 entity.HasIndex(c => c.IsActive);
+                entity.HasIndex(c => c.IsArchived);
                 entity.HasIndex(c => c.StartDate);
                 entity.HasIndex(c => c.ExpiryDate);
 
