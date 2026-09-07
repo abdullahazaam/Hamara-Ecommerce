@@ -1100,6 +1100,19 @@ namespace HamaraCommerce.Controllers
                 review.IsApproved = !review.IsApproved;
                 await LogAuditAsync("ReviewModerated", "Review", review.Id.ToString(), $"Review approval set to {review.IsApproved}");
                 await _context.SaveChangesAsync();
+
+                // Recalculate rating & review count ONLY from approved reviews
+                var product = await _context.Products.FindAsync(review.ProductId);
+                if (product != null)
+                {
+                    var approvedReviews = await _context.Reviews
+                        .Where(r => r.ProductId == review.ProductId && r.IsApproved)
+                        .ToListAsync();
+                    product.ReviewCount = approvedReviews.Count;
+                    product.Rating = approvedReviews.Any() ? Math.Round(approvedReviews.Average(r => r.Rating), 1) : 0.0;
+                    await _context.SaveChangesAsync();
+                }
+
                 TempData["SuccessMessage"] = $"Review status updated to {(review.IsApproved ? "Approved" : "Hidden")}.";
             }
 
@@ -1113,9 +1126,23 @@ namespace HamaraCommerce.Controllers
             var review = await _context.Reviews.FindAsync(id);
             if (review != null)
             {
+                int productId = review.ProductId;
                 _context.Reviews.Remove(review);
                 await LogAuditAsync("ReviewDeleted", "Review", review.Id.ToString(), "Deleted abusive review");
                 await _context.SaveChangesAsync();
+
+                // Recalculate rating & review count ONLY from approved reviews
+                var product = await _context.Products.FindAsync(productId);
+                if (product != null)
+                {
+                    var approvedReviews = await _context.Reviews
+                        .Where(r => r.ProductId == productId && r.IsApproved)
+                        .ToListAsync();
+                    product.ReviewCount = approvedReviews.Count;
+                    product.Rating = approvedReviews.Any() ? Math.Round(approvedReviews.Average(r => r.Rating), 1) : 0.0;
+                    await _context.SaveChangesAsync();
+                }
+
                 TempData["SuccessMessage"] = "Review removed.";
             }
 
@@ -1139,8 +1166,15 @@ namespace HamaraCommerce.Controllers
             var q = await _context.QuestionAnswers.FindAsync(id);
             if (q != null && !string.IsNullOrWhiteSpace(answer))
             {
+                string cleanAnswer = answer.Trim();
+                if (cleanAnswer.Length > 2000)
+                {
+                    TempData["ErrorMessage"] = "Answer cannot exceed 2,000 characters.";
+                    return RedirectToAction(nameof(Questions));
+                }
+
                 var user = await _userManager.GetUserAsync(User);
-                q.Answer = answer.Trim();
+                q.Answer = cleanAnswer;
                 q.AnsweredBy = user?.FullName ?? "Store Administrator";
                 q.AnswerDate = DateTime.UtcNow;
                 q.IsAnswered = true;
@@ -1150,6 +1184,38 @@ namespace HamaraCommerce.Controllers
                 await _context.SaveChangesAsync();
 
                 TempData["SuccessMessage"] = "Question answered and published.";
+            }
+
+            return RedirectToAction(nameof(Questions));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ToggleQuestionApproval(int id)
+        {
+            var q = await _context.QuestionAnswers.FindAsync(id);
+            if (q != null)
+            {
+                q.IsApproved = !q.IsApproved;
+                await LogAuditAsync("QuestionModerated", "Question", q.Id.ToString(), $"Question approval set to {q.IsApproved}");
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = $"Question status updated to {(q.IsApproved ? "Approved" : "Hidden")}.";
+            }
+
+            return RedirectToAction(nameof(Questions));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteQuestion(int id)
+        {
+            var q = await _context.QuestionAnswers.FindAsync(id);
+            if (q != null)
+            {
+                _context.QuestionAnswers.Remove(q);
+                await LogAuditAsync("QuestionDeleted", "Question", q.Id.ToString(), "Deleted question");
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = "Question removed.";
             }
 
             return RedirectToAction(nameof(Questions));

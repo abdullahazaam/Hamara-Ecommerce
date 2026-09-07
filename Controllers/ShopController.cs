@@ -334,9 +334,31 @@ namespace HamaraCommerce.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Challenge();
 
-            if (string.IsNullOrWhiteSpace(comment) || rating < 1 || rating > 5)
+            // Validate rating values
+            if (rating < 1 || rating > 5)
             {
-                TempData["ErrorMessage"] = "Please provide a valid rating (1 to 5 stars) and review comment.";
+                TempData["ErrorMessage"] = "Please provide a valid rating (1 to 5 stars).";
+                return RedirectToAction(nameof(Details), new { id = productId });
+            }
+
+            // Validate maximum lengths and required comment
+            if (string.IsNullOrWhiteSpace(comment))
+            {
+                TempData["ErrorMessage"] = "Please provide a review comment.";
+                return RedirectToAction(nameof(Details), new { id = productId });
+            }
+
+            string cleanComment = comment.Trim();
+            if (cleanComment.Length > 2000)
+            {
+                TempData["ErrorMessage"] = "Review comment cannot exceed 2,000 characters.";
+                return RedirectToAction(nameof(Details), new { id = productId });
+            }
+
+            string cleanTitle = (title ?? string.Empty).Trim();
+            if (cleanTitle.Length > 200)
+            {
+                TempData["ErrorMessage"] = "Review title cannot exceed 200 characters.";
                 return RedirectToAction(nameof(Details), new { id = productId });
             }
 
@@ -345,7 +367,7 @@ namespace HamaraCommerce.Controllers
 
             // Prevent duplicate reviews by the same user
             var alreadyReviewed = await _context.Reviews
-                .AnyAsync(r => r.ProductId == productId && (r.UserId == user.Id || r.AuthorEmail == user.Email));
+                .AnyAsync(r => r.ProductId == productId && (r.UserId == user.Id || (!string.IsNullOrEmpty(user.Email) && r.AuthorEmail == user.Email)));
 
             if (alreadyReviewed)
             {
@@ -353,27 +375,32 @@ namespace HamaraCommerce.Controllers
                 return RedirectToAction(nameof(Details), new { id = productId });
             }
 
-            // Real Verified Purchase verification in database (Paid or Delivered orders only, not cancelled or refunded)
+            // Real Verified Purchase verification in database:
+            // A verified-purchase review requires an order owned by that customer, containing the product, with successful payment or properly recorded paid COD delivery.
+            // Pending, unpaid, failed, cancelled and refunded orders must never qualify.
             var hasPurchased = await _context.Orders
-                .AnyAsync(o => (o.UserId == user.Id || (user.EmailConfirmed && o.UserId == null && o.CustomerEmail.ToLower() == (user.Email ?? "").ToLower())) &&
+                .AnyAsync(o => (o.UserId == user.Id || (user.EmailConfirmed && o.UserId == null && !string.IsNullOrEmpty(user.Email) && o.CustomerEmail.ToLower() == user.Email.ToLower())) &&
                                o.Items.Any(i => i.ProductId == productId) &&
-                               (o.PaymentStatus == PaymentStatus.Paid || o.Status == OrderStatus.Delivered) &&
+                               o.Status != OrderStatus.Pending &&
                                o.Status != OrderStatus.Cancelled &&
-                               o.Status != OrderStatus.Refunded);
+                               o.Status != OrderStatus.Refunded &&
+                               o.PaymentStatus == PaymentStatus.Paid &&
+                               (!o.PaymentMethod.ToLower().Contains("cash") || o.Status == OrderStatus.Delivered));
 
+            // Store normal text safely without double-encoding it
             var review = new Review
             {
                 ProductId = productId,
                 UserId = user.Id,
                 AuthorEmail = user.Email,
-                UserName = HtmlEncoder(user.FullName),
+                UserName = string.IsNullOrWhiteSpace(user.FullName) ? "Verified Customer" : user.FullName.Trim(),
                 UserAvatar = user.AvatarUrl ?? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
                 Rating = rating,
-                Title = HtmlEncoder(title ?? string.Empty),
-                Comment = HtmlEncoder(comment),
+                Title = cleanTitle,
+                Comment = cleanComment,
                 Date = DateTime.UtcNow,
                 IsVerifiedPurchase = hasPurchased,
-                IsApproved = true
+                IsApproved = false // New reviews must enter moderation with IsApproved = false
             };
 
             try
@@ -387,15 +414,13 @@ namespace HamaraCommerce.Controllers
                 return RedirectToAction(nameof(Details), new { id = productId });
             }
 
-            // Recalculate rating & review count - unreviewed products show 0.0 stars
+            // Recalculate rating & review count ONLY from approved reviews
             var approvedReviews = await _context.Reviews.Where(r => r.ProductId == productId && r.IsApproved).ToListAsync();
             product.ReviewCount = approvedReviews.Count;
             product.Rating = approvedReviews.Any() ? Math.Round(approvedReviews.Average(r => r.Rating), 1) : 0.0;
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = hasPurchased 
-                ? "Thank you! Your verified purchase review has been published." 
-                : "Thank you! Your review has been submitted.";
+            TempData["SuccessMessage"] = "Thank you! Your review has been submitted and is pending moderation.";
 
             return RedirectToAction(nameof(Details), new { id = productId });
         }
@@ -417,17 +442,25 @@ namespace HamaraCommerce.Controllers
                 return RedirectToAction(nameof(Details), new { id = productId });
             }
 
+            string cleanQuestion = question.Trim();
+            if (cleanQuestion.Length > 1000)
+            {
+                TempData["ErrorMessage"] = "Question cannot exceed 1,000 characters.";
+                return RedirectToAction(nameof(Details), new { id = productId });
+            }
+
             var product = await _context.Products.FindAsync(productId);
             if (product == null) return NotFound();
 
+            // Store normal text safely without double-encoding it
             var qa = new QuestionAnswer
             {
                 ProductId = productId,
                 UserId = user.Id,
-                AskedBy = HtmlEncoder(user.FullName),
-                Question = HtmlEncoder(question.Trim()),
+                AskedBy = string.IsNullOrWhiteSpace(user.FullName) ? "Customer" : user.FullName.Trim(),
+                Question = cleanQuestion,
                 QuestionDate = DateTime.UtcNow,
-                IsApproved = true,
+                IsApproved = false, // New questions must remain unpublished until approved or answered by an administrator
                 IsAnswered = false,
                 Answer = null,
                 AnsweredBy = null,
@@ -437,14 +470,8 @@ namespace HamaraCommerce.Controllers
             _context.QuestionAnswers.Add(qa);
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Your question has been submitted. Our support team and community will reply soon.";
+            TempData["SuccessMessage"] = "Your question has been submitted and will appear once approved or answered by our team.";
             return RedirectToAction(nameof(Details), new { id = productId });
-        }
-
-        private static string HtmlEncoder(string input)
-        {
-            if (string.IsNullOrEmpty(input)) return string.Empty;
-            return WebUtility.HtmlEncode(input.Trim());
         }
     }
 }

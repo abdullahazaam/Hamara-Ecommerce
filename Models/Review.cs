@@ -19,7 +19,7 @@ namespace HamaraCommerce.Models
         public DateTime Date { get; set; } = DateTime.UtcNow;
         public int HelpfulCount { get; set; } = 0;
         public bool IsVerifiedPurchase { get; set; } = false;
-        public bool IsApproved { get; set; } = true;
+        public bool IsApproved { get; set; } = false;
         public int? OrderId { get; set; }
         public string? ImageUrl { get; set; }
     }
@@ -35,7 +35,7 @@ namespace HamaraCommerce.Models
         public string AskedBy { get; set; } = string.Empty;
         public DateTime QuestionDate { get; set; } = DateTime.UtcNow;
 
-        public bool IsApproved { get; set; } = true;
+        public bool IsApproved { get; set; } = false;
         public bool IsAnswered { get; set; } = false;
         public string? Answer { get; set; }
         public string? AnsweredBy { get; set; }
