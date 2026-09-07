@@ -131,24 +131,17 @@
                                 @(r.FailureReason ?? "Payment completed but transaction interrupted prior to commit.")
                             </td>
                             <td class="text-end pe-4">
-                                <div class="d-flex justify-content-end gap-1">
-                                    <form asp-controller="Admin" asp-action="ReconcilePayment" method="post" class="d-inline">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="id" value="@r.Id" />
-                                        <input type="hidden" name="action" value="MarkResolved" />
-                                        <button type="submit" class="btn btn-sm btn-outline-success rounded-pill px-2" title="Mark Resolved">
-                                            <i class="fa-solid fa-check me-1"></i>Resolve
-                                        </button>
-                                    </form>
-                                    <form asp-controller="Admin" asp-action="ReconcilePayment" method="post" class="d-inline">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="id" value="@r.Id" />
-                                        <input type="hidden" name="action" value="CancelRecord" />
-                                        <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-2" title="Cancel/Refund Record">
-                                            <i class="fa-solid fa-xmark me-1"></i>Cancel
-                                        </button>
-                                    </form>
-                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 reconcile-btn"
+                                        data-bs-toggle="modal" data-bs-target="#reconcileModal"
+                                        data-id="@r.Id"
+                                        data-key="@r.IdempotencyKey"
+                                        data-customer="@r.CustomerEmail"
+                                        data-amount="@(r.PaymentAmount.HasValue ? $"Rs. {r.PaymentAmount.Value:N2}" : "N/A")"
+                                        data-provider="@(r.PaymentProvider ?? "")"
+                                        data-ref="@(r.PaymentReference ?? "")"
+                                        data-notes="@(r.FailureReason ?? "")">
+                                    <i class="fa-solid fa-scale-balanced me-1"></i>Reconcile
+                                </button>
                             </td>
                         </tr>
                     }
@@ -281,3 +274,75 @@
         </div>
     }
 </div>
+
+<!-- PAYMENT RECONCILIATION MODAL -->
+<div class="modal fade" id="reconcileModal" tabindex="-1" aria-labelledby="reconcileModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form asp-controller="Admin" asp-action="ReconcilePayment" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" id="modalRecordId" />
+                <div class="modal-header border-bottom p-4">
+                    <h5 class="modal-title font-heading fw-bold" id="reconcileModalLabel">
+                        <i class="fa-solid fa-scale-balanced text-primary me-2"></i>Payment Reconciliation
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-info py-2 small mb-3">
+                        <i class="fa-solid fa-shield-halved me-1"></i>
+                        Uncertain payments remain unresolved until explicitly recorded with provider evidence and administrator review notes.
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Customer &amp; Record</label>
+                        <div class="form-control-plaintext small fw-bold" id="modalRecordDesc"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Reconciliation Outcome</label>
+                        <select name="outcome" class="form-select" required>
+                            <option value="">-- Select Explicit Outcome --</option>
+                            <option value="Paid">Paid (Verified Received at Provider)</option>
+                            <option value="Failed">Failed (Payment Declined/Failed at Provider)</option>
+                            <option value="Cancelled">Cancelled (Abandoned / Expired Session)</option>
+                            <option value="Refunded">Refunded (Payment Remitted / Reverted to Customer)</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Provider Reference Evidence</label>
+                        <input type="text" name="providerReference" id="modalProviderRef" class="form-control" placeholder="e.g. Bank Ref #, EasyPaisa TID, JazzCash Ref" required />
+                        <div class="form-text small text-muted">Enter genuine transaction reference from gateway or bank statement.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Payment Provider Name (Optional)</label>
+                        <input type="text" name="providerName" id="modalProviderName" class="form-control" placeholder="e.g. JazzCash, EasyPaisa, BankTransfer" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Administrator Verification Notes</label>
+                        <textarea name="adminNotes" class="form-control" rows="3" placeholder="Document source of evidence and reconciliation justification..." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-top p-3">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-3" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary-custom rounded-pill px-4">Confirm Reconciliation</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.querySelectorAll('.reconcile-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            document.getElementById('modalRecordId').value = this.dataset.id;
+            document.getElementById('modalRecordDesc').textContent =
+                `${this.dataset.customer} | ${this.dataset.amount} (Key: ${this.dataset.key.substring(0, 16)}...)`;
+            document.getElementById('modalProviderRef').value = this.dataset.ref || '';
+            document.getElementById('modalProviderName').value = this.dataset.provider || '';
+        });
+    });
+</script>

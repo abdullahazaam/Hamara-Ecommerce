@@ -182,6 +182,7 @@ builder.Services.AddScoped<ICatalogueImporter, CatalogueImporter>();
 builder.Services.AddScoped<ICatalogueImageRepairService, CatalogueImageRepairService>();
 builder.Services.AddScoped<MarketplaceCatalogueService>();
 builder.Services.AddScoped<IReturnRefundService, ReturnRefundService>();
+builder.Services.AddScoped<IOperationalRecoveryService, OperationalRecoveryService>();
 
 if (builder.Environment.IsProduction())
 {

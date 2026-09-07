@@ -31,6 +31,7 @@ namespace HamaraCommerce.Controllers
         private readonly IEmailTemplateService _emailTemplateService;
         private readonly IEmailOutboxService? _emailOutboxService;
         private readonly IReturnRefundService? _returnRefundService;
+        private readonly IOperationalRecoveryService _operationalRecoveryService;
         private readonly ILogger<AdminController> _logger;
 
         public AdminController(
@@ -43,7 +44,8 @@ namespace HamaraCommerce.Controllers
             IEmailTemplateService emailTemplateService,
             ILogger<AdminController> logger,
             IEmailOutboxService? emailOutboxService = null,
-            IReturnRefundService? returnRefundService = null)
+            IReturnRefundService? returnRefundService = null,
+            IOperationalRecoveryService? operationalRecoveryService = null)
         {
             _context = context;
             _userManager = userManager;
@@ -55,6 +57,7 @@ namespace HamaraCommerce.Controllers
             _logger = logger;
             _emailOutboxService = emailOutboxService;
             _returnRefundService = returnRefundService;
+            _operationalRecoveryService = operationalRecoveryService ?? new OperationalRecoveryService(context, Microsoft.Extensions.Logging.Abstractions.NullLogger<OperationalRecoveryService>.Instance);
         }
 
         // ==========================================
@@ -1547,43 +1550,69 @@ namespace HamaraCommerce.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> RetryOutboxEmail(long id)
         {
-            var message = await _context.EmailOutboxMessages.FindAsync(id);
-            if (message != null)
+            var user = await _userManager.GetUserAsync(User);
+            var result = await _operationalRecoveryService.RetryOutboxEmailAsync(
+                id,
+                user?.Id ?? "System",
+                user?.FullName ?? "Administrator");
+
+            if (result.Success)
             {
-                message.Status = EmailOutboxStatus.Queued;
-                message.AttemptCount = 0;
-                message.NextAttemptAt = DateTime.UtcNow;
-                message.LockExpiresAt = null;
-                message.LockToken = null;
-                await LogAuditAsync("EmailOutboxReset", "EmailOutbox", message.Id.ToString(), $"Reset outbox message #{message.Id} to {message.ToEmail} for retry");
-                await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = $"Outbox email #{id} reset to Queued status for immediate retry.";
+                TempData["SuccessMessage"] = result.Message;
             }
+            else if (result.AlreadySent)
+            {
+                TempData["ErrorMessage"] = result.Message;
+            }
+            else
+            {
+                TempData["WarningMessage"] = result.Message;
+            }
+
             return RedirectToAction(nameof(OperationalRecovery));
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ReconcilePayment(int id, string action)
+        public async Task<IActionResult> ReconcilePayment(
+            int id,
+            string? outcome = null,
+            string? action = null,
+            string? adminNotes = null,
+            string? providerReference = null,
+            string? providerName = null)
         {
-            var record = await _context.CheckoutIdempotencyRecords.FindAsync(id);
-            if (record == null) return NotFound();
-
-            if (action.Equals("MarkResolved", StringComparison.OrdinalIgnoreCase))
+            // Rule: Do not mark a payment checkout record Completed merely because an administrator clicked a button.
+            // If legacy action button was submitted without outcome, notes, and provider reference:
+            if (string.IsNullOrWhiteSpace(outcome) && !string.IsNullOrWhiteSpace(action))
             {
-                record.Status = IdempotencyStatus.Completed;
-                record.FailureReason = $"Manually resolved by administrator: {record.FailureReason}";
-                await LogAuditAsync("PaymentReconciled", "CheckoutIdempotency", record.IdempotencyKey, $"Manually resolved payment record #{record.Id}");
-                await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = $"Payment record #{id} marked as resolved.";
+                TempData["ErrorMessage"] = "Payment checkout records cannot be marked completed merely by clicking a button. An explicit reconciliation outcome (Paid, Failed, Cancelled, or Refunded), administrator notes, and provider/reference evidence are strictly required. Uncertain payments remain unresolved.";
+                return RedirectToAction(nameof(OperationalRecovery));
             }
-            else if (action.Equals("CancelRecord", StringComparison.OrdinalIgnoreCase))
+
+            var user = await _userManager.GetUserAsync(User);
+            var request = new PaymentReconciliationRequest
             {
-                record.Status = IdempotencyStatus.Failed;
-                record.FailureReason = "Manually marked failed/refunded by administrator.";
-                await LogAuditAsync("PaymentRecordCancelled", "CheckoutIdempotency", record.IdempotencyKey, $"Marked failed #{record.Id}");
-                await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = $"Payment record #{id} marked as cancelled.";
+                Id = id,
+                Outcome = outcome,
+                Action = action,
+                AdminNotes = adminNotes,
+                ProviderReference = providerReference,
+                ProviderName = providerName
+            };
+
+            var result = await _operationalRecoveryService.ReconcilePaymentAsync(
+                request,
+                user?.Id ?? "System",
+                user?.FullName ?? "Administrator");
+
+            if (result.Success)
+            {
+                TempData["SuccessMessage"] = result.Message;
+            }
+            else
+            {
+                TempData["ErrorMessage"] = result.Message;
             }
 
             return RedirectToAction(nameof(OperationalRecovery));
