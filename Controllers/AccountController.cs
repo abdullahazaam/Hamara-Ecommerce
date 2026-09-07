@@ -28,6 +28,7 @@ namespace HamaraCommerce.Controllers
         private readonly IEmailOutboxService? _emailOutboxService;
         private readonly ILogger<AccountController> _logger;
         private readonly Microsoft.Extensions.Configuration.IConfiguration? _configuration;
+        private readonly IReturnRefundService? _returnRefundService;
 
         public AccountController(
             UserManager<ApplicationUser> userManager,
@@ -39,7 +40,8 @@ namespace HamaraCommerce.Controllers
             IEmailTemplateService emailTemplateService,
             ILogger<AccountController> logger,
             IEmailOutboxService? emailOutboxService = null,
-            Microsoft.Extensions.Configuration.IConfiguration? configuration = null)
+            Microsoft.Extensions.Configuration.IConfiguration? configuration = null,
+            IReturnRefundService? returnRefundService = null)
         {
             _userManager = userManager;
             _signInManager = signInManager;
@@ -51,6 +53,7 @@ namespace HamaraCommerce.Controllers
             _logger = logger;
             _emailOutboxService = emailOutboxService;
             _configuration = configuration;
+            _returnRefundService = returnRefundService;
         }
 
         private string UsePublicOrigin(string callbackUrl)
@@ -304,6 +307,20 @@ namespace HamaraCommerce.Controllers
                 await ClaimGuestOrdersAsync(user);
             }
 
+            if (_returnRefundService != null)
+            {
+                var result = await _returnRefundService.RequestReturnAsync(model.OrderNumber, model.Reason, user.Id);
+                if (!result.Success)
+                {
+                    TempData["ErrorMessage"] = result.Message;
+                }
+                else
+                {
+                    TempData["SuccessMessage"] = result.Message;
+                }
+                return RedirectToAction(nameof(OrderDetail), new { id = model.OrderNumber });
+            }
+
             var order = await _context.Orders.FirstOrDefaultAsync(o => o.OrderNumber == model.OrderNumber.Trim());
             if (order == null) return NotFound();
 
@@ -331,6 +348,8 @@ namespace HamaraCommerce.Controllers
             }
             order.ReturnRequestedAt = DateTime.UtcNow;
             order.ReturnReason = model.Reason;
+            order.RefundStatus = ReturnStatus.Requested;
+            order.ReturnInspectionState = ReturnInspectionState.AwaitingInspection;
             order.CustomerNotes = (order.CustomerNotes ?? "") + $" | Return requested by customer on {DateTime.UtcNow:yyyy-MM-dd}: {model.Reason}";
             await _context.SaveChangesAsync();
 

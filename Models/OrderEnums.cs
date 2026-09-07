@@ -21,7 +21,8 @@ namespace HamaraCommerce.Models
         Authorized = 1,
         Paid = 2,
         Failed = 3,
-        Refunded = 4
+        Refunded = 4,
+        PartiallyRefunded = 5
     }
 
     public enum PaymentMethodType

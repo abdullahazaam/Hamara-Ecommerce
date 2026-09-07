@@ -181,6 +181,7 @@ builder.Services.AddScoped<ISeoService, SeoService>();
 builder.Services.AddScoped<ICatalogueImporter, CatalogueImporter>();
 builder.Services.AddScoped<ICatalogueImageRepairService, CatalogueImageRepairService>();
 builder.Services.AddScoped<MarketplaceCatalogueService>();
+builder.Services.AddScoped<IReturnRefundService, ReturnRefundService>();
 
 if (builder.Environment.IsProduction())
 {

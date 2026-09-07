@@ -37,7 +37,11 @@ public static class CommerceDatabaseWork
     public static async Task<T> TransactionAsync<T>(ApplicationDbContext context, Func<Task<T>> action)
     {
         if (!context.Database.IsRelational() || context.Database.CurrentTransaction != null)
-            return await action();
+        {
+            var res = await action();
+            await context.SaveChangesAsync();
+            return res;
+        }
         return await context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
             await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.Serializable);

@@ -30,6 +30,7 @@ namespace HamaraCommerce.Controllers
         private readonly IEmailSender _emailSender;
         private readonly IEmailTemplateService _emailTemplateService;
         private readonly IEmailOutboxService? _emailOutboxService;
+        private readonly IReturnRefundService? _returnRefundService;
         private readonly ILogger<AdminController> _logger;
 
         public AdminController(
@@ -41,7 +42,8 @@ namespace HamaraCommerce.Controllers
             IEmailSender emailSender,
             IEmailTemplateService emailTemplateService,
             ILogger<AdminController> logger,
-            IEmailOutboxService? emailOutboxService = null)
+            IEmailOutboxService? emailOutboxService = null,
+            IReturnRefundService? returnRefundService = null)
         {
             _context = context;
             _userManager = userManager;
@@ -52,6 +54,7 @@ namespace HamaraCommerce.Controllers
             _emailTemplateService = emailTemplateService;
             _logger = logger;
             _emailOutboxService = emailOutboxService;
+            _returnRefundService = returnRefundService;
         }
 
         // ==========================================
@@ -1236,15 +1239,23 @@ namespace HamaraCommerce.Controllers
             {
                 if (status.Equals("Pending", StringComparison.OrdinalIgnoreCase))
                 {
-                    query = query.Where(o => o.RefundStatus == null || o.RefundStatus == "Pending");
+                    query = query.Where(o => o.RefundStatus == null || o.RefundStatus == "Pending" || o.RefundStatus == ReturnStatus.Requested || o.RefundStatus == ReturnStatus.Approved || o.RefundStatus == ReturnStatus.Inspected || o.RefundStatus == ReturnStatus.RefundPending);
+                }
+                else if (status.Equals("Approved", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(o => o.RefundStatus == ReturnStatus.Approved);
+                }
+                else if (status.Equals("RefundPending", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(o => o.RefundStatus == ReturnStatus.RefundPending || o.RefundStatus == ReturnStatus.Inspected);
                 }
                 else if (status.Equals("Completed", StringComparison.OrdinalIgnoreCase))
                 {
-                    query = query.Where(o => o.RefundStatus == "Completed");
+                    query = query.Where(o => o.RefundStatus == ReturnStatus.Completed);
                 }
                 else if (status.Equals("Rejected", StringComparison.OrdinalIgnoreCase))
                 {
-                    query = query.Where(o => o.RefundStatus == "Rejected");
+                    query = query.Where(o => o.RefundStatus == ReturnStatus.Rejected);
                 }
             }
 
@@ -1271,8 +1282,63 @@ namespace HamaraCommerce.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ProcessReturn(int orderId, string decision, string? inspectionState, bool restock, string? refundMethod, decimal? refundAmount, string? adminNotes)
+        public async Task<IActionResult> ProcessReturn(
+            int orderId,
+            string decision,
+            string? inspectionState,
+            bool restock,
+            string? refundMethod,
+            decimal? refundAmount,
+            string? adminNotes,
+            string? refundTransactionReference = null)
         {
+            var user = await _userManager.GetUserAsync(User);
+            string adminId = user?.Id ?? "System";
+            string adminName = user?.FullName ?? user?.UserName ?? "Administrator";
+
+            if (_returnRefundService != null)
+            {
+                ReturnOperationResult result;
+                if (decision.Equals("Reject", StringComparison.OrdinalIgnoreCase))
+                {
+                    result = await _returnRefundService.RejectReturnAsync(orderId, inspectionState, adminNotes, adminId, adminName);
+                }
+                else if (decision.Equals("Inspect", StringComparison.OrdinalIgnoreCase))
+                {
+                    result = await _returnRefundService.InspectReturnAsync(orderId, inspectionState ?? ReturnInspectionState.PassedInspection, adminNotes, adminId, adminName);
+                }
+                else if (decision.Equals("CompleteRefund", StringComparison.OrdinalIgnoreCase) || decision.Equals("Complete", StringComparison.OrdinalIgnoreCase))
+                {
+                    result = await _returnRefundService.CompleteRefundAsync(orderId, refundTransactionReference ?? string.Empty, refundAmount, refundMethod, restock, adminNotes, adminId, adminName);
+                }
+                else // "Approve"
+                {
+                    if (!string.IsNullOrWhiteSpace(refundTransactionReference) && refundTransactionReference.Trim().Length >= 4)
+                    {
+                        result = await _returnRefundService.CompleteRefundAsync(orderId, refundTransactionReference, refundAmount, refundMethod, restock, adminNotes, adminId, adminName);
+                    }
+                    else
+                    {
+                        result = await _returnRefundService.ApproveReturnAsync(orderId, adminNotes, adminId, adminName);
+                        if (result.Success && !string.IsNullOrWhiteSpace(inspectionState) && !inspectionState.Equals(ReturnInspectionState.AwaitingInspection, StringComparison.OrdinalIgnoreCase))
+                        {
+                            result = await _returnRefundService.InspectReturnAsync(orderId, inspectionState, adminNotes, adminId, adminName);
+                        }
+                    }
+                }
+
+                if (!result.Success)
+                {
+                    TempData["ErrorMessage"] = result.Message;
+                }
+                else
+                {
+                    TempData["SuccessMessage"] = result.Message;
+                }
+
+                return RedirectToAction(nameof(Returns));
+            }
+
             var order = await _context.Orders
                 .Include(o => o.Items)
                 .Include(o => o.Payments)
@@ -1280,41 +1346,86 @@ namespace HamaraCommerce.Controllers
 
             if (order == null) return NotFound();
 
-            if (decision.Equals("Approve", StringComparison.OrdinalIgnoreCase))
+            if (decision.Equals("Reject", StringComparison.OrdinalIgnoreCase))
             {
-                order.ReturnInspectionState = string.IsNullOrWhiteSpace(inspectionState) ? "PassedInspection" : inspectionState.Trim();
+                order.ReturnInspectionState = string.IsNullOrWhiteSpace(inspectionState) ? ReturnInspectionState.RejectedInspection : inspectionState.Trim();
+                order.ReturnAdminNotes = adminNotes?.Trim();
+                order.RefundStatus = ReturnStatus.Rejected;
+                order.ReturnProcessedAt = DateTime.UtcNow;
+
+                if (_emailOutboxService != null)
+                {
+                    await _emailOutboxService.QueueEmailAsync(
+                        order.CustomerEmail,
+                        $"Return Request Update - Order #{order.OrderNumber}",
+                        $"<p>Dear {order.CustomerName},</p><p>Your return request for order <strong>#{order.OrderNumber}</strong> has been reviewed and declined.</p><p>Reason: {order.ReturnAdminNotes}</p>",
+                        eventKey: $"ReturnRejected_{order.OrderNumber}");
+                }
+
+                await LogAuditAsync("ReturnRejected", "Order", order.OrderNumber, $"Declined return for order #{order.OrderNumber}. Reason: {order.ReturnAdminNotes}");
+                TempData["WarningMessage"] = $"Return request for order #{order.OrderNumber} has been rejected.";
+            }
+            else if (decision.Equals("Inspect", StringComparison.OrdinalIgnoreCase))
+            {
+                order.ReturnInspectionState = string.IsNullOrWhiteSpace(inspectionState) ? ReturnInspectionState.PassedInspection : inspectionState.Trim();
+                order.ReturnAdminNotes = adminNotes?.Trim();
+                order.RefundStatus = ReturnStatus.RefundPending;
+                order.ReturnProcessedAt = DateTime.UtcNow;
+
+                if (_emailOutboxService != null)
+                {
+                    await _emailOutboxService.QueueEmailAsync(
+                        order.CustomerEmail,
+                        $"Return Item Inspected - Order #{order.OrderNumber}",
+                        $"<p>Dear {order.CustomerName},</p><p>Your return inspection has been recorded ({order.ReturnInspectionState}) for order <strong>#{order.OrderNumber}</strong>. Refund is now pending remittance.</p>",
+                        eventKey: $"ReturnInspected_{order.OrderNumber}");
+                }
+
+                await LogAuditAsync("ReturnInspected", "Order", order.OrderNumber, $"Inspection recorded ({order.ReturnInspectionState}) for order #{order.OrderNumber}.");
+                TempData["SuccessMessage"] = $"Return inspection recorded. Order #{order.OrderNumber} is pending refund remittance.";
+            }
+            else if (decision.Equals("CompleteRefund", StringComparison.OrdinalIgnoreCase) || !string.IsNullOrWhiteSpace(refundTransactionReference))
+            {
+                if (string.IsNullOrWhiteSpace(refundTransactionReference) || refundTransactionReference.Trim().Length < 4)
+                {
+                    TempData["ErrorMessage"] = "A valid refund transaction reference is required to record a completed refund.";
+                    return RedirectToAction(nameof(Returns));
+                }
+
+                string trimmedRef = refundTransactionReference.Trim();
+                decimal alreadyRefunded = order.Payments.Where(p => p.Status == PaymentStatus.Refunded).Sum(p => p.Amount);
+                decimal refundableAmount = order.TotalAmount - alreadyRefunded;
+                decimal finalRefund = refundAmount ?? refundableAmount;
+
+                if (finalRefund <= 0 || finalRefund > refundableAmount)
+                {
+                    TempData["ErrorMessage"] = $"Invalid refund amount. Must be > 0 and <= refundable remainder ({refundableAmount:N2}).";
+                    return RedirectToAction(nameof(Returns));
+                }
+
+                order.ReturnInspectionState = string.IsNullOrWhiteSpace(inspectionState) ? ReturnInspectionState.PassedInspection : inspectionState.Trim();
                 order.ReturnAdminNotes = adminNotes?.Trim();
                 order.ReturnProcessedAt = DateTime.UtcNow;
                 order.RefundMethod = string.IsNullOrWhiteSpace(refundMethod) ? order.PaymentMethod : refundMethod.Trim();
-                decimal finalRefund = refundAmount ?? order.TotalAmount;
-                order.RefundAmount = finalRefund;
-                order.RefundTransactionReference = $"REF-{Guid.NewGuid():N}"[..12].ToUpperInvariant();
-                order.RefundStatus = "Completed";
-                order.PaymentStatus = PaymentStatus.Refunded;
-                order.Status = OrderStatus.Refunded;
+                order.RefundAmount = (order.RefundAmount ?? 0) + finalRefund;
+                order.RefundTransactionReference = trimmedRef;
+                order.RefundStatus = ReturnStatus.Completed;
 
                 if (restock && !order.IsRestockedOnReturn)
                 {
-                    var user = await _userManager.GetUserAsync(User);
-                    string adminName = user?.FullName ?? "Administrator";
-                    string adminId = user?.Id ?? "System";
-
                     foreach (var item in order.Items)
                     {
                         var product = await _context.Products.Include(p => p.Variants).FirstOrDefaultAsync(p => p.Id == item.ProductId);
                         if (product != null)
                         {
                             int oldStock = product.Stock;
-                            int newStock = oldStock + item.Quantity;
-                            product.Stock = newStock;
+                            product.Stock += item.Quantity;
+                            int newStock = product.Stock;
 
                             if (item.VariantId.HasValue)
                             {
                                 var variant = product.Variants.FirstOrDefault(v => v.Id == item.VariantId.Value);
-                                if (variant != null)
-                                {
-                                    variant.Stock += item.Quantity;
-                                }
+                                if (variant != null) variant.Stock += item.Quantity;
                             }
 
                             _context.InventoryMovements.Add(new InventoryMovement
@@ -1336,12 +1447,22 @@ namespace HamaraCommerce.Controllers
                     order.IsRestockedOnReturn = true;
                 }
 
-                await _pricingService.RestoreCouponRedemptionAsync(order);
+                bool isFull = (alreadyRefunded + finalRefund) >= order.TotalAmount;
+                if (isFull)
+                {
+                    order.PaymentStatus = PaymentStatus.Refunded;
+                    order.Status = OrderStatus.Refunded;
+                    await _pricingService.RestoreCouponRedemptionAsync(order);
+                }
+                else
+                {
+                    order.PaymentStatus = PaymentStatus.PartiallyRefunded;
+                }
 
                 _context.PaymentTransactions.Add(new PaymentTransaction
                 {
                     OrderId = order.Id,
-                    TransactionReference = order.RefundTransactionReference,
+                    TransactionReference = trimmedRef,
                     Provider = order.RefundMethod,
                     PaymentMethod = order.PaymentMethod,
                     Amount = finalRefund,
@@ -1355,31 +1476,31 @@ namespace HamaraCommerce.Controllers
                     await _emailOutboxService.QueueEmailAsync(
                         order.CustomerEmail,
                         $"Return Approved & Refund Processed - Order #{order.OrderNumber}",
-                        $"<p>Dear {order.CustomerName},</p><p>Your return request for order <strong>#{order.OrderNumber}</strong> has been approved and processed.</p><p>Refund Amount: <strong>Rs. {finalRefund:N2}</strong> via {order.RefundMethod} (Ref: {order.RefundTransactionReference}).</p>",
-                        eventKey: $"ReturnApproved_{order.OrderNumber}");
+                        $"<p>Dear {order.CustomerName},</p><p>Your refund for order <strong>#{order.OrderNumber}</strong> has been processed.</p><p>Refund Amount: <strong>Rs. {finalRefund:N2}</strong> via {order.RefundMethod} (Ref: {trimmedRef}).</p>",
+                        eventKey: $"RefundCompleted_{order.OrderNumber}_{trimmedRef}");
                 }
 
-                await LogAuditAsync("ReturnApproved", "Order", order.OrderNumber, $"Approved return for order #{order.OrderNumber}. Refund: Rs. {finalRefund}, Restocked: {restock}");
-                TempData["SuccessMessage"] = $"Return for order #{order.OrderNumber} approved and refund of Rs. {finalRefund:N2} recorded.";
+                await LogAuditAsync("RefundCompleted", "Order", order.OrderNumber, $"Completed refund for order #{order.OrderNumber}. Refund: Rs. {finalRefund}, Ref: {trimmedRef}, Restocked: {restock}");
+                TempData["SuccessMessage"] = $"Refund of Rs. {finalRefund:N2} recorded for order #{order.OrderNumber} (Ref: {trimmedRef}).";
             }
-            else
+            else // Approve
             {
-                order.ReturnInspectionState = string.IsNullOrWhiteSpace(inspectionState) ? "RejectedInspection" : inspectionState.Trim();
+                order.ReturnInspectionState = string.IsNullOrWhiteSpace(inspectionState) ? ReturnInspectionState.AwaitingInspection : inspectionState.Trim();
                 order.ReturnAdminNotes = adminNotes?.Trim();
-                order.RefundStatus = "Rejected";
                 order.ReturnProcessedAt = DateTime.UtcNow;
+                order.RefundStatus = ReturnStatus.Approved;
 
                 if (_emailOutboxService != null)
                 {
                     await _emailOutboxService.QueueEmailAsync(
                         order.CustomerEmail,
-                        $"Return Request Update - Order #{order.OrderNumber}",
-                        $"<p>Dear {order.CustomerName},</p><p>Your return request for order <strong>#{order.OrderNumber}</strong> has been reviewed and declined.</p><p>Reason: {order.ReturnAdminNotes}</p>",
-                        eventKey: $"ReturnRejected_{order.OrderNumber}");
+                        $"Return Request Approved - Order #{order.OrderNumber}",
+                        $"<p>Dear {order.CustomerName},</p><p>Your return request for order <strong>#{order.OrderNumber}</strong> has been approved. Please dispatch items for condition inspection.</p>",
+                        eventKey: $"ReturnApproved_{order.OrderNumber}");
                 }
 
-                await LogAuditAsync("ReturnRejected", "Order", order.OrderNumber, $"Declined return for order #{order.OrderNumber}. Reason: {order.ReturnAdminNotes}");
-                TempData["WarningMessage"] = $"Return request for order #{order.OrderNumber} has been rejected.";
+                await LogAuditAsync("ReturnApproved", "Order", order.OrderNumber, $"Approved return for order #{order.OrderNumber}. Awaiting inspection.");
+                TempData["SuccessMessage"] = $"Return for order #{order.OrderNumber} approved and awaiting item inspection.";
             }
 
             await _context.SaveChangesAsync();

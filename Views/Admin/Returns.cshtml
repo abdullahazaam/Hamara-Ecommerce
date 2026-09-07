@@ -17,7 +17,9 @@
         <div class="col-md-4">
             <select name="status" class="form-select rounded-pill">
                 <option value="">All Return Requests</option>
-                <option value="Pending" selected="@(Model.StatusFilter == "Pending")">Pending Decision</option>
+                <option value="Pending" selected="@(Model.StatusFilter == "Pending")">Pending Decision / Review</option>
+                <option value="Approved" selected="@(Model.StatusFilter == "Approved")">Return Approved</option>
+                <option value="RefundPending" selected="@(Model.StatusFilter == "RefundPending")">Refund Pending Remittance</option>
                 <option value="Completed" selected="@(Model.StatusFilter == "Completed")">Completed / Refunded</option>
                 <option value="Rejected" selected="@(Model.StatusFilter == "Rejected")">Declined / Rejected</option>
             </select>
@@ -94,6 +96,22 @@
                                 {
                                     <span class="badge bg-danger-subtle text-danger border border-danger">Declined</span>
                                 }
+                                else if (o.RefundStatus == "RefundPending")
+                                {
+                                    <span class="badge bg-primary-subtle text-primary border border-primary">Refund Pending</span>
+                                }
+                                else if (o.RefundStatus == "Inspected")
+                                {
+                                    <span class="badge bg-info-subtle text-info border border-info">Inspected</span>
+                                }
+                                else if (o.RefundStatus == "Approved")
+                                {
+                                    <span class="badge bg-info-subtle text-info border border-info">Return Approved</span>
+                                }
+                                else if (o.RefundStatus == "Requested")
+                                {
+                                    <span class="badge bg-warning-subtle text-warning border border-warning">Return Requested</span>
+                                }
                                 else
                                 {
                                     <span class="badge bg-warning-subtle text-warning border border-warning">Pending Review</span>
@@ -165,12 +183,14 @@
                     <div class="mb-3">
                         <label class="form-label small fw-semibold text-muted">Governance Decision</label>
                         <select name="decision" id="modalDecisionSelect" class="form-select" required>
-                            <option value="Approve">Approve Return &amp; Authorize Refund</option>
+                            <option value="Approve">Approve Return (Move to Approved / Awaiting Item)</option>
+                            <option value="Inspect">Record Physical Inspection (Move to Refund Pending)</option>
+                            <option value="CompleteRefund">Confirm &amp; Record Completed Refund (Manual Remittance)</option>
                             <option value="Reject">Decline / Reject Return Request</option>
                         </select>
                     </div>
 
-                    <div class="mb-3">
+                    <div class="mb-3" id="inspectionGroup">
                         <label class="form-label small fw-semibold text-muted">Physical Inspection Assessment</label>
                         <select name="inspectionState" class="form-select">
                             <option value="PassedInspection">Item Passed Inspection (Unopened / Mint Condition)</option>
@@ -182,6 +202,12 @@
                     </div>
 
                     <div id="refundFieldsContainer">
+                        <div class="mb-3" id="refundRefGroup">
+                            <label class="form-label small fw-semibold text-muted">Remittance Reference (Bank IBAN / Wallet Transaction ID)</label>
+                            <input type="text" name="refundTransactionReference" id="modalRefundRef" class="form-control" placeholder="e.g. PK-HBL-948201 or EP-748291" />
+                            <div class="form-text small text-muted">Required when completing refund. Enter real remittance reference.</div>
+                        </div>
+
                         <div class="mb-3">
                             <label class="form-label small fw-semibold text-muted">Refund Method</label>
                             <select name="refundMethod" class="form-select">
@@ -230,6 +256,17 @@
                 document.getElementById('modalRefundAmount').value = this.dataset.totalAmount;
                 document.getElementById('modalAdminNotes').value = this.dataset.adminNotes || '';
                 
+                const status = this.dataset.refundStatus;
+                const decisionSelect = document.getElementById('modalDecisionSelect');
+                if (status === 'Approved') {
+                    decisionSelect.value = 'Inspect';
+                } else if (status === 'RefundPending' || status === 'Inspected') {
+                    decisionSelect.value = 'CompleteRefund';
+                } else {
+                    decisionSelect.value = 'Approve';
+                }
+                decisionSelect.dispatchEvent(new Event('change'));
+
                 const isRestocked = this.dataset.isRestocked === 'true';
                 const restockCheck = document.getElementById('modalRestockCheck');
                 if (isRestocked) {
@@ -246,10 +283,27 @@
 
         document.getElementById('modalDecisionSelect').addEventListener('change', function() {
             const container = document.getElementById('refundFieldsContainer');
+            const refGroup = document.getElementById('refundRefGroup');
+            const refInput = document.getElementById('modalRefundRef');
+            const inspectionGroup = document.getElementById('inspectionGroup');
+            
             if (this.value === 'Reject') {
                 container.style.display = 'none';
-            } else {
+                if (inspectionGroup) inspectionGroup.style.display = 'block';
+                if (refInput) refInput.required = false;
+            } else if (this.value === 'Approve') {
+                container.style.display = 'none';
+                if (inspectionGroup) inspectionGroup.style.display = 'none';
+                if (refInput) refInput.required = false;
+            } else if (this.value === 'Inspect') {
+                container.style.display = 'none';
+                if (inspectionGroup) inspectionGroup.style.display = 'block';
+                if (refInput) refInput.required = false;
+            } else if (this.value === 'CompleteRefund') {
                 container.style.display = 'block';
+                if (refGroup) refGroup.style.display = 'block';
+                if (inspectionGroup) inspectionGroup.style.display = 'none';
+                if (refInput) refInput.required = true;
             }
         });
     </script>
