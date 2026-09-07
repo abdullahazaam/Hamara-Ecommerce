@@ -1,101 +1,63 @@
 # Hamara Commerce
 
-An ASP.NET Core MVC e-commerce portfolio project built around a Pakistan-focused catalogue, secure customer accounts, server-authoritative pricing, and operational admin workflows.
+Hamara Commerce is the main ASP.NET Core project in my portfolio. I started it as an e-commerce store and kept expanding it so I could work through more than basic product management. The project now covers customer accounts, shopping, checkout, orders and several admin workflows.
 
-> **Project status:** actively developed portfolio application. It demonstrates production-oriented patterns, but it is not presented as a hosted commercial marketplace or a PCI-certified payment system.
+## What is included
 
-## What it demonstrates
+- Product catalogue with categories, brands, search, filters and pagination
+- Product details, variants, stock information and image galleries
+- Customer registration, email confirmation and account management
+- Cart and wishlist
+- Guest and signed-in checkout flows
+- Orders, coupons, pricing calculations and order tracking
+- Admin screens for products, orders and store operations
+- Transactional email queue with retry handling
+- Automated tests for important account, pricing and checkout behaviour
 
-- ASP.NET Core MVC on .NET 9 with C# and Razor views
-- Entity Framework Core with SQL Server migrations
-- ASP.NET Core Identity, email confirmation, role-based authorization, and account controls
-- Product catalogue, categories, variants, search, filters, cart, wishlist, coupons, checkout, and order tracking
-- Server-side totals, stock validation, checkout idempotency, and order-scoped guest access
-- Admin catalogue and order-management workflows
-- Transactional email outbox and recovery-oriented checkout records
-- Responsive light/dark storefront, structured metadata, sitemap, and asset caching
-- xUnit regression and SQL Server integration tests
+## Technology
 
-## Architecture
+- ASP.NET Core MVC on .NET 9
+- C# and Entity Framework Core
+- SQL Server
+- ASP.NET Core Identity
+- Razor views, Bootstrap, CSS and JavaScript
+- xUnit for tests
+- GitHub Actions for build and test checks
 
-```text
-Browser / Razor Views
-        |
-ASP.NET Core MVC Controllers
-        |
-Application Services (cart, pricing, payments, email)
-        |
-Entity Framework Core
-        |
-SQL Server
-```
+## Areas I focused on
 
-The server remains the source of truth for price, discount, stock, ownership, and final order totals. Client-submitted totals are not trusted.
+The most useful part of this project was working through problems that do not appear in a simple CRUD store. These included checking who can access an order, keeping displayed and saved prices consistent, updating stock safely, preventing repeated checkout submissions and recovering queued email work after an interruption.
 
-## Repository layout
+## Running the project
 
-| Path | Purpose |
-| --- | --- |
-| `Controllers/` | Storefront, account, checkout, and admin request handling |
-| `Services/` | Pricing, cart, payment, email, and supporting business logic |
-| `Models/` | Domain entities and view models |
-| `Data/` | EF Core context, initialisation, and catalogue data |
-| `Migrations/` | Additive SQL Server schema migrations |
-| `Views/` | Razor storefront and back-office UI |
-| `wwwroot/` | CSS, JavaScript, and local product assets |
-| `Tests/HamaraCommerce.Tests/` | xUnit regression and integration tests |
+You will need the .NET 9 SDK and SQL Server.
 
-## Run locally
-
-### Requirements
-
-- .NET 9 SDK
-- SQL Server or SQL Server LocalDB
-- EF Core CLI (`dotnet tool install --global dotnet-ef`)
-
-### Setup
+1. Clone the repository.
+2. Set the SQL Server connection string in local configuration or user secrets.
+3. Restore packages and apply the migrations:
 
 ```bash
-git clone https://github.com/abdullahazaam/Hamara-Ecommerce.git
-cd Hamara-Ecommerce
 dotnet restore
 dotnet ef database update
+```
+
+4. Start the application:
+
+```bash
 dotnet run
 ```
 
-The default development connection targets SQL Server LocalDB. Override it without committing secrets:
-
-```powershell
-$env:ConnectionStrings__DefaultConnection="Server=(localdb)\MSSQLLocalDB;Database=HamaraCommerceDb;Trusted_Connection=True;TrustServerCertificate=True"
-```
-
-ASP.NET Core maps nested environment keys with double underscores, for example `Smtp__Host`, `Smtp__Username`, and `Smtp__Password`.
+Do not commit production connection strings, SMTP credentials or payment credentials. Use user secrets or environment variables for local development.
 
 ## Tests
 
 ```bash
-dotnet build HamaraCommerce.sln
 dotnet test HamaraCommerce.sln
 ```
 
-Some concurrency and recovery tests require an actual SQL Server instance. Configure the test connection expected by `TestDbContextFactory`; do not treat an in-memory provider as proof of SQL locking behaviour.
+Some checkout and concurrency tests require SQL Server. They should not be treated as passing if the required database is unavailable.
 
-## Development accounts
+## Project status
 
-Demo accounts are created only by the development seed path. Treat them as local demonstration credentials and replace or disable seeded credentials before any deployment.
-
-## Security and deployment notes
-
-- Keep connection strings, SMTP credentials, signing keys, and payment credentials outside tracked configuration.
-- Apply migrations to a backed-up database; never replace a database containing real customer/order data with seed data.
-- Only configured payment providers should be exposed to customers.
-- Production deployment still requires HTTPS, secret management, monitoring, backups, an SMTP provider, and payment-provider reconciliation.
-
-## Portfolio focus
-
-The most important engineering work in this repository is not the catalogue size. It is the treatment of identity, order ownership, pricing, stock contention, checkout replay safety, coupon consistency, and recoverable email/payment workflows.
-
-## Author
-
-**Abdullah Azaam** — junior web developer focused on ASP.NET Core, C#, SQL Server, PHP, and Laravel.
+This is a portfolio project, not a live commercial marketplace. COD and test payment flows are available for demonstration, but a real deployment would still need production payment, email, monitoring and operational configuration.
 
