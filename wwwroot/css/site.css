@@ -102,6 +102,9 @@
     /* Sizing & Transitions */
     --navbar-height: 72px;
     --announcement-height: 38px;
+    --header-margin-top: 0.5rem;
+    --header-margin-bottom: 0.5rem;
+    --header-reserved-height: calc(var(--announcement-height) + var(--navbar-height) + var(--header-margin-top) + var(--header-margin-bottom));
     --transition-fast: 0.15s cubic-bezier(0.16, 1, 0.3, 1);
     --transition-base: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     --transition-smooth: 0.5s cubic-bezier(0.16, 1, 0.3, 1);
@@ -263,13 +266,14 @@ main {
     pointer-events: none;
     background-color: var(--bg-base);
     transition: opacity var(--transition-smooth);
+    contain: strict;
 }
 
 .aurora-field {
     position: absolute;
     border-radius: 50%;
-    filter: blur(140px);
-    will-change: transform, opacity;
+    filter: blur(40px);
+    will-change: transform;
     opacity: 0.85;
 }
 
@@ -331,8 +335,6 @@ main {
     position: absolute;
     border-radius: 50%;
     pointer-events: none;
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
     border: 1.5px solid rgba(255, 255, 255, 0.88);
     background: radial-gradient(circle at 32% 28%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.35) 20%, rgba(0,168,120,0.10) 45%, rgba(36,87,245,0.12) 70%, rgba(216,169,40,0.16) 100%);
     box-shadow:
@@ -628,8 +630,6 @@ main {
     background: var(--bg-glass);
     color: var(--text-primary) !important;
     border: 1px solid var(--border-default);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
 }
 .btn-glass:hover {
     background: var(--bg-surface-raised);
@@ -691,19 +691,40 @@ main {
 .hero-3d-stage [data-tilt-z="badge"] { transform: translateZ(44px); }
 
 /* --------------------------------------------------------------------------
-   9. ANNOUNCEMENT BAR
+   9. FIXED STOREFRONT HEADER & ANNOUNCEMENT BAR
    -------------------------------------------------------------------------- */
+.storefront-header-fixed {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    z-index: 1050;
+    pointer-events: none;
+    transform: none !important;
+}
+
+.header-placeholder-spacer {
+    width: 100%;
+    height: var(--header-reserved-height);
+    flex-shrink: 0;
+    pointer-events: none;
+}
+
 .announcement-bar {
     background: linear-gradient(90deg, #03070B 0%, #07111A 50%, #04100D 100%);
     color: #94a3b8;
     font-size: 0.8125rem;
     height: var(--announcement-height);
-    display: flex; align-items: center;
+    display: flex;
+    align-items: center;
     border-bottom: 1px solid rgba(0,168,120,0.12);
-    position: relative; z-index: 1040;
+    position: relative;
+    z-index: 1;
     overflow: hidden;
     width: 100%;
     max-width: 100%;
+    pointer-events: auto;
 }
 .annbar-inner {
     width: 100%; max-width: 1320px; margin: 0 auto;
@@ -721,15 +742,16 @@ main {
    -------------------------------------------------------------------------- */
 .site-header,
 .floating-header-wrapper {
-    position: sticky;
-    top: 0.75rem;
-    z-index: 1040;
+    position: relative;
+    top: 0;
+    z-index: 2;
     width: calc(100% - 32px); /* 16px side margins */
     max-width: 1440px;
-    margin: 0 auto;
+    margin: var(--header-margin-top) auto var(--header-margin-bottom);
     padding: 0;
     pointer-events: none;
-    transition: top 0.3s ease, width 0.3s ease;
+    transform: none !important;
+    transition: width 0.3s ease;
 }
 
 @media (min-width: 1440px) {
@@ -750,8 +772,8 @@ main {
     height: var(--navbar-height);
     padding: 0.45rem 1.15rem;
     background: var(--bg-glass);
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
     border: 1px solid var(--border-glass);
     border-radius: var(--radius-pill);
     box-shadow: 0 10px 30px -10px rgba(16, 24, 39, 0.10), 0 2px 8px rgba(16, 24, 39, 0.04);
@@ -760,7 +782,7 @@ main {
     justify-content: space-between;
     gap: 0.75rem;
     flex-wrap: nowrap;
-    transition: all 0.3s ease;
+    transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
 [data-theme='dark'] .site-header-inner,
@@ -772,9 +794,14 @@ main {
 
 .site-header.scrolled .site-header-inner,
 .floating-header-wrapper.scrolled .floating-header-bar {
-    height: 60px;
-    box-shadow: var(--shadow-card-hover);
+    box-shadow: 0 14px 35px -8px rgba(16, 24, 39, 0.18), 0 4px 12px rgba(16, 24, 39, 0.06);
     background: var(--bg-surface-raised);
+}
+
+[data-theme='dark'] .site-header.scrolled .site-header-inner,
+[data-theme='dark'] .floating-header-wrapper.scrolled .floating-header-bar {
+    background: rgba(11, 25, 38, 0.94);
+    box-shadow: 0 18px 40px -8px rgba(0, 0, 0, 0.85);
 }
 
 /* Brand Logo */
@@ -1296,8 +1323,6 @@ main {
     overflow: hidden;
     border: 1.5px solid rgba(255, 255, 255, 0.95);
     box-shadow: 0 24px 50px -12px rgba(15, 23, 42, 0.08), 0 8px 24px -4px rgba(36, 87, 245, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(20px) saturate(160%);
-    -webkit-backdrop-filter: blur(20px) saturate(160%);
 }
 .hero-section::before {
     content: ''; position: absolute; inset: 0;
@@ -1406,9 +1431,7 @@ main {
     display: inline-flex;
     align-items: center;
     gap: 0.75rem;
-    background: rgba(255, 255, 255, 0.88);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    background: rgba(255, 255, 255, 0.94);
     border: 1.5px solid rgba(255, 255, 255, 0.95);
     border-radius: var(--radius-lg);
     padding: 0.5rem 0.85rem;
@@ -1792,8 +1815,6 @@ main {
    -------------------------------------------------------------------------- */
 .product-card {
     background: var(--surface-level-2);
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
     border: 1px solid var(--border-level-2);
     border-radius: var(--radius-xl);
     overflow: visible;
@@ -1928,8 +1949,6 @@ main {
     border-radius: 50%;
     background: var(--surface-level-3);
     border: 1px solid var(--border-level-3);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
     color: var(--text-muted);
     display: flex;
     align-items: center;
@@ -1979,11 +1998,33 @@ main {
     transform-style: preserve-3d;
 }
 .product-card-category {
-    font-size: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.22rem 0.6rem;
+    background: var(--brand-primary-subtle);
+    color: var(--brand-primary);
+    border: 1px solid rgba(36, 87, 245, 0.15);
+    border-radius: var(--radius-pill);
+    font-size: 0.68rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--brand-primary);
+    letter-spacing: 0.04em;
+    transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+[data-theme='dark'] .product-card-category {
+    background: rgba(59, 130, 246, 0.15);
+    color: #93C5FD;
+    border-color: rgba(59, 130, 246, 0.25);
+}
+.product-card-category:hover {
+    background: var(--brand-primary);
+    color: #ffffff;
+    border-color: var(--brand-primary);
+}
+.product-card-footer {
+    margin-top: auto;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-level-1);
 }
 .product-card-stock-alert {
     color: var(--status-danger);
@@ -2246,13 +2287,94 @@ main {
     color: var(--text-primary);
 }
 
-/* Reveal on scroll */
-.reveal-on-scroll {
-    opacity: 1;
-    transform: translateY(0);
-    transition: opacity 0.4s ease, transform 0.4s ease;
+/* --------------------------------------------------------------------------
+   16. POLISHED SCROLL REVEAL (Shared Observer, Staggered Cards, Separated Wrappers)
+   -------------------------------------------------------------------------- */
+
+/* Accessibility & Fallbacks: content visible if JS fails or reduced motion is requested */
+html.no-js .reveal-on-scroll,
+html:not(.js-active) .reveal-on-scroll,
+html.no-js .reveal-card,
+html:not(.js-active) .reveal-card,
+@media (prefers-reduced-motion: reduce) {
+    .reveal-on-scroll,
+    .reveal-card {
+        opacity: 1 !important;
+        transform: none !important;
+        transition: none !important;
+    }
 }
-.reveal-on-scroll.is-revealed { opacity: 1; transform: translateY(0); }
+
+/* Above-the-fold Hero is immediately visible to avoid LCP blank flash */
+.hero-section,
+.hero-section.reveal-on-scroll,
+.reveal-immediate {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+}
+
+/* Base Reveal for Section Headings & General Containers */
+html.js-active .reveal-on-scroll {
+    opacity: 0;
+    transform: translate3d(0, 24px, 0);
+    transition: opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1), transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
+}
+
+html.js-active .reveal-on-scroll.is-revealed {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    will-change: auto;
+}
+
+/* Card Column Wrappers: individual entrance with subtle alternating horizontal movement, upward movement, opacity & small scale */
+html.js-active .reveal-card,
+html.js-active [class*="col-"].reveal-on-scroll {
+    opacity: 0;
+    transform: translate3d(-8px, 24px, 0) scale(0.965);
+    transition: opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1), transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
+}
+
+/* Alternating horizontal movement for odd / even cards */
+html.js-active .reveal-card:nth-child(even),
+html.js-active [class*="col-"].reveal-on-scroll:nth-child(even) {
+    transform: translate3d(8px, 24px, 0) scale(0.965);
+}
+
+/* 4-column alternating pattern for rich rhythm */
+html.js-active .reveal-card:nth-child(4n+3),
+html.js-active [class*="col-"].reveal-on-scroll:nth-child(4n+3) {
+    transform: translate3d(-6px, 24px, 0) scale(0.965);
+}
+html.js-active .reveal-card:nth-child(4n+4),
+html.js-active [class*="col-"].reveal-on-scroll:nth-child(4n+4) {
+    transform: translate3d(6px, 24px, 0) scale(0.965);
+}
+
+/* Revealed state for cards */
+html.js-active .reveal-card.is-revealed,
+html.js-active [class*="col-"].reveal-on-scroll.is-revealed {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    will-change: auto;
+}
+
+/* Do not animate admin tables or content */
+.admin-table,
+.admin-table *,
+.table,
+.table *,
+table,
+table *,
+.admin-layout .reveal-on-scroll,
+.admin-content .reveal-on-scroll,
+.admin-page .reveal-on-scroll {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+}
 
 /* Toast */
 .toast-container-custom {
@@ -2322,14 +2444,21 @@ main {
 }
 
 @media (max-width: 991px) {
+    :root {
+        --navbar-height: 58px;
+        --header-margin-top: 0.4rem;
+        --header-margin-bottom: 0.4rem;
+        --header-reserved-height: calc(var(--announcement-height) + 58px + 0.8rem);
+    }
     .site-header,
     .floating-header-wrapper {
-        top: 0.6rem;
+        top: 0;
         width: calc(100% - 28px);
+        margin: var(--header-margin-top) auto var(--header-margin-bottom);
     }
     .site-header-inner,
     .floating-header-bar {
-        height: 58px;
+        height: var(--navbar-height);
         padding: 0.4rem 0.85rem;
         gap: 0.5rem;
     }
@@ -2339,17 +2468,24 @@ main {
 }
 
 @media (max-width: 767px) {
+    :root {
+        --announcement-height: 34px;
+        --navbar-height: 52px;
+        --header-margin-top: 0.35rem;
+        --header-margin-bottom: 0.35rem;
+        --header-reserved-height: calc(34px + 52px + 0.7rem);
+    }
     .site-header,
     .floating-header-wrapper {
-        top: 0.5rem;
+        top: 0;
         width: calc(100% - 24px);
         max-width: calc(100% - 24px);
-        margin: 0 auto;
+        margin: var(--header-margin-top) auto var(--header-margin-bottom);
         padding: 0;
     }
     .site-header-inner,
     .floating-header-bar {
-        height: 52px;
+        height: var(--navbar-height);
         padding: 0.35rem 0.5rem;
         gap: 0.35rem;
         width: 100% !important;
@@ -2654,43 +2790,108 @@ html:not(.js-active) .reveal-on-scroll {
 /* ==========================================================================
    BOUNDED PAGINATION & HORIZONTAL OVERFLOW PREVENTION SAFEGUARDS
    ========================================================================== */
-html, body {
-    max-width: 100%;
-    overflow-x: hidden;
+/* ===== ADMIN BOUNDED PAGINATION ===== */
+.admin-pagination-wrapper {
+    background: transparent;
+    border-color: rgba(0, 0, 0, 0.08) !important;
 }
 
-.pagination-bounded {
-    max-width: 100% !important;
-    display: flex !important;
-    flex-wrap: wrap !important;
-    justify-content: center !important;
-    gap: 0.25rem;
-    padding: 0;
+.admin-pagination {
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
-.pagination-bounded .page-item {
-    display: inline-flex;
+.admin-pagination .page-item {
+    margin: 0;
 }
 
-.pagination-bounded .page-link {
-    min-width: 38px;
-    height: 38px;
-    padding: 0 0.75rem;
+.admin-pagination .admin-page-link {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.875rem;
+    min-width: 36px;
+    height: 36px;
+    padding: 0 10px;
+    font-size: 0.84rem;
     font-weight: 600;
-    white-space: nowrap;
+    border-radius: 8px !important;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    background-color: #ffffff;
+    color: #475569;
+    text-decoration: none;
+    transition: all 0.2s ease-in-out;
+    user-select: none;
 }
 
-@media (max-width: 576px) {
-    .pagination-bounded .page-link {
-        min-width: 34px;
-        height: 34px;
-        padding: 0 0.5rem;
-        font-size: 0.8125rem;
-    }
+.admin-pagination .admin-page-link:hover {
+    background-color: #f1f5f9;
+    color: #2563eb;
+    border-color: #2563eb;
+}
+
+.admin-pagination .page-item.active .admin-page-link {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+    border-color: #2563eb !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+    cursor: default;
+}
+
+.admin-pagination .page-item.disabled .admin-page-link {
+    background-color: transparent !important;
+    border-color: rgba(0, 0, 0, 0.05) !important;
+    color: #94a3b8 !important;
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.admin-pagination .admin-ellipsis-item .ellipsis-link {
+    border-color: transparent !important;
+    background-color: transparent !important;
+    color: #64748b !important;
+    cursor: default;
+    min-width: 28px;
+    padding: 0 4px;
+    letter-spacing: 2px;
+}
+
+.admin-pagination .prev-next-link {
+    padding: 0 12px;
+    font-weight: 500;
+}
+
+[data-theme="dark"] .admin-pagination-wrapper {
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-theme="dark"] .admin-pagination .admin-page-link {
+    border-color: rgba(255, 255, 255, 0.1);
+    background-color: rgba(30, 41, 59, 0.7);
+    color: #cbd5e1;
+}
+
+[data-theme="dark"] .admin-pagination .admin-page-link:hover {
+    background-color: rgba(59, 130, 246, 0.15);
+    border-color: #3b82f6;
+    color: #60a5fa;
+}
+
+[data-theme="dark"] .admin-pagination .page-item.active .admin-page-link {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+    border-color: #3b82f6 !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 10px rgba(59, 130, 246, 0.4);
+}
+
+[data-theme="dark"] .admin-pagination .page-item.disabled .admin-page-link {
+    border-color: rgba(255, 255, 255, 0.04) !important;
+    color: #64748b !important;
+    opacity: 0.5;
+}
+
+[data-theme="dark"] .admin-pagination .admin-ellipsis-item .ellipsis-link {
+    color: #64748b !important;
 }
 
 

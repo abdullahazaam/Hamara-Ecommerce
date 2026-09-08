@@ -89,17 +89,20 @@
     };
 
     // =========================================================================
+    // =========================================================================
     // 2. DARK-MODE PARTICLE PLEXUS CANVAS ENGINE
     // =========================================================================
     const PlexusEngine = {
         canvas: null,
         ctx: null,
         particles: [],
-        particleCount: 65,
+        particleCount: 24,
         maxDistance: 120,
         mouse: { x: null, y: null, radius: 130 },
         animFrameId: null,
         isRunning: false,
+        isScrolling: false,
+        scrollTimeout: null,
 
         colors: [
             { r: 0, g: 168, b: 120 },   // Emerald
@@ -124,6 +127,15 @@
                 this.mouse.x = null;
                 this.mouse.y = null;
             });
+
+            // Pause during active scrolling to protect frame rate
+            window.addEventListener('scroll', () => {
+                this.isScrolling = true;
+                if (this.scrollTimeout) clearTimeout(this.scrollTimeout);
+                this.scrollTimeout = setTimeout(() => {
+                    this.isScrolling = false;
+                }, 120);
+            }, { passive: true });
 
             // Pause on tab hide
             document.addEventListener('visibilitychange', () => {
@@ -152,19 +164,19 @@
 
         resize() {
             if (!this.canvas) return;
-            const dpr = window.devicePixelRatio || 1;
+            const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
             const w = window.innerWidth;
             const h = window.innerHeight;
 
-            this.canvas.width = w * dpr;
-            this.canvas.height = h * dpr;
+            this.canvas.width = Math.floor(w * dpr);
+            this.canvas.height = Math.floor(h * dpr);
             this.ctx.scale(dpr, dpr);
 
             this.width = w;
             this.height = h;
 
-            // Adjust count for smaller devices
-            this.particleCount = w < 768 ? 35 : 70;
+            // Cap particle count: 12 on mobile, 24 on desktop
+            this.particleCount = w < 768 ? 12 : 24;
             this.createParticles();
         },
 
@@ -175,17 +187,18 @@
                 this.particles.push({
                     x: Math.random() * this.width,
                     y: Math.random() * this.height,
-                    vx: (Math.random() - 0.5) * 0.7,
-                    vy: (Math.random() - 0.5) * 0.7,
-                    radius: Math.random() * 1.8 + 1.2,
+                    vx: (Math.random() - 0.5) * 0.6,
+                    vy: (Math.random() - 0.5) * 0.6,
+                    radius: Math.random() * 1.5 + 1.0,
                     color: color,
-                    baseAlpha: Math.random() * 0.4 + 0.35
+                    baseAlpha: Math.random() * 0.35 + 0.30
                 });
             }
         },
 
         start() {
             if (this.isRunning) return;
+            if (ThemeManager.getTheme() !== 'dark') return;
             this.isRunning = true;
             this.loop();
         },
@@ -200,8 +213,21 @@
 
         loop() {
             if (!this.isRunning) return;
+            if (ThemeManager.getTheme() !== 'dark') {
+                this.stop();
+                return;
+            }
+
+            // If actively scrolling, yield frame to keep native scroll silky smooth
+            if (this.isScrolling) {
+                this.animFrameId = requestAnimationFrame(() => this.loop());
+                return;
+            }
 
             this.ctx.clearRect(0, 0, this.width, this.height);
+
+            const maxDist = this.maxDistance;
+            const maxDistSq = maxDist * maxDist;
 
             // Draw particles & update
             for (let i = 0; i < this.particles.length; i++) {
@@ -219,12 +245,14 @@
                 if (this.mouse.x !== null && this.mouse.y !== null) {
                     const dx = this.mouse.x - p.x;
                     const dy = this.mouse.y - p.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const distSq = dx * dx + dy * dy;
+                    const radiusSq = this.mouse.radius * this.mouse.radius;
 
-                    if (dist < this.mouse.radius && dist > 0) {
+                    if (distSq < radiusSq && distSq > 0) {
+                        const dist = Math.sqrt(distSq);
                         const force = (this.mouse.radius - dist) / this.mouse.radius;
-                        p.x -= (dx / dist) * force * 2.5;
-                        p.y -= (dy / dist) * force * 2.5;
+                        p.x -= (dx / dist) * force * 2.0;
+                        p.y -= (dy / dist) * force * 2.0;
                     }
                 }
 
@@ -234,20 +262,21 @@
                 this.ctx.fillStyle = `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, ${p.baseAlpha})`;
                 this.ctx.fill();
 
-                // Connect nearby particles
+                // Connect nearby particles (using squared distance pre-filter to skip Math.sqrt)
                 for (let j = i + 1; j < this.particles.length; j++) {
                     const p2 = this.particles[j];
                     const dx = p.x - p2.x;
                     const dy = p.y - p2.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const distSq = dx * dx + dy * dy;
 
-                    if (dist < this.maxDistance) {
-                        const alpha = (1 - dist / this.maxDistance) * 0.28;
+                    if (distSq < maxDistSq) {
+                        const dist = Math.sqrt(distSq);
+                        const alpha = (1 - dist / maxDist) * 0.25;
                         this.ctx.beginPath();
                         this.ctx.moveTo(p.x, p.y);
                         this.ctx.lineTo(p2.x, p2.y);
                         this.ctx.strokeStyle = `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, ${alpha})`;
-                        this.ctx.lineWidth = 0.85;
+                        this.ctx.lineWidth = 0.8;
                         this.ctx.stroke();
                     }
                 }
@@ -258,7 +287,7 @@
     };
 
     // =========================================================================
-    // 3. UNIVERSAL 3D TILT ENGINE & POINTER GLARE
+    // 3. UNIVERSAL 3D TILT ENGINE & POINTER GLARE (Active-Card Bound, Zero Thrash)
     // =========================================================================
     const TiltEngine = {
         profiles: {
@@ -267,6 +296,13 @@
             product: { maxTiltX: 5.0, maxTiltY: 6.0, scale: 1.015, lift: 5 },
             hero:    { maxTiltX: 8.5, maxTiltY: 10.0, scale: 1.025, lift: 6 }
         },
+
+        activeCard: null,
+        activeRect: null,
+        activeProfile: null,
+        activeGlare: null,
+        pendingEvent: null,
+        rafId: null,
 
         init() {
             // Strictly activate on devices with fine pointer (mouse/trackpad) and NO reduced motion
@@ -296,49 +332,68 @@
                 el.appendChild(glare);
             }
 
-            let rect = null;
-            let rafId = null;
+            el.addEventListener('mouseenter', () => {
+                this.activeCard = el;
+                this.activeProfile = profile;
+                this.activeGlare = glare;
+                this.activeRect = el.getBoundingClientRect();
+                el.style.transition = 'none';
+            });
 
-            const onMouseEnter = () => {
-                rect = el.getBoundingClientRect();
-                el.style.transition = 'none'; // Instant response on movement
-            };
+            el.addEventListener('mousemove', (e) => {
+                if (this.activeCard !== el) return;
+                this.pendingEvent = { clientX: e.clientX, clientY: e.clientY };
 
-            const onMouseMove = (e) => {
-                if (!rect) rect = el.getBoundingClientRect();
+                if (!this.rafId) {
+                    this.rafId = requestAnimationFrame(() => this.updateTilt());
+                }
+            });
 
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
-
-                const percentX = (x / rect.width) * 2 - 1;   // -1 to +1
-                const percentY = (y / rect.height) * 2 - 1;  // -1 to +1
-
-                // Clamped within max limits
-                const rotateY = Math.max(-profile.maxTiltY, Math.min(profile.maxTiltY, percentX * profile.maxTiltY));
-                const rotateX = Math.max(-profile.maxTiltX, Math.min(profile.maxTiltX, -percentY * profile.maxTiltX));
-
-                const transformValue = `perspective(1100px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) translateZ(${profile.lift}px) scale3d(${profile.scale}, ${profile.scale}, ${profile.scale})`;
-                el.style.transform = transformValue;
-
-                const glareX = ((x / rect.width) * 100).toFixed(1);
-                const glareY = ((y / rect.height) * 100).toFixed(1);
-
-                el.style.setProperty('--mouse-x', `${glareX}%`);
-                el.style.setProperty('--mouse-y', `${glareY}%`);
-                glare.style.background = `radial-gradient(circle at ${glareX}% ${glareY}%, rgba(255,255,255,0.28) 0%, rgba(36,87,245,0.10) 35%, transparent 70%)`;
-            };
-
-            const onMouseLeave = () => {
-                if (rafId) cancelAnimationFrame(rafId);
+            el.addEventListener('mouseleave', () => {
+                if (this.activeCard === el) {
+                    if (this.rafId) {
+                        cancelAnimationFrame(this.rafId);
+                        this.rafId = null;
+                    }
+                    this.pendingEvent = null;
+                    this.activeCard = null;
+                    this.activeRect = null;
+                    this.activeGlare = null;
+                }
                 // Spring back smoothly
                 el.style.transition = 'transform 0.5s cubic-bezier(0.16, 1, 0.3, 1)';
                 el.style.transform = 'perspective(1100px) rotateX(0deg) rotateY(0deg) translateZ(0) scale3d(1, 1, 1)';
-                rect = null;
-            };
+            });
+        },
 
-            el.addEventListener('mouseenter', onMouseEnter);
-            el.addEventListener('mousemove', onMouseMove);
-            el.addEventListener('mouseleave', onMouseLeave);
+        updateTilt() {
+            this.rafId = null;
+            const el = this.activeCard;
+            const rect = this.activeRect;
+            const e = this.pendingEvent;
+            const profile = this.activeProfile;
+            const glare = this.activeGlare;
+
+            if (!el || !rect || !e || !profile) return;
+
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const percentX = (x / rect.width) * 2 - 1;   // -1 to +1
+            const percentY = (y / rect.height) * 2 - 1;  // -1 to +1
+
+            const rotateY = Math.max(-profile.maxTiltY, Math.min(profile.maxTiltY, percentX * profile.maxTiltY));
+            const rotateX = Math.max(-profile.maxTiltX, Math.min(profile.maxTiltX, -percentY * profile.maxTiltX));
+
+            el.style.transform = `perspective(1100px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) translateZ(${profile.lift}px) scale3d(${profile.scale}, ${profile.scale}, ${profile.scale})`;
+
+            if (glare) {
+                const glareX = ((x / rect.width) * 100).toFixed(1);
+                const glareY = ((y / rect.height) * 100).toFixed(1);
+                el.style.setProperty('--mouse-x', `${glareX}%`);
+                el.style.setProperty('--mouse-y', `${glareY}%`);
+                glare.style.background = `radial-gradient(circle at ${glareX}% ${glareY}%, rgba(255,255,255,0.28) 0%, rgba(36,87,245,0.10) 35%, transparent 70%)`;
+            }
         }
     };
 
@@ -1017,51 +1072,151 @@
     }
 
     // =========================================================================
-    // 10. SCROLL REVEAL & STICKY NAVBAR
+    // 10. SCROLL REVEAL ENGINE & STICKY NAVBAR
     // =========================================================================
-    function initScrollInteractions() {
-        const header = document.getElementById('siteHeader');
-        window.addEventListener('scroll', () => {
-            if (!header) return;
-            if (window.scrollY > 20) {
-                header.classList.add('scrolled');
-            } else {
-                header.classList.remove('scrolled');
+    const ScrollRevealEngine = {
+        observer: null,
+        initialized: false,
+
+        init() {
+            if (this.initialized) return;
+            this.initialized = true;
+
+            // Keep above-the-fold hero immediately visible
+            const hero = document.querySelector('.hero-section');
+            if (hero) {
+                hero.classList.add('is-revealed');
             }
-        }, { passive: true });
 
-        if ('IntersectionObserver' in window) {
-            const revealObserver = new IntersectionObserver((entries, obs) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        entry.target.classList.add('is-revealed');
-                        obs.unobserve(entry.target);
-                    }
+            // Fallback for reduced motion preference
+            const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (prefersReducedMotion) {
+                document.querySelectorAll('.reveal-on-scroll, .reveal-card').forEach(el => {
+                    el.classList.add('is-revealed');
                 });
-            }, { rootMargin: '100px 0px 50px 0px', threshold: 0.01 });
+                return;
+            }
 
-            document.querySelectorAll('.reveal-on-scroll').forEach(el => {
+            if (!('IntersectionObserver' in window)) {
+                document.querySelectorAll('.reveal-on-scroll, .reveal-card').forEach(el => {
+                    el.classList.add('is-revealed');
+                });
+                return;
+            }
+
+            // Single shared IntersectionObserver
+            this.observer = new IntersectionObserver((entries) => {
+                const intersecting = entries.filter(e => e.isIntersecting);
+                if (intersecting.length === 0) return;
+
+                let cardBatchIndex = 0;
+                let lastTop = -1;
+
+                intersecting.forEach((entry) => {
+                    const el = entry.target;
+                    // Animate once and unobserve immediately
+                    this.observer.unobserve(el);
+
+                    // Detect cards / column wrappers containing cards
+                    const isCard = el.classList.contains('reveal-card') ||
+                                   el.matches('[class*="col-"]') ||
+                                   el.querySelector('.product-card, .category-card');
+
+                    if (isCard) {
+                        const clientTop = entry.boundingClientRect ? entry.boundingClientRect.top : (el.offsetTop || 0);
+                        const top = Math.round(clientTop / 25) * 25;
+                        if (lastTop === -1 || Math.abs(top - lastTop) > 20) {
+                            cardBatchIndex = 0;
+                            lastTop = top;
+                        } else {
+                            cardBatchIndex++;
+                        }
+                        // 80ms stagger per card in row, capped at 300ms
+                        const delay = Math.min(cardBatchIndex * 80, 300);
+                        el.style.transitionDelay = `${delay}ms`;
+                    } else {
+                        // Heading or container
+                        if (!el.style.transitionDelay) {
+                            el.style.transitionDelay = '0ms';
+                        }
+                    }
+
+                    // Trigger reveal
+                    el.classList.add('is-revealed');
+                });
+            }, {
+                rootMargin: '0px 0px -30px 0px',
+                threshold: 0.05
+            });
+
+            this.observeAll(document);
+        },
+
+        observeAll(root = document) {
+            if (!this.observer) return;
+
+            const elements = (root === document ? document : root).querySelectorAll('.reveal-on-scroll, .reveal-card');
+            elements.forEach(el => {
+                // Skip admin tables, forms, or already revealed elements
+                if (el.closest('.admin-table, table, .admin-page, .admin-layout') || el.classList.contains('is-revealed')) {
+                    el.classList.add('is-revealed');
+                    return;
+                }
+
+                // Keep above-the-fold items immediately visible (no blank flash)
                 const rect = el.getBoundingClientRect();
-                if (rect.top < window.innerHeight + 100 && rect.bottom > -100) {
+                if (rect.top < window.innerHeight * 0.75 && rect.bottom > 0) {
                     el.classList.add('is-revealed');
                 } else {
-                    revealObserver.observe(el);
+                    this.observer.observe(el);
                 }
             });
-        } else {
-            document.querySelectorAll('.reveal-on-scroll').forEach(el => el.classList.add('is-revealed'));
-        }
+        },
 
+        // Support dynamically filtered / AJAX-loaded cards without duplicate observers
+        refresh(container) {
+            if (container) {
+                this.observeAll(container);
+            } else {
+                this.observeAll(document);
+            }
+        }
+    };
+
+    function initScrollInteractions() {
+        const header = document.getElementById('siteHeader');
         const backToTop = document.getElementById('backToTop');
-        if (backToTop) {
-            window.addEventListener('scroll', () => {
-                if (window.scrollY > 300) {
+        let scrollTicking = false;
+
+        function onScrollUpdate() {
+            const y = window.scrollY;
+            if (header) {
+                if (y > 20) {
+                    header.classList.add('scrolled');
+                } else {
+                    header.classList.remove('scrolled');
+                }
+            }
+            if (backToTop) {
+                if (y > 300) {
                     backToTop.classList.add('is-visible');
                 } else {
                     backToTop.classList.remove('is-visible');
                 }
-            }, { passive: true });
+            }
+            scrollTicking = false;
+        }
 
+        window.addEventListener('scroll', () => {
+            if (!scrollTicking) {
+                requestAnimationFrame(onScrollUpdate);
+                scrollTicking = true;
+            }
+        }, { passive: true });
+
+        ScrollRevealEngine.init();
+
+        if (backToTop) {
             backToTop.addEventListener('click', () => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             });
@@ -1185,5 +1340,6 @@
     }
 
     window.HamaraTheme = ThemeManager;
+    window.HC_ScrollReveal = ScrollRevealEngine;
 
 })();

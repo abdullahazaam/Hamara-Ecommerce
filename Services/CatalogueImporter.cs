@@ -121,7 +121,7 @@ namespace HamaraCommerce.Services
 
         public async Task SyncCategoriesAsync(CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Synchronizing 15 Pakistani e-commerce categories...");
+            _logger.LogInformation("Synchronizing 12 Pakistani e-commerce categories...");
 
             var officialCategories = PakistanCatalogBuilder.GetOfficialCategories();
             var existingCategories = await _context.Categories.ToListAsync(cancellationToken);
@@ -143,7 +143,7 @@ namespace HamaraCommerce.Services
                 }
                 else
                 {
-                    // Deactivate categories outside the official 15 taxonomy
+                    // Deactivate categories outside the official 12 taxonomy
                     existing.IsActive = false;
                     existing.IsFeatured = false;
                     existing.ParentCategoryId = null;
@@ -177,7 +177,7 @@ namespace HamaraCommerce.Services
 
         public async Task<CatalogueImportReport> ImportCatalogueAsync(string? jsonFilePath = null, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Beginning canonical 342-product catalogue import...");
+            _logger.LogInformation("Beginning canonical 163-product catalogue import...");
 
             // Resolve JSON path
             string path = jsonFilePath ?? PakistanCatalogBuilder.ResolveJsonFilePath();
@@ -254,7 +254,7 @@ namespace HamaraCommerce.Services
                     existing.IsFeatured = dto.IsFeatured;
                     existing.IsFlashDeal = dto.IsFlashDeal;
                     existing.FlashDealEnd = dto.IsFlashDeal ? DateTime.UtcNow.AddDays(7) : null;
-                    existing.StorefrontRank = count + 1;
+                    existing.StorefrontRank = dto.StorefrontRank ?? (count + 1);
                     existing.UpdatedAt = DateTime.UtcNow;
                     updated++;
                 }
@@ -286,7 +286,7 @@ namespace HamaraCommerce.Services
                         IsFeatured = dto.IsFeatured,
                         IsFlashDeal = dto.IsFlashDeal,
                         FlashDealEnd = dto.IsFlashDeal ? DateTime.UtcNow.AddDays(7) : null,
-                        StorefrontRank = count + 1,
+                        StorefrontRank = dto.StorefrontRank ?? (count + 1),
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
                     };

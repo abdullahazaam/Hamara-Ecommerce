@@ -167,8 +167,11 @@ namespace HamaraCommerce.Controllers
 
             int pageSize = 10;
             int totalCount = await query.CountAsync();
+            int totalPages = totalCount > 0 ? (int)Math.Ceiling(totalCount / (double)pageSize) : 1;
+            page = Math.Clamp(page, 1, totalPages);
             var orders = await query
                 .OrderByDescending(o => o.OrderDate)
+                .ThenBy(o => o.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -182,7 +185,7 @@ namespace HamaraCommerce.Controllers
                 CurrentPage = page,
                 PageSize = pageSize,
                 TotalCount = totalCount,
-                TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+                TotalPages = totalPages
             };
 
             return View(viewModel);
@@ -390,8 +393,11 @@ namespace HamaraCommerce.Controllers
 
             int pageSize = 10;
             int totalCount = await query.CountAsync();
+            int totalPages = totalCount > 0 ? (int)Math.Ceiling(totalCount / (double)pageSize) : 1;
+            page = Math.Clamp(page, 1, totalPages);
             var users = await query
                 .OrderByDescending(u => u.CreatedAt)
+                .ThenBy(u => u.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -422,7 +428,7 @@ namespace HamaraCommerce.Controllers
                 CurrentPage = page,
                 PageSize = pageSize,
                 TotalCount = totalCount,
-                TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+                TotalPages = totalPages
             };
 
             return View(viewModel);
@@ -482,8 +488,11 @@ namespace HamaraCommerce.Controllers
 
             int pageSize = 10;
             int totalCount = await query.CountAsync();
+            int totalPages = totalCount > 0 ? (int)Math.Ceiling(totalCount / (double)pageSize) : 1;
+            page = Math.Clamp(page, 1, totalPages);
             var products = await query
                 .OrderByDescending(p => p.CreatedAt)
+                .ThenBy(p => p.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -493,8 +502,9 @@ namespace HamaraCommerce.Controllers
             ViewBag.CategoryId = categoryId;
             ViewBag.StatusFilter = status;
             ViewBag.CurrentPage = page;
-            ViewBag.TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+            ViewBag.TotalPages = totalPages;
             ViewBag.TotalCount = totalCount;
+            ViewBag.PageSize = pageSize;
 
             return View(products);
         }
@@ -867,15 +877,23 @@ namespace HamaraCommerce.Controllers
                 query = query.Where(p => p.CategoryId == categoryId.Value);
             }
 
+            int pageSize = 10;
+            int totalCount = await query.CountAsync();
+            int totalPages = totalCount > 0 ? (int)Math.Ceiling(totalCount / (double)pageSize) : 1;
+            page = Math.Clamp(page, 1, totalPages);
             var products = await query
                 .OrderBy(p => p.Stock)
                 .ThenBy(p => p.Title)
+                .ThenBy(p => p.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToListAsync();
 
             var recentMovements = await _context.InventoryMovements
                 .Include(m => m.Product)
                 .Include(m => m.Variant)
                 .OrderByDescending(m => m.CreatedAt)
+                .ThenByDescending(m => m.Id)
                 .Take(25)
                 .ToListAsync();
 
@@ -883,6 +901,10 @@ namespace HamaraCommerce.Controllers
             ViewBag.Categories = await _context.Categories.OrderBy(c => c.DisplayOrder).ToListAsync();
             ViewBag.CurrentSearch = search;
             ViewBag.CurrentCategory = categoryId;
+            ViewBag.CurrentPage = page;
+            ViewBag.TotalPages = totalPages;
+            ViewBag.TotalCount = totalCount;
+            ViewBag.PageSize = pageSize;
 
             return View(products);
         }
@@ -1077,8 +1099,11 @@ namespace HamaraCommerce.Controllers
 
             int pageSize = 10;
             int totalCount = await query.CountAsync();
+            int totalPages = totalCount > 0 ? (int)Math.Ceiling(totalCount / (double)pageSize) : 1;
+            page = Math.Clamp(page, 1, totalPages);
             var reviews = await query
                 .OrderByDescending(r => r.Date)
+                .ThenBy(r => r.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -1090,7 +1115,7 @@ namespace HamaraCommerce.Controllers
                 CurrentPage = page,
                 PageSize = pageSize,
                 TotalCount = totalCount,
-                TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+                TotalPages = totalPages
             };
 
             return View(viewModel);
@@ -1264,8 +1289,11 @@ namespace HamaraCommerce.Controllers
 
             int pageSize = 10;
             int totalCount = await query.CountAsync();
+            int totalPages = totalCount > 0 ? (int)Math.Ceiling(totalCount / (double)pageSize) : 1;
+            page = Math.Clamp(page, 1, totalPages);
             var orders = await query
                 .OrderByDescending(o => o.ReturnRequestedAt ?? o.OrderDate)
+                .ThenBy(o => o.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -1277,7 +1305,7 @@ namespace HamaraCommerce.Controllers
                 CurrentPage = page,
                 PageSize = pageSize,
                 TotalCount = totalCount,
-                TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+                TotalPages = totalPages
             };
 
             return View(viewModel);
@@ -1678,8 +1706,11 @@ namespace HamaraCommerce.Controllers
 
             int pageSize = 15;
             int totalCount = await query.CountAsync();
+            int totalPages = totalCount > 0 ? (int)Math.Ceiling(totalCount / (double)pageSize) : 1;
+            page = Math.Clamp(page, 1, totalPages);
             var logs = await query
                 .OrderByDescending(a => a.CreatedAt)
+                .ThenBy(a => a.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -1691,7 +1722,7 @@ namespace HamaraCommerce.Controllers
                 CurrentPage = page,
                 PageSize = pageSize,
                 TotalCount = totalCount,
-                TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+                TotalPages = totalPages
             };
 
             return View(viewModel);

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.EntityFrameworkCore;
 using HamaraCommerce.Data.Catalog;
 using HamaraCommerce.Models;
 
@@ -64,32 +65,99 @@ namespace HamaraCommerce.Data
                 existingCategories = context.Categories.ToList();
             }
 
-            // 2. SEED CANONICAL 342 REAL PAKISTANI PRODUCTS
-            if (!context.Products.Any(p => p.Status == ProductStatus.Published))
+            // 2. SEED CANONICAL 163 REAL PAKISTANI PRODUCTS
+            var dtos = PakistanCatalogBuilder.GetAllProducts();
+            var canonicalSkus = dtos.Select(d => d.SKU).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var existingDbProducts = context.Products
+                .Include(p => p.OrderItems)
+                .Include(p => p.Images)
+                .Include(p => p.Variants)
+                .Include(p => p.InventoryMovements)
+                .Include(p => p.Reviews)
+                .Include(p => p.Questions)
+                .ToList();
+
+            foreach (var prod in existingDbProducts)
             {
-                var dtos = PakistanCatalogBuilder.GetAllProducts();
-                var catMap = existingCategories.ToDictionary(c => c.Slug.ToLowerInvariant(), c => c);
-                var products = new List<Product>();
-                int rank = 1;
-
-                foreach (var dto in dtos)
+                if (!canonicalSkus.Contains(prod.SKU))
                 {
-                    if (!catMap.TryGetValue(dto.Category.ToLowerInvariant(), out var cat))
+                    bool hasOrders = prod.OrderItems.Any() || context.OrderItems.Any(oi => oi.ProductId == prod.Id);
+                    if (hasOrders)
                     {
-                        continue;
+                        prod.Status = ProductStatus.Archived;
+                        prod.IsFeatured = false;
+                        prod.IsFlashDeal = false;
+                        prod.IsTrending = false;
+                        prod.IsBestSeller = false;
+                        prod.IsNewArrival = false;
+                        prod.Rating = 0.0;
+                        prod.ReviewCount = 0;
                     }
-
-                    double discount = 0;
-                    if (dto.OldPrice > 0 && dto.OldPrice > dto.Price)
+                    else
                     {
-                        discount = Math.Round((double)((dto.OldPrice - dto.Price) / dto.OldPrice) * 100, 1);
+                        if (prod.Reviews.Any()) context.Reviews.RemoveRange(prod.Reviews);
+                        if (prod.Questions.Any()) context.QuestionAnswers.RemoveRange(prod.Questions);
+                        if (prod.Images.Any()) context.ProductImages.RemoveRange(prod.Images);
+                        if (prod.Variants.Any()) context.ProductVariants.RemoveRange(prod.Variants);
+                        if (prod.InventoryMovements.Any()) context.InventoryMovements.RemoveRange(prod.InventoryMovements);
+                        context.Products.Remove(prod);
                     }
+                }
+            }
+            context.SaveChanges();
 
-                    DateTime priceChecked = DateTime.TryParse(dto.PriceCheckedAt, out var dt)
-                        ? DateTime.SpecifyKind(dt, DateTimeKind.Utc)
-                        : DateTime.UtcNow;
+            var existingMap = context.Products.ToDictionary(p => p.SKU, StringComparer.OrdinalIgnoreCase);
+            var catMap = existingCategories.ToDictionary(c => c.Slug.ToLowerInvariant(), c => c);
+            int rank = 1;
 
-                    var p = new Product
+            foreach (var dto in dtos)
+            {
+                if (!catMap.TryGetValue(dto.Category.ToLowerInvariant(), out var cat))
+                {
+                    continue;
+                }
+
+                double discount = 0;
+                if (dto.OldPrice > 0 && dto.OldPrice > dto.Price)
+                {
+                    discount = Math.Round((double)((dto.OldPrice - dto.Price) / dto.OldPrice) * 100, 1);
+                }
+
+                DateTime priceChecked = DateTime.TryParse(dto.PriceCheckedAt, out var dt)
+                    ? DateTime.SpecifyKind(dt, DateTimeKind.Utc)
+                    : DateTime.UtcNow;
+
+                if (existingMap.TryGetValue(dto.SKU, out var p))
+                {
+                    p.Title = dto.Title;
+                    p.Brand = dto.Brand;
+                    p.CategoryId = cat.Id;
+                    p.CategoryName = cat.Name;
+                    p.Slug = dto.Slug;
+                    p.Price = dto.Price;
+                    p.OldPrice = dto.OldPrice;
+                    p.DiscountPercentage = discount;
+                    p.Stock = dto.Stock;
+                    p.Status = ProductStatus.Published;
+                    p.Rating = 0.0;
+                    p.ReviewCount = 0;
+                    p.ShortDescription = dto.ShortDescription;
+                    p.FullDescription = dto.ShortDescription;
+                    p.MainImage = dto.MainImage;
+                    p.ImageSourceUrl = dto.ImageSourceUrl;
+                    p.SourceRetailer = dto.SourceRetailer;
+                    p.SourceProductUrl = dto.SourceProductUrl;
+                    p.PriceCheckedAt = priceChecked;
+                    p.IsFeatured = dto.IsFeatured;
+                    p.IsFlashDeal = dto.IsFlashDeal;
+                    p.StorefrontRank = dto.StorefrontRank ?? (rank++);
+                    p.FlashDealEnd = dto.IsFlashDeal ? DateTime.UtcNow.AddDays(7) : null;
+                    p.UpdatedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    p = new Product
                     {
                         Title = dto.Title,
                         Brand = dto.Brand,
@@ -113,7 +181,7 @@ namespace HamaraCommerce.Data
                         PriceCheckedAt = priceChecked,
                         IsFeatured = dto.IsFeatured,
                         IsFlashDeal = dto.IsFlashDeal,
-                        StorefrontRank = rank++,
+                        StorefrontRank = dto.StorefrontRank ?? (rank++),
                         FlashDealEnd = dto.IsFlashDeal ? DateTime.UtcNow.AddDays(7) : null,
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
@@ -127,18 +195,17 @@ namespace HamaraCommerce.Data
                         SortOrder = 0
                     });
 
-                    products.Add(p);
+                    context.Products.Add(p);
+                    existingMap[p.SKU] = p;
                 }
-
-                context.Products.AddRange(products);
-                context.SaveChanges();
-
-                foreach (var cat in context.Categories.ToList())
-                {
-                    cat.ProductCount = context.Products.Count(p => p.CategoryId == cat.Id && p.Status == ProductStatus.Published);
-                }
-                context.SaveChanges();
             }
+            context.SaveChanges();
+
+            foreach (var cat in context.Categories.ToList())
+            {
+                cat.ProductCount = context.Products.Count(p => p.CategoryId == cat.Id && p.Status == ProductStatus.Published);
+            }
+            context.SaveChanges();
 
             // 3. SEED COUPONS (PKR-based)
             if (!context.Coupons.Any())

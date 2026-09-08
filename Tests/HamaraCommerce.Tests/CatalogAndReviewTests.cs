@@ -85,7 +85,7 @@ namespace HamaraCommerce.Tests
         }
 
         [Fact]
-        public async Task CanonicalCatalogue_GeneratesAndValidates342SourcePairedItems()
+        public async Task CanonicalCatalogue_GeneratesAndValidates163SourcePairedItems()
         {
             // Find base project root directory
             string currentDir = AppContext.BaseDirectory;
@@ -99,13 +99,13 @@ namespace HamaraCommerce.Tests
 
             Assert.True(Directory.Exists(projectRoot), "Project root directory not found.");
 
-            // Generate/Ensure 342-item canonical catalogue
+            // Generate/Ensure 163-item canonical catalogue
             var items = await HamaraCommerce.Data.Catalog.CatalogueSourceGenerator.GenerateCanonicalCatalogueAsync(projectRoot);
 
-            Assert.Equal(342, items.Count);
+            Assert.Equal(163, items.Count);
 
             var categories = items.Select(i => i.Category).Distinct().ToList();
-            Assert.Equal(15, categories.Count);
+            Assert.Equal(12, categories.Count);
 
             var duplicateSkus = items.GroupBy(i => i.SKU).Where(g => g.Count() > 1).ToList();
             Assert.Empty(duplicateSkus);
@@ -131,11 +131,11 @@ namespace HamaraCommerce.Tests
                 Assert.True(imageHashes.Add(hash), $"Duplicate image hash detected for SKU {item.SKU}: {hash}");
             }
 
-            Assert.Equal(342, imageHashes.Count);
+            Assert.Equal(163, imageHashes.Count);
         }
 
         [Fact]
-        public void DbInitializer_FreshDatabase_Produces342PublishedProductsAnd15Categories()
+        public void DbInitializer_FreshDatabase_Produces163PublishedProductsAnd12Categories()
         {
             // Arrange
             using var context = TestDbContextFactory.CreateInMemoryDbContext();
@@ -145,10 +145,10 @@ namespace HamaraCommerce.Tests
 
             // Assert
             int publishedCount = context.Products.Count(p => p.Status == ProductStatus.Published);
-            Assert.Equal(342, publishedCount);
+            Assert.Equal(163, publishedCount);
 
             int activeCategories = context.Categories.Count(c => c.IsActive);
-            Assert.Equal(15, activeCategories);
+            Assert.Equal(12, activeCategories);
 
             // Every category must have products assigned
             foreach (var cat in context.Categories.Where(c => c.IsActive).ToList())
@@ -156,15 +156,15 @@ namespace HamaraCommerce.Tests
                 Assert.True(cat.ProductCount > 0, $"Category {cat.Slug} should have product count > 0.");
             }
 
-            // Storefront ranks must be sequential from 1 to 342
+            // Storefront ranks must be sequential from 1 to 163
             var ranks = context.Products
                 .Where(p => p.Status == ProductStatus.Published && p.StorefrontRank.HasValue)
                 .Select(p => p.StorefrontRank!.Value)
                 .OrderBy(r => r)
                 .ToList();
-            Assert.Equal(342, ranks.Count);
+            Assert.Equal(163, ranks.Count);
             Assert.Equal(1, ranks.First());
-            Assert.Equal(342, ranks.Last());
+            Assert.Equal(163, ranks.Last());
         }
 
         [Fact]
@@ -205,10 +205,10 @@ namespace HamaraCommerce.Tests
             var report1 = await importer.ImportCatalogueAsync();
 
             // Assert 1
-            Assert.Equal(342, report1.PublishedProductCount);
-            Assert.Equal(343, report1.TotalProcessed); // 342 canonical + 1 historical
+            Assert.Equal(163, report1.PublishedProductCount);
+            Assert.Equal(164, report1.TotalProcessed); // 163 canonical + 1 historical
             Assert.Equal(1, report1.TotalArchived);
-            Assert.Equal(15, report1.CategoryCounts.Count);
+            Assert.Equal(12, report1.CategoryCounts.Count);
             Assert.Equal(0, report1.DuplicateSkus);
 
             var preserved = await context.Products.FirstOrDefaultAsync(p => p.SKU == "HIST-ORDER-01");
@@ -219,10 +219,10 @@ namespace HamaraCommerce.Tests
             var report2 = await importer.ImportCatalogueAsync();
 
             // Assert 2: Must be completely idempotent
-            Assert.Equal(342, report2.PublishedProductCount);
-            Assert.Equal(343, report2.TotalProcessed);
+            Assert.Equal(163, report2.PublishedProductCount);
+            Assert.Equal(164, report2.TotalProcessed);
             Assert.Equal(1, report2.TotalArchived);
-            Assert.Equal(15, report2.CategoryCounts.Count);
+            Assert.Equal(12, report2.CategoryCounts.Count);
             Assert.Equal(0, report2.DuplicateSkus);
 
             var preservedAfterRepeat = await context.Products.FirstOrDefaultAsync(p => p.SKU == "HIST-ORDER-01");

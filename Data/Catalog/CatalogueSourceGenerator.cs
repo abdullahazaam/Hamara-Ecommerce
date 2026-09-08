@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -9,19 +9,32 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
+using SkiaSharp;
 
 namespace HamaraCommerce.Data.Catalog
 {
     public static class CatalogueSourceGenerator
     {
-        private const int UsdToPkr = 280;
-
-        public static decimal UsdToPkrPrice(double usd)
-        {
-            double val = Math.Max(1.0, usd) * UsdToPkr;
-            return (decimal)(Math.Round(val / 50.0) * 50);
-        }
+        public record RawProductDef(
+            string SKU,
+            string Title,
+            string Brand,
+            string Category,
+            decimal Price,
+            decimal OldPrice,
+            string Slug,
+            string SourceRetailer,
+            string SourceProductUrl,
+            string ImageUrl,
+            string LocalImageName,
+            string ShortDescription,
+            int Stock,
+            bool IsFeatured,
+            bool IsFlashDeal,
+            int StorefrontRank
+        );
 
         public static string CleanText(string? text, int limit = 420)
         {
@@ -40,260 +53,395 @@ namespace HamaraCommerce.Data.Catalog
             return clean.Trim('-');
         }
 
-        private static string[] ParseCsvLine(string line)
+        public static List<RawProductDef> GetCanonical163Definitions()
         {
-            var parts = new List<string>();
-            bool inQuotes = false;
-            var current = new StringBuilder();
-            for (int i = 0; i < line.Length; i++)
-            {
-                char c = line[i];
-                if (c == '\"')
-                {
-                    inQuotes = !inQuotes;
-                }
-                else if (c == ',' && !inQuotes)
-                {
-                    parts.Add(current.ToString());
-                    current.Clear();
-                }
-                else
-                {
-                    current.Append(c);
-                }
-            }
-            parts.Add(current.ToString());
-            return parts.ToArray();
+            var list = new List<RawProductDef>();
+
+            // =========================================================================
+            // 1. MOBILE PHONES (16 products) - DummyJSON smartphones 121-136
+            // =========================================================================
+            list.Add(new("PK-MOB-0001", "Apple iPhone 5s Space Gray 16GB", "Apple", "mobile-phones", 42000m, 0m, "apple-iphone-5s-space-gray", "PriceOye Pakistan", "https://priceoye.pk/mobiles/apple/iphone-5s", "https://cdn.dummyjson.com/product-images/smartphones/iphone-5s/thumbnail.webp", "pk-dj-0121.webp", "Apple iPhone 5s featuring 4-inch Retina display, Touch ID fingerprint sensor, and 8MP iSight camera.", 18, false, false, 13));
+            list.Add(new("PK-MOB-0002", "Apple iPhone 6 Space Gray 64GB", "Apple", "mobile-phones", 55000m, 0m, "apple-iphone-6-space-gray", "PriceOye Pakistan", "https://priceoye.pk/mobiles/apple/iphone-6", "https://cdn.dummyjson.com/product-images/smartphones/iphone-6/thumbnail.webp", "pk-dj-0122.webp", "Apple iPhone 6 with 4.7-inch Retina HD display, A8 chip with 64-bit architecture, and sleek unibody design.", 22, false, false, 14));
+            list.Add(new("PK-MOB-0003", "Apple iPhone 13 Pro Sierra Blue 128GB", "Apple", "mobile-phones", 265000m, 285000m, "apple-iphone-13-pro-sierra-blue", "PriceOye Pakistan", "https://priceoye.pk/mobiles/apple/iphone-13-pro", "https://cdn.dummyjson.com/product-images/smartphones/iphone-13-pro/thumbnail.webp", "pk-dj-0123.webp", "Apple iPhone 13 Pro in stunning Sierra Blue with ProMotion 120Hz Super Retina XDR display, A15 Bionic chip, and triple 12MP camera system.", 12, true, false, 15));
+            list.Add(new("PK-MOB-0004", "Apple iPhone X Silver 64GB", "Apple", "mobile-phones", 95000m, 0m, "apple-iphone-x-silver", "PriceOye Pakistan", "https://priceoye.pk/mobiles/apple/iphone-x", "https://cdn.dummyjson.com/product-images/smartphones/iphone-x/thumbnail.webp", "pk-dj-0124.webp", "Apple iPhone X featuring all-screen 5.8-inch Super Retina OLED display, Face ID facial recognition, and dual optical image stabilization.", 15, false, false, 16));
+            list.Add(new("PK-MOB-0005", "Oppo A57 Glowing Green 64GB", "Oppo", "mobile-phones", 38500m, 0m, "oppo-a57-glowing-green", "Daraz Pakistan", "https://www.daraz.pk/products/oppo-a57", "https://cdn.dummyjson.com/product-images/smartphones/oppo-a57/thumbnail.webp", "pk-dj-0125.webp", "Oppo A57 with 33W SUPERVOOC fast charging, 5000mAh long-lasting battery, and ultra-linear stereo speaker.", 35, false, false, 17));
+            list.Add(new("PK-MOB-0006", "Oppo F19 Pro Plus Space Silver 128GB", "Oppo", "mobile-phones", 68000m, 74000m, "oppo-f19-pro-plus-space-silver", "PriceOye Pakistan", "https://priceoye.pk/mobiles/oppo/f19-pro-plus", "https://cdn.dummyjson.com/product-images/smartphones/oppo-f19-pro-plus/thumbnail.webp", "pk-dj-0126.webp", "Oppo F19 Pro+ 5G featuring 50W Flash Charge, AI Highlight Portrait Video, and ultra-thin 7.8mm sleek design.", 20, false, false, 18));
+            list.Add(new("PK-MOB-0007", "Oppo K1 Astral Blue 64GB", "Oppo", "mobile-phones", 44000m, 0m, "oppo-k1-astral-blue", "Telemart Pakistan", "https://www.telemart.pk/oppo-k1", "https://cdn.dummyjson.com/product-images/smartphones/oppo-k1/thumbnail.webp", "pk-dj-0127.webp", "Oppo K1 with in-display fingerprint sensor, 6.4-inch AMOLED waterdrop screen, and 25MP AI front beauty camera.", 16, false, false, 19));
+            list.Add(new("PK-MOB-0008", "Realme C35 Glowing Black 128GB", "Realme", "mobile-phones", 34999m, 37999m, "realme-c35-glowing-black", "PriceOye Pakistan", "https://priceoye.pk/mobiles/realme/realme-c35", "https://cdn.dummyjson.com/product-images/smartphones/realme-c35/thumbnail.webp", "pk-dj-0128.webp", "Realme C35 with 8.1mm ultra slim dynamic glowing design, 50MP AI triple camera, and 6.6-inch FHD+ fullscreen.", 40, false, false, 1));
+            list.Add(new("PK-MOB-0009", "Realme X Polar White 128GB", "Realme", "mobile-phones", 52000m, 0m, "realme-x-polar-white", "PriceOye Pakistan", "https://priceoye.pk/mobiles/realme/realme-x", "https://cdn.dummyjson.com/product-images/smartphones/realme-x/thumbnail.webp", "pk-dj-0129.webp", "Realme X featuring notchless full-screen AMOLED display, pop-up selfie camera, and VOOC 3.0 fast charging.", 19, false, false, 20));
+            list.Add(new("PK-MOB-0010", "Realme XT Pearl White 128GB", "Realme", "mobile-phones", 58000m, 0m, "realme-xt-pearl-white", "PriceOye Pakistan", "https://priceoye.pk/mobiles/realme/realme-xt", "https://cdn.dummyjson.com/product-images/smartphones/realme-xt/thumbnail.webp", "pk-dj-0130.webp", "Realme XT with 64MP ultra-high resolution quad camera, Super AMOLED in-display fingerprint screen, and Snapdragon 712.", 24, false, false, 21));
+            list.Add(new("PK-MOB-0011", "Samsung Galaxy S7 Black Onyx 32GB", "Samsung", "mobile-phones", 48000m, 0m, "samsung-galaxy-s7-black-onyx", "PriceOye Pakistan", "https://priceoye.pk/mobiles/samsung/galaxy-s7", "https://cdn.dummyjson.com/product-images/smartphones/samsung-galaxy-s7/thumbnail.webp", "pk-dj-0131.webp", "Samsung Galaxy S7 in Black Onyx with Quad HD Super AMOLED display, dual-pixel 12MP fast autofocus camera, and IP68 water resistance.", 14, false, false, 22));
+            list.Add(new("PK-MOB-0012", "Samsung Galaxy S8 Midnight Black 64GB", "Samsung", "mobile-phones", 62000m, 0m, "samsung-galaxy-s8-midnight-black", "PriceOye Pakistan", "https://priceoye.pk/mobiles/samsung/galaxy-s8", "https://cdn.dummyjson.com/product-images/smartphones/samsung-galaxy-s8/thumbnail.webp", "pk-dj-0132.webp", "Samsung Galaxy S8 with revolutionary curved Infinity Display, Iris scanner biometric security, and premium metal-glass design.", 17, false, false, 23));
+            list.Add(new("PK-MOB-0013", "Samsung Galaxy S10 Prism White 128GB", "Samsung", "mobile-phones", 88000m, 95000m, "samsung-galaxy-s10-prism-white", "PriceOye Pakistan", "https://priceoye.pk/mobiles/samsung/galaxy-s10", "https://cdn.dummyjson.com/product-images/smartphones/samsung-galaxy-s10/thumbnail.webp", "pk-dj-0133.webp", "Samsung Galaxy S10 featuring Dynamic AMOLED Infinity-O screen, ultrasonic fingerprint sensor, and triple rear camera with ultra-wide angle.", 21, true, false, 24));
+            list.Add(new("PK-MOB-0014", "Vivo S1 Skyline Blue 128GB", "Vivo", "mobile-phones", 45000m, 0m, "vivo-s1-skyline-blue", "PriceOye Pakistan", "https://priceoye.pk/mobiles/vivo/vivo-s1", "https://cdn.dummyjson.com/product-images/smartphones/vivo-s1/thumbnail.webp", "pk-dj-0134.webp", "Vivo S1 with Halo FullView Super AMOLED display, in-display fingerprint scanning, and 32MP front AI selfie camera.", 28, false, false, 25));
+            list.Add(new("PK-MOB-0015", "Vivo V9 Pearl Black 64GB", "Vivo", "mobile-phones", 41000m, 0m, "vivo-v9-pearl-black", "Telemart Pakistan", "https://www.telemart.pk/vivo-v9", "https://cdn.dummyjson.com/product-images/smartphones/vivo-v9/thumbnail.webp", "pk-dj-0135.webp", "Vivo V9 featuring 6.3-inch FullView notch display, AI dual rear cameras, and 24MP clear selfie portrait lens.", 15, false, false, 26));
+            list.Add(new("PK-MOB-0016", "Vivo X21 Under-Display Black 128GB", "Vivo", "mobile-phones", 59000m, 0m, "vivo-x21-under-display-black", "Telemart Pakistan", "https://www.telemart.pk/vivo-x21", "https://cdn.dummyjson.com/product-images/smartphones/vivo-x21/thumbnail.webp", "pk-dj-0136.webp", "Vivo X21 equipped with groundbreaking in-display fingerprint sensor, Hi-Fi audio chip, and 19:9 FHD+ Super AMOLED screen.", 12, false, false, 27));
+
+            // =========================================================================
+            // 2. LAPTOPS & COMPUTERS (12 products)
+            // =========================================================================
+            list.Add(new("PK-LAP-0078", "Apple MacBook Pro 14 Inch Space Grey M-Series", "Apple", "laptops-computers", 485000m, 510000m, "apple-macbook-pro-14-inch-space-grey", "Paklap Pakistan", "https://www.paklap.pk/apple-macbook-pro-14", "https://cdn.dummyjson.com/product-images/laptops/apple-macbook-pro-14-inch-space-grey/thumbnail.webp", "pk-dj-0078.webp", "Apple MacBook Pro 14-inch featuring Liquid Retina XDR display, pro performance silicon, MagSafe 3 charging, and 18-hour battery life.", 8, true, false, 28));
+            list.Add(new("PK-LAP-0079", "Asus ZenBook Pro Duo OLED Dual Screen Laptop", "Asus", "laptops-computers", 420000m, 0m, "asus-zenbook-pro-duo-oled", "Paklap Pakistan", "https://www.paklap.pk/asus-zenbook-pro-duo", "https://cdn.dummyjson.com/product-images/laptops/asus-zenbook-pro-dual-screen-laptop/thumbnail.webp", "pk-dj-0079.webp", "Asus ZenBook Pro Duo with dual 4K OLED touchscreens, innovative ScreenPad Plus secondary display, and powerful creator graphics.", 6, false, false, 29));
+            list.Add(new("PK-LAP-0080", "Huawei MateBook X Pro Mystic Silver", "Huawei", "laptops-computers", 340000m, 0m, "huawei-matebook-x-pro-mystic-silver", "Mega.pk Pakistan", "https://www.mega.pk/laptop_products/huawei-matebook-x-pro", "https://cdn.dummyjson.com/product-images/laptops/huawei-matebook-x-pro/thumbnail.webp", "pk-dj-0080.webp", "Huawei MateBook X Pro featuring 3K FullView touchscreen, premium CNC aluminum unibody, and ultra-lightweight portability.", 9, false, false, 30));
+            list.Add(new("PK-LAP-0081", "Lenovo Yoga 920 2-in-1 Touchscreen Laptop", "Lenovo", "laptops-computers", 265000m, 0m, "lenovo-yoga-920-2-in-1-touchscreen", "Paklap Pakistan", "https://www.paklap.pk/lenovo-yoga-920", "https://cdn.dummyjson.com/product-images/laptops/lenovo-yoga-920/thumbnail.webp", "pk-dj-0081.webp", "Lenovo Yoga 920 convertible 2-in-1 laptop with 360-degree watchband hinge, 4K touchscreen display, and active digital stylus support.", 11, false, false, 31));
+            list.Add(new("PK-LAP-0082", "Dell XPS 13 9300 Platinum Silver Laptop", "Dell", "laptops-computers", 360000m, 385000m, "dell-xps-13-9300-platinum-silver", "Paklap Pakistan", "https://www.paklap.pk/dell-xps-13-9300", "https://cdn.dummyjson.com/product-images/laptops/new-dell-xps-13-9300-laptop/thumbnail.webp", "pk-dj-0082.webp", "Dell XPS 13 9300 with 4-sided InfinityEdge 16:10 display, precision machined aluminum chassis, and carbon fiber palm rest.", 10, true, false, 32));
+            list.Add(new("PK-LAP-0159", "Apple iPad Mini 6th Gen 64GB Starlight", "Apple", "laptops-computers", 145000m, 0m, "apple-ipad-mini-6th-gen-starlight", "PriceOye Pakistan", "https://priceoye.pk/tablets/apple/ipad-mini-6th-gen", "https://cdn.dummyjson.com/product-images/tablets/ipad-mini-2021-starlight/thumbnail.webp", "pk-dj-0159.webp", "Apple iPad Mini 6th Gen with 8.3-inch Liquid Retina display, A15 Bionic chip, Center Stage camera, and Apple Pencil 2 support.", 16, false, false, 33));
+            list.Add(new("PK-LAP-0160", "Samsung Galaxy Tab S8 Plus 128GB Graphite", "Samsung", "laptops-computers", 185000m, 199000m, "samsung-galaxy-tab-s8-plus-graphite", "PriceOye Pakistan", "https://priceoye.pk/tablets/samsung/galaxy-tab-s8-plus", "https://cdn.dummyjson.com/product-images/tablets/samsung-galaxy-tab-s8-plus-grey/thumbnail.webp", "pk-dj-0160.webp", "Samsung Galaxy Tab S8+ with 12.4-inch Super AMOLED 120Hz screen, ultra-low latency S Pen included, and Snapdragon 8 Gen 1 processor.", 12, false, false, 34));
+            list.Add(new("PK-LAP-0161", "Samsung Galaxy Tab A7 32GB Silver", "Samsung", "laptops-computers", 58000m, 0m, "samsung-galaxy-tab-a7-silver", "PriceOye Pakistan", "https://priceoye.pk/tablets/samsung/galaxy-tab-a7", "https://cdn.dummyjson.com/product-images/tablets/samsung-galaxy-tab-white/thumbnail.webp", "pk-dj-0161.webp", "Samsung Galaxy Tab A7 featuring 10.4-inch immersive display, quad stereo speakers with Dolby Atmos, and 7040mAh battery.", 25, false, false, 2));
+            list.Add(new("PK-LAP-0001", "Apple MacBook Pro Backlit Keyboard Space Gray", "Apple", "laptops-computers", 395000m, 0m, "apple-macbook-pro-backlit-space-gray", "Paklap Pakistan", "https://www.paklap.pk/apple-macbooks", "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80", "pk-lap-001.webp", "Apple MacBook Pro with luminous LED backlit keyboard, precision Force Touch trackpad, and high-performance macOS architecture.", 7, false, false, 35));
+            list.Add(new("PK-LAP-0002", "Apple MacBook Pro 15-inch Retina Wooden Desk", "Apple", "laptops-computers", 280000m, 0m, "apple-macbook-pro-15-retina-wooden-desk", "Paklap Pakistan", "https://www.paklap.pk/apple-macbooks", "https://images.unsplash.com/photo-1541807084-5c52b6b3adef?auto=format&fit=crop&w=600&q=80", "pk-lap-002.webp", "Apple MacBook Pro 15-inch with crystal-clear Retina display, quad-core processor, dual graphics, and studio-grade stereo sound.", 8, false, false, 36));
+            list.Add(new("PK-LAP-0004", "Dell XPS 13 InfinityEdge Ultrabook Carbon Fiber", "Dell", "laptops-computers", 325000m, 0m, "dell-xps-13-infinityedge-ultrabook", "Paklap Pakistan", "https://www.paklap.pk/dell-xps-laptops", "https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&w=600&q=80", "pk-lap-004.webp", "Dell XPS 13 Ultrabook with bezel-less InfinityEdge display, woven carbon fiber palm rest, and Intel Core processor.", 11, false, false, 37));
+            list.Add(new("PK-LAP-0005", "Dell Latitude 14-Inch Business Laptop Silver", "Dell", "laptops-computers", 165000m, 0m, "dell-latitude-14-business-laptop", "Paklap Pakistan", "https://www.paklap.pk/dell-latitude-laptops", "https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=600&q=80", "pk-lap-005.webp", "Dell Latitude enterprise business laptop featuring durable chassis, full-sized ergonomic keyboard, and robust enterprise security features.", 15, false, false, 38));
+
+            // =========================================================================
+            // 3. HEADPHONES & AUDIO (15 products)
+            // =========================================================================
+            list.Add(new("PK-AUD-0099", "Amazon Echo Plus Smart Speaker with Alexa", "Amazon", "headphones-audio", 24500m, 0m, "amazon-echo-plus-smart-speaker", "Shophive Pakistan", "https://www.shophive.com/amazon-echo-plus", "https://cdn.dummyjson.com/product-images/mobile-accessories/amazon-echo-plus/thumbnail.webp", "pk-dj-0099.webp", "Amazon Echo Plus premium smart home speaker with 360-degree Dolby audio, built-in Zigbee hub, and Alexa voice assistant.", 20, false, false, 39));
+            list.Add(new("PK-AUD-0100", "Apple AirPods 2nd Gen Wireless Earbuds", "Apple", "headphones-audio", 34999m, 38000m, "apple-airpods-2nd-gen-wireless-earbuds", "PriceOye Pakistan", "https://priceoye.pk/wireless-earbuds/apple/airpods-2nd-generation", "https://cdn.dummyjson.com/product-images/mobile-accessories/apple-airpods/thumbnail.webp", "pk-dj-0100.webp", "Apple AirPods (2nd Gen) with H1 headphone chip, hands-free Hey Siri, seamless device switching, and Lightning charging case.", 30, true, false, 40));
+            list.Add(new("PK-AUD-0101", "Apple AirPods Max Active Noise Cancelling Silver", "Apple", "headphones-audio", 148000m, 160000m, "apple-airpods-max-silver", "PriceOye Pakistan", "https://priceoye.pk/wireless-earbuds/apple/airpods-max", "https://cdn.dummyjson.com/product-images/mobile-accessories/apple-airpods-max-silver/thumbnail.webp", "pk-dj-0101.webp", "Apple AirPods Max over-ear headphones featuring computational audio, Active Noise Cancellation, Transparency mode, and knit-mesh canopy headband.", 7, true, false, 41));
+            list.Add(new("PK-AUD-0103", "Apple HomePod Mini Smart Speaker Space Grey", "Apple", "headphones-audio", 29500m, 0m, "apple-homepod-mini-space-grey", "PriceOye Pakistan", "https://priceoye.pk/audio/apple/homepod-mini", "https://cdn.dummyjson.com/product-images/mobile-accessories/apple-homepod-mini-cosmic-grey/thumbnail.webp", "pk-dj-0103.webp", "Apple HomePod Mini compact smart speaker with room-filling 360-degree acoustic sound, Siri intelligent assistant, and intercom.", 18, false, false, 42));
+            list.Add(new("PK-AUD-0107", "Beats Flex All-Day Wireless Earphones Black", "Beats", "headphones-audio", 14500m, 0m, "beats-flex-wireless-earphones-black", "PriceOye Pakistan", "https://priceoye.pk/wireless-earbuds/beats/beats-flex", "https://cdn.dummyjson.com/product-images/mobile-accessories/beats-flex-wireless-earphones/thumbnail.webp", "pk-dj-0107.webp", "Beats Flex magnetic wireless earphones with Apple W1 chip, 12-hour battery life, Fast Fuel charging, and flexible form-fitting cable.", 35, false, false, 3));
+            list.Add(new("PK-AUD-0001", "Sony WH-1000XM5 Wireless Noise-Cancelling Headphones", "Sony", "headphones-audio", 98000m, 108000m, "sony-wh-1000xm5-wireless-noise-cancelling-headphones", "PriceOye Pakistan", "https://priceoye.pk/audio/sony/wh-1000xm5", "https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=600&q=80", "elec-sony-001.webp", "Sony flagship WH-1000XM5 wireless over-ear noise-cancelling headphones with dual processors, 8 microphones, and LDAC high-resolution sound.", 14, true, false, 43));
+            list.Add(new("PK-AUD-0002", "JBL Flip 5 Waterproof Portable Bluetooth Speaker", "JBL", "headphones-audio", 28500m, 0m, "jbl-flip-5-waterproof-portable-bluetooth-speaker", "PriceOye Pakistan", "https://priceoye.pk/speakers/jbl/flip-5", "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?auto=format&fit=crop&w=600&q=80", "elec-bose-002.webp", "JBL Flip 5 all-weather portable speaker delivering powerful signature sound, racetrack-shaped driver, IPX7 waterproof rating, and 12-hour playtime.", 22, false, false, 44));
+            list.Add(new("PK-AUD-0003", "Edifier R1280T Powered Bookshelf Studio Speakers", "Edifier", "headphones-audio", 38000m, 0m, "edifier-r1280t-powered-bookshelf-speakers", "Telemart Pakistan", "https://www.telemart.pk/edifier-r1280t", "https://images.unsplash.com/photo-1545454675-3531b543be5d?auto=format&fit=crop&w=600&q=80", "pk-ent-003.webp", "Edifier R1280T active nearfield bookshelf monitor speakers with 4-inch bass driver, 13mm silk dome tweeter, and classic wood finish.", 12, false, false, 45));
+            list.Add(new("PK-AUD-0004", "Sony WF-1000XM4 Noise Canceling True Wireless Earbuds", "Sony", "headphones-audio", 58000m, 65000m, "sony-wf-1000xm4-noise-canceling-earbuds", "PriceOye Pakistan", "https://priceoye.pk/wireless-earbuds/sony/wf-1000xm4", "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=600&q=80", "pk-aud-0004.webp", "Sony WF-1000XM4 industry-leading noise canceling earbuds with Integrated Processor V1, High-Resolution Audio Wireless, and IPX4 water resistance.", 16, true, false, 46));
+            list.Add(new("PK-AUD-0005", "Bose QuietComfort 45 Wireless ANC Headphones", "Bose", "headphones-audio", 89000m, 95000m, "bose-quietcomfort-45-wireless-anc-headphones", "PriceOye Pakistan", "https://priceoye.pk/audio/bose/qc45", "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80", "pk-aud-0005.webp", "Bose QuietComfort 45 legendary noise cancelling headphones with TriPort acoustic architecture, Quiet and Aware modes, and plush synthetic leather cushions.", 10, true, false, 47));
+            list.Add(new("PK-AUD-0006", "Sennheiser HD 450BT Wireless Noise-Cancelling Headphones", "Sennheiser", "headphones-audio", 49000m, 0m, "sennheiser-hd-450bt-wireless-headphones", "Shophive Pakistan", "https://www.shophive.com/sennheiser-hd-450bt", "https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&w=600&q=80", "pk-aud-0006.webp", "Sennheiser HD 450BT closed-back wireless headphones with active noise cancellation, superior wireless codec support (AAC, aptX Low Latency), and 30-hour battery life.", 15, false, false, 48));
+            list.Add(new("PK-AUD-0007", "Audio-Technica ATH-M50x Professional Studio Monitor Headphones", "Audio-Technica", "headphones-audio", 52000m, 0m, "audio-technica-ath-m50x-studio-headphones", "Paklap Pakistan", "https://www.paklap.pk/audio-technica-ath-m50x", "https://images.unsplash.com/photo-1484704849700-f032a568e944?auto=format&fit=crop&w=600&q=80", "pk-aud-0007.webp", "Audio-Technica ATH-M50x critically acclaimed professional monitor headphones with 45mm large-aperture drivers, copper-clad aluminum wire voice coils, and 90-degree swiveling earcups.", 18, false, false, 49));
+            list.Add(new("PK-AUD-0008", "JBL Charge 5 Portable Waterproof Bluetooth Speaker Black", "JBL", "headphones-audio", 44000m, 0m, "jbl-charge-5-portable-bluetooth-speaker", "PriceOye Pakistan", "https://priceoye.pk/speakers/jbl/charge-5", "https://images.unsplash.com/photo-1589003077984-894e133dabab?auto=format&fit=crop&w=600&q=80", "pk-aud-0008.webp", "JBL Charge 5 portable Bluetooth speaker with optimized long excursion driver, separate tweeter, dual passive radiators, and built-in powerbank.", 20, false, false, 50));
+            list.Add(new("PK-AUD-0009", "Marshall Stanmore II Wireless Bluetooth Home Speaker", "Marshall", "headphones-audio", 115000m, 0m, "marshall-stanmore-ii-wireless-speaker", "Shophive Pakistan", "https://www.shophive.com/marshall-stanmore-ii", "https://images.unsplash.com/photo-1543512214-318c7553f230?auto=format&fit=crop&w=600&q=80", "pk-aud-0009.webp", "Marshall Stanmore II legendary home audio speaker with classic vintage vinyl casing, brass details, analog control knobs, and advanced Bluetooth 5.0 aptX.", 8, false, false, 51));
+            list.Add(new("PK-AUD-0010", "Apple AirPods Pro 2nd Generation Wireless Earbuds White", "Apple", "headphones-audio", 69000m, 76000m, "apple-airpods-pro-2nd-generation-white", "PriceOye Pakistan", "https://priceoye.pk/wireless-earbuds/apple/airpods-pro-2", "https://images.unsplash.com/photo-1600294037681-c80b4cb5b434?auto=format&fit=crop&w=600&q=80", "pk-aud-0010.webp", "Apple AirPods Pro 2 with H2 chip, up to 2x more Active Noise Cancellation, Adaptive Transparency, and personalized Spatial Audio.", 25, true, false, 52));
+
+            // =========================================================================
+            // 4. SMART WATCHES (11 products)
+            // =========================================================================
+            list.Add(new("PK-WAT-0106", "Apple Watch Series 4 GPS 44mm Gold Aluminum", "Apple", "smart-watches", 75000m, 0m, "apple-watch-series-4-gold-aluminum", "PriceOye Pakistan", "https://priceoye.pk/smart-watches/apple/apple-watch-series-4", "https://cdn.dummyjson.com/product-images/mobile-accessories/apple-watch-series-4-gold/thumbnail.webp", "pk-dj-0106.webp", "Apple Watch Series 4 in Gold Aluminum with pink sand sport band, electrical heart sensor, fall detection, and larger OLED display.", 14, false, false, 53));
+            list.Add(new("PK-WAT-0001", "Apple Watch Ultra 2 GPS + Cellular 49mm Titanium", "Apple", "smart-watches", 245000m, 265000m, "apple-watch-ultra-2-titanium", "PriceOye Pakistan", "https://priceoye.pk/smart-watches/apple/apple-watch-ultra-2", "https://images.unsplash.com/photo-1510017803434-a899398421b3?auto=format&fit=crop&w=600&q=80", "pk-wat-0001.webp", "Apple Watch Ultra 2 crafted from aerospace-grade titanium with precision dual-frequency GPS, customizable Action button, and 3000-nit display.", 8, true, false, 54));
+            list.Add(new("PK-WAT-0002", "Apple Watch Series 9 GPS 45mm Midnight Aluminum", "Apple", "smart-watches", 125000m, 138000m, "apple-watch-series-9-midnight", "PriceOye Pakistan", "https://priceoye.pk/smart-watches/apple/apple-watch-series-9", "https://images.unsplash.com/photo-1508685096489-7aacd43bd3b1?auto=format&fit=crop&w=600&q=80", "pk-wat-0002.webp", "Apple Watch Series 9 powered by S9 SiP chip, magical Double Tap gesture control, brighter edge-to-edge Retina display, and on-device Siri.", 15, true, false, 55));
+            list.Add(new("PK-WAT-0003", "Apple Watch SE 2nd Gen 40mm Starlight Aluminum", "Apple", "smart-watches", 78000m, 0m, "apple-watch-se-2nd-gen-starlight", "PriceOye Pakistan", "https://priceoye.pk/smart-watches/apple/apple-watch-se-2nd-gen", "https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=600&q=80", "pk-wat-0003.webp", "Apple Watch SE (2nd Gen) with essential fitness and heart rate tracking, Crash Detection, water resistance to 50 meters, and lightweight case.", 20, false, false, 56));
+            list.Add(new("PK-WAT-0004", "Samsung Galaxy Watch 6 Classic 47mm Stainless Steel Black", "Samsung", "smart-watches", 78500m, 86000m, "samsung-galaxy-watch-6-classic-black", "PriceOye Pakistan", "https://priceoye.pk/smart-watches/samsung/galaxy-watch-6-classic", "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?auto=format&fit=crop&w=600&q=80", "pk-wat-0004.webp", "Samsung Galaxy Watch 6 Classic featuring rotating physical bezel, Sapphire Crystal Super AMOLED display, advanced sleep coaching, and body composition analysis.", 16, true, false, 57));
+            list.Add(new("PK-WAT-0005", "Samsung Galaxy Watch 5 Pro Titanium Bluetooth Smartwatch", "Samsung", "smart-watches", 65000m, 0m, "samsung-galaxy-watch-5-pro-titanium", "PriceOye Pakistan", "https://priceoye.pk/smart-watches/samsung/galaxy-watch-5-pro", "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=600&q=80", "pk-wat-0005.webp", "Samsung Galaxy Watch 5 Pro with premium titanium casing, GPS route tracking with turn-by-turn navigation, and massive 590mAh long-life battery.", 12, false, false, 58));
+            list.Add(new("PK-WAT-0006", "Google Pixel Watch 2 Matte Black Aluminum Obsidian", "Google", "smart-watches", 88000m, 0m, "google-pixel-watch-2-matte-black", "PriceOye Pakistan", "https://priceoye.pk/smart-watches/google/pixel-watch-2", "https://images.unsplash.com/photo-1434493789847-2f02dc6ca35d?auto=format&fit=crop&w=600&q=80", "pk-wat-0006.webp", "Google Pixel Watch 2 combining Google AI smarts with Fitbit health tracking, continuous cEDA stress tracking, and multi-path heart rate sensor.", 10, false, false, 59));
+            list.Add(new("PK-WAT-0007", "Huawei Watch GT 4 46mm Stainless Steel Leather Strap", "Huawei", "smart-watches", 54000m, 0m, "huawei-watch-gt-4-stainless-steel", "PriceOye Pakistan", "https://priceoye.pk/smart-watches/huawei/watch-gt-4", "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80", "pk-wat-0007.webp", "Huawei Watch GT 4 featuring geometric octagonal stainless steel design, comprehensive calorie management, and up to 14 days of ultra-long battery life.", 22, false, false, 60));
+            list.Add(new("PK-WAT-0008", "Amazfit GTR 4 Smart Fitness Watch Superspeed Black", "Amazfit", "smart-watches", 46000m, 0m, "amazfit-gtr-4-smart-fitness-watch", "PriceOye Pakistan", "https://priceoye.pk/smart-watches/amazfit/gtr-4", "https://images.unsplash.com/photo-1539185441755-769473a23570?auto=format&fit=crop&w=600&q=80", "pk-wat-0008.webp", "Amazfit GTR 4 with dual-band circularly-polarized GPS antenna, 150+ sports modes, BioTracker 4.0 PPG biometric sensor, and 1.43-inch HD AMOLED screen.", 28, false, false, 4));
+            list.Add(new("PK-WAT-0009", "Garmin Forerunner 265 Running GPS Smartwatch Amp Yellow", "Garmin", "smart-watches", 145000m, 0m, "garmin-forerunner-265-gps-smartwatch", "Telemart Pakistan", "https://www.telemart.pk/garmin-forerunner-265", "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=600&q=80", "pk-wat-0009.webp", "Garmin Forerunner 265 dedicated running smartwatch with colorful AMOLED touchscreen, training readiness score, morning report, and multi-band GPS.", 9, false, false, 61));
+            list.Add(new("PK-WAT-0010", "Xiaomi Watch 2 Pro 46mm Stainless Steel Case LTE Black", "Xiaomi", "smart-watches", 56000m, 0m, "xiaomi-watch-2-pro-stainless-steel", "PriceOye Pakistan", "https://priceoye.pk/smart-watches/xiaomi/watch-2-pro", "https://images.unsplash.com/photo-1544117519-31a4b719223d?auto=format&fit=crop&w=600&q=80", "pk-wat-0010.webp", "Xiaomi Watch 2 Pro powered by Snapdragon W5+ Gen 1 platform, Google Wear OS with Play Store apps, and rotating crown navigation.", 17, false, false, 62));
+
+            // =========================================================================
+            // 5. HOME APPLIANCES (17 products)
+            // =========================================================================
+            list.Add(new("PK-HAP-0001", "Dyson V15 Detect Cordless Vacuum Cleaner Yellow/Iron", "Dyson", "home-appliances", 215000m, 230000m, "dyson-v15-detect-cordless-vacuum", "Shophive Pakistan", "https://www.shophive.com/dyson-v15-detect", "https://images.unsplash.com/photo-1558317374-067fb5f30001?auto=format&fit=crop&w=600&q=80", "pk-hap-0001.webp", "Dyson V15 Detect smart cordless vacuum with laser illumination revealing microscopic dust, acoustic piezo sensor, and 60 minutes run time.", 6, true, false, 63));
+            list.Add(new("PK-HAP-0002", "Xiaomi Robot Vacuum S10+ Smart Robotic Vacuum & Mop", "Xiaomi", "home-appliances", 88000m, 95000m, "xiaomi-robot-vacuum-s10-plus", "PriceOye Pakistan", "https://priceoye.pk/home-appliances/xiaomi/robot-vacuum-s10-plus", "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=600&q=80", "pk-hap-0002.webp", "Xiaomi Robot Vacuum S10+ with dual-line laser obstacle avoidance, 4000Pa intense suction, LDS navigation, and pressurized dual rotary mopping.", 14, true, false, 64));
+            list.Add(new("PK-HAP-0003", "Philips PowerPro Compact Bagless Vacuum Cleaner 1800W", "Philips", "home-appliances", 36500m, 0m, "philips-powerpro-compact-vacuum-cleaner", "Naheed Supermarket", "https://www.naheed.pk/philips-powerpro-compact-vacuum-cleaner", "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?auto=format&fit=crop&w=600&q=80", "pk-hap-0003.webp", "Philips PowerPro Compact vacuum cleaner with PowerCyclone 5 technology, fully sealed Allergy H13 filtration system, and TriActive nozzle.", 20, false, false, 65));
+            list.Add(new("PK-HAP-0004", "Philips Azur Steam Iron 2600W OptimalTEMP Blue", "Philips", "home-appliances", 18500m, 0m, "philips-azur-steam-iron-2600w", "Naheed Supermarket", "https://www.naheed.pk/philips-azur-steam-iron", "https://images.unsplash.com/photo-1517677208171-0bc6725a3e60?auto=format&fit=crop&w=600&q=80", "pk-hap-0004.webp", "Philips Azur steam iron delivering 2600W for quick heat up, 50g/min continuous steam, SteamGlide Elite scratch-resistant soleplate, and Quick Calc Release.", 35, false, false, 5));
+            list.Add(new("PK-HAP-0005", "Braun TexStyle 7 Pro Steam Iron Ceramic Soleplate", "Braun", "home-appliances", 22000m, 0m, "braun-texstyle-7-pro-steam-iron", "Naheed Supermarket", "https://www.naheed.pk/braun-texstyle-7-pro", "https://images.unsplash.com/photo-1585771724684-38269d6639fd?auto=format&fit=crop&w=600&q=80", "pk-hap-0005.webp", "Braun TexStyle 7 Pro premium iron featuring world's first FreeGlide 3D bidirectional technology to glide backward over obstacles like buttons and pockets.", 25, false, false, 66));
+            list.Add(new("PK-HAP-0006", "Xiaomi Smart Air Purifier 4 Pro HEPA Filter White", "Xiaomi", "home-appliances", 68000m, 0m, "xiaomi-smart-air-purifier-4-pro", "PriceOye Pakistan", "https://priceoye.pk/home-appliances/xiaomi/air-purifier-4-pro", "https://images.unsplash.com/photo-1584992236310-6edddc08acff?auto=format&fit=crop&w=600&q=80", "pk-hap-0006.webp", "Xiaomi Smart Air Purifier 4 Pro covering up to 60 sq meters with 3-in-1 filtration eliminating 99.97% of particles down to 0.3 microns and OLED touch display.", 15, false, false, 67));
+            list.Add(new("PK-HAP-0007", "Dyson Purifier Hot+Cool Formaldehyde HP09 Fan", "Dyson", "home-appliances", 240000m, 0m, "dyson-purifier-hot-cool-formaldehyde-hp09", "Shophive Pakistan", "https://www.shophive.com/dyson-hp09", "https://images.unsplash.com/photo-1588854337236-6889d631faa8?auto=format&fit=crop&w=600&q=80", "pk-hap-0007.webp", "Dyson HP09 flagship purifier automatically detects and destroys formaldehyde, captures H1N1 virus, and projects purified heated or cooled airflow.", 5, false, false, 68));
+            list.Add(new("PK-HAP-0008", "De'Longhi Dragon 4 Oil Filled Radiator Heater 2500W", "De'Longhi", "home-appliances", 42000m, 0m, "delonghi-dragon-4-oil-filled-radiator-heater", "Naheed Supermarket", "https://www.naheed.pk/delonghi-dragon-4-heater", "https://images.unsplash.com/photo-1545259741-2ea3ebf61fa3?auto=format&fit=crop&w=600&q=80", "pk-hap-0008.webp", "De'Longhi Dragon 4 oil-filled electric radiator heater with chimney effect for rapid convection heating, three heat settings, and pre-assembled castors.", 18, false, false, 69));
+            list.Add(new("PK-HAP-0009", "Dawlance 91999 Avante Inverter Refrigerator Glass Door", "Dawlance", "home-appliances", 145000m, 155000m, "dawlance-91999-avante-inverter-refrigerator", "PriceOye Pakistan", "https://priceoye.pk/refrigerators/dawlance/91999-avante", "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?auto=format&fit=crop&w=600&q=80", "pk-hap-0009.webp", "Dawlance 91999 Avante French door glass inverter refrigerator with Nature Lock technology preserving freshness up to 20 days and 55% energy saving.", 10, true, false, 70));
+            list.Add(new("PK-HAP-0010", "Haier HRF-622 Side by Side Inverter Refrigerator 570L", "Haier", "home-appliances", 225000m, 0m, "haier-hrf-622-side-by-side-inverter-refrigerator", "PriceOye Pakistan", "https://priceoye.pk/refrigerators/haier/hrf-622", "https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?auto=format&fit=crop&w=600&q=80", "pk-hap-0010.webp", "Haier HRF-622 luxury side-by-side inverter refrigerator with Digital Inverter Compressor, Multi Air Flow 360-degree cooling, and touch digital controller.", 8, false, false, 71));
+            list.Add(new("PK-HAP-0011", "Haier 1.5 Ton DC Inverter Air Conditioner Heat & Cool", "Haier", "home-appliances", 138000m, 148000m, "haier-1-5-ton-dc-inverter-ac-heat-cool", "PriceOye Pakistan", "https://priceoye.pk/air-conditioners/haier/1-5-ton-dc-inverter", "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=600&q=80", "pk-hap-0011.webp", "Haier Triple Inverter Heat & Cool split air conditioner delivering 66% energy savings, self-cleaning cold expansion tech, and rapid T3 ambient cooling.", 14, true, false, 72));
+            list.Add(new("PK-HAP-0012", "Dawlance Mega T-Pro Inverter Split AC 1.5 Ton", "Dawlance", "home-appliances", 142000m, 0m, "dawlance-mega-t-pro-inverter-ac", "PriceOye Pakistan", "https://priceoye.pk/air-conditioners/dawlance/mega-t-pro", "https://images.unsplash.com/photo-1614631446501-abcf76949eca?auto=format&fit=crop&w=600&q=80", "pk-hap-0012.webp", "Dawlance Mega T-Pro high-efficiency inverter air conditioner with Typhoon Airflow 12-meter air throw, Gold Fin condenser, and fire-proof PCB box.", 12, false, false, 73));
+            list.Add(new("PK-HAP-0013", "Gree Fairy Inverter Heat & Cool Split AC 1.5 Ton", "Gree", "home-appliances", 155000m, 0m, "gree-fairy-inverter-split-ac-1-5-ton", "PriceOye Pakistan", "https://priceoye.pk/air-conditioners/gree/fairy-inverter", "https://images.unsplash.com/photo-1585338107529-13afc5f02586?auto=format&fit=crop&w=600&q=80", "pk-hap-0013.webp", "Gree Fairy series elegant curved inverter air conditioner featuring G10 inverter technology, ultra-low frequency torque control, and four-way airflow.", 11, false, false, 74));
+            list.Add(new("PK-HAP-0014", "Dawlance Fully Automatic Front Load Washing Machine 9kg", "Dawlance", "home-appliances", 115000m, 124000m, "dawlance-front-load-washing-machine-9kg", "PriceOye Pakistan", "https://priceoye.pk/washing-machines/dawlance/front-load-9kg", "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?auto=format&fit=crop&w=600&q=80", "pk-hap-0014.webp", "Dawlance front load washing machine with ProFabric diamond drum, steam wash allergen care, inverter motor, and 14 distinct wash cycles.", 9, true, false, 75));
+            list.Add(new("PK-HAP-0015", "Haier Fully Automatic Top Load Washing Machine 12kg", "Haier", "home-appliances", 78000m, 0m, "haier-top-load-washing-machine-12kg", "PriceOye Pakistan", "https://priceoye.pk/washing-machines/haier/top-load-12kg", "https://images.unsplash.com/photo-1582735689369-4fe89db7114c?auto=format&fit=crop&w=600&q=80", "pk-hap-0015.webp", "Haier 12kg large capacity top load automatic washer with Pillow Drum protection, storm wash pulsator, soft close tempered glass lid, and fuzzy logic.", 16, false, false, 76));
+            list.Add(new("PK-HAP-0016", "Homage 3-Tap Floor Standing Water Dispenser with Refrigerator", "Homage", "home-appliances", 36000m, 0m, "homage-3-tap-floor-standing-water-dispenser", "PriceOye Pakistan", "https://priceoye.pk/water-dispensers/homage/3-tap-dispenser", "https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=600&q=80", "pk-hap-0016.webp", "Homage 3-tap water dispenser (Hot, Cold, Normal) with bottom refrigerator compartment, high efficiency compressor cooling, and child safety lock.", 20, false, false, 77));
+            list.Add(new("PK-HAP-0017", "Orient Crystal 3-Tap Hot & Cold Floor Standing Water Dispenser", "Orient", "home-appliances", 38500m, 0m, "orient-crystal-3-tap-water-dispenser", "Telemart Pakistan", "https://www.telemart.pk/orient-crystal-water-dispenser", "https://images.unsplash.com/photo-1563453392212-326f5e854473?auto=format&fit=crop&w=600&q=80", "pk-hap-0017.webp", "Orient Crystal premium glass door water dispenser with stainless steel water tank, low voltage startup, and odorless non-toxic water tubing.", 18, false, false, 78));
+
+            // =========================================================================
+            // 6. KITCHEN APPLIANCES (14 products) - DummyJSON kitchen-accessories
+            // =========================================================================
+            list.Add(new("PK-KIT-0051", "Stainless Steel Countertop Kitchen Blender 1.5L", "ChefMaster", "kitchen-appliances", 8500m, 0m, "countertop-kitchen-blender-1-5l", "Daraz Pakistan", "https://www.daraz.pk/products/countertop-blender", "https://cdn.dummyjson.com/product-images/kitchen-accessories/boxed-blender/thumbnail.webp", "pk-dj-0051.webp", "Multi-speed kitchen countertop blender with heavy duty glass pitcher, 6 stainless steel crushing blades, and pulse function for smoothies.", 30, false, false, 6));
+            list.Add(new("PK-KIT-0052", "Heavy Duty Carbon Steel Stir-Fry Wok 32cm", "WokMaster", "kitchen-appliances", 4800m, 0m, "carbon-steel-stir-fry-wok-32cm", "Naheed Supermarket", "https://www.naheed.pk/carbon-steel-wok", "https://cdn.dummyjson.com/product-images/kitchen-accessories/carbon-steel-wok/thumbnail.webp", "pk-dj-0052.webp", "Authentic round-bottom carbon steel wok with ergonomic wooden stay-cool handle for high-heat Asian stir frying and searing.", 45, false, false, 79));
+            list.Add(new("PK-KIT-0053", "Natural Organic Bamboo Kitchen Chopping Board", "EcoKitchen", "kitchen-appliances", 2200m, 0m, "natural-bamboo-chopping-board", "Daraz Pakistan", "https://www.daraz.pk/products/bamboo-chopping-board", "https://cdn.dummyjson.com/product-images/kitchen-accessories/chopping-board/thumbnail.webp", "pk-dj-0053.webp", "Durable antibacterial bamboo cutting board with deep juice groove, non-slip silicone feet, and knife-friendly surface.", 50, false, false, 80));
+            list.Add(new("PK-KIT-0054", "Handheld Heavy Duty Citrus Squeezer Yellow", "CitrusPro", "kitchen-appliances", 1450m, 0m, "handheld-citrus-squeezer-yellow", "Daraz Pakistan", "https://www.daraz.pk/products/citrus-squeezer", "https://cdn.dummyjson.com/product-images/kitchen-accessories/citrus-squeezer-yellow/thumbnail.webp", "pk-dj-0054.webp", "Enamelled cast aluminum manual lemon and lime squeezer extractor with seed strainer and maximum juice yield.", 60, false, false, 81));
+            list.Add(new("PK-KIT-0055", "Stainless Steel Wire Boiled Egg Slicer", "KitchenCraft", "kitchen-appliances", 950m, 0m, "stainless-steel-boiled-egg-slicer", "Daraz Pakistan", "https://www.daraz.pk/products/egg-slicer", "https://cdn.dummyjson.com/product-images/kitchen-accessories/egg-slicer/thumbnail.webp", "pk-dj-0055.webp", "Precision wire egg and soft food slicer for uniform egg, mushroom, and strawberry slices in a single motion.", 65, false, false, 82));
+            list.Add(new("PK-KIT-0056", "Digital Touch Induction Electric Cooktop Stove 2000W", "ThermoCook", "kitchen-appliances", 14500m, 16000m, "digital-induction-electric-cooktop-2000w", "Naheed Supermarket", "https://www.naheed.pk/electric-induction-stove", "https://cdn.dummyjson.com/product-images/kitchen-accessories/electric-stove/thumbnail.webp", "pk-dj-0056.webp", "Slim crystal glass induction cooktop featuring digital LED touch display, 8 preset cooking modes, timer, and automatic pot detection.", 20, true, false, 83));
+            list.Add(new("PK-KIT-0060", "Multi-Sided Stainless Steel Box Grater Black Handle", "ProChef", "kitchen-appliances", 1650m, 0m, "stainless-steel-box-grater-black", "Naheed Supermarket", "https://www.naheed.pk/box-grater", "https://cdn.dummyjson.com/product-images/kitchen-accessories/grater-black/thumbnail.webp", "pk-dj-0060.webp", "4-sided professional stainless steel box grater for coarse grating, medium grating, fine shredding, and slicing.", 40, false, false, 84));
+            list.Add(new("PK-KIT-0061", "Multi-Speed Immersion Hand Blender Red 600W", "BlendTech", "kitchen-appliances", 6800m, 0m, "immersion-hand-blender-red-600w", "Naheed Supermarket", "https://www.naheed.pk/hand-blender", "https://cdn.dummyjson.com/product-images/kitchen-accessories/hand-blender/thumbnail.webp", "pk-dj-0061.webp", "Ergonomic stick hand blender with stainless steel shaft, anti-splash blade guard, turbo speed button, and easy twist release.", 35, false, false, 85));
+            list.Add(new("PK-KIT-0064", "Stainless Steel Kitchen Chef Knife 8-Inch", "ShunPro", "kitchen-appliances", 3200m, 0m, "stainless-steel-kitchen-chef-knife-8-inch", "Daraz Pakistan", "https://www.daraz.pk/products/chef-knife", "https://cdn.dummyjson.com/product-images/kitchen-accessories/knife/thumbnail.webp", "pk-dj-0064.webp", "High-carbon stainless steel all-purpose culinary chef knife with razor-sharp tapered edge and full tang balanced handle.", 30, false, false, 86));
+            list.Add(new("PK-KIT-0066", "Digital Countertop Microwave Oven 20L White", "Westpoint", "kitchen-appliances", 26500m, 29000m, "digital-countertop-microwave-oven-20l-white", "PriceOye Pakistan", "https://priceoye.pk/microwave-ovens/westpoint/20l", "https://cdn.dummyjson.com/product-images/kitchen-accessories/microwave-oven/thumbnail.webp", "pk-dj-0066.webp", "Countertop microwave oven with 700W output power, defrost by weight and time, 30-minute timer, and easy-clean enamel interior.", 15, true, false, 87));
+            list.Add(new("PK-KIT-0068", "Non-Stick Aluminum Frying Skillet Pan 26cm", "CookRite", "kitchen-appliances", 3400m, 0m, "non-stick-aluminum-frying-skillet-pan", "Naheed Supermarket", "https://www.naheed.pk/frying-pan", "https://cdn.dummyjson.com/product-images/kitchen-accessories/pan/thumbnail.webp", "pk-dj-0068.webp", "Heavy gauge pressed aluminum frying pan with multi-layer PFOA-free nonstick coating and heat-resistant Bakelite handle.", 40, false, false, 88));
+            list.Add(new("PK-KIT-0071", "Stainless Steel Stockpot With Tempered Glass Lid 6L", "ChefQuality", "kitchen-appliances", 5800m, 0m, "stainless-steel-stockpot-with-glass-lid", "Naheed Supermarket", "https://www.naheed.pk/stockpot", "https://cdn.dummyjson.com/product-images/kitchen-accessories/silver-pot-with-glass-cap/thumbnail.webp", "pk-dj-0071.webp", "Encapsulated aluminum base stockpot for even heat distribution with clear tempered glass lid and steam release vent.", 22, false, false, 89));
+            list.Add(new("PK-KIT-0073", "Revolving Countertop Spice Rack Organizer 12-Jar", "SpiceHouse", "kitchen-appliances", 3900m, 0m, "revolving-spice-rack-organizer", "Daraz Pakistan", "https://www.daraz.pk/products/spice-rack", "https://cdn.dummyjson.com/product-images/kitchen-accessories/spice-rack/thumbnail.webp", "pk-dj-0073.webp", "360-degree rotating stainless steel carousel spice rack with 12 glass seasoning jars with shaker lids.", 25, false, false, 90));
+            list.Add(new("PK-KIT-0076", "Traditional Solid Hardwood Kitchen Rolling Pin", "BakeMaster", "kitchen-appliances", 1250m, 0m, "solid-hardwood-kitchen-rolling-pin", "Daraz Pakistan", "https://www.daraz.pk/products/rolling-pin", "https://cdn.dummyjson.com/product-images/kitchen-accessories/wooden-rolling-pin/thumbnail.webp", "pk-dj-0076.webp", "Classic smooth natural beechwood rolling pin with comfortable handles and nylon bearings for effortless dough rolling.", 55, false, false, 91));
+
+            // =========================================================================
+            // 7. BEAUTY & PERSONAL CARE (13 products) - DummyJSON 1-10, 118-120
+            // =========================================================================
+            list.Add(new("PK-BEA-0001", "Essence Mascara Lash Princess False Lash Effect", "Essence", "beauty-personal-care", 1650m, 0m, "essence-mascara-lash-princess", "Naheed Supermarket", "https://www.naheed.pk/essence-lash-princess-false-lash-effect-mascara", "https://cdn.dummyjson.com/product-images/beauty/essence-mascara-lash-princess/thumbnail.webp", "pk-dj-0001.webp", "Essence Lash Princess False Lash Effect mascara with iconic conic fiber brush providing intense volume and dramatic sculpted lashes.", 50, false, false, 7));
+            list.Add(new("PK-BEA-0002", "Eyeshadow Palette with Built-in Mirror", "Glamour Beauty", "beauty-personal-care", 3850m, 0m, "eyeshadow-palette-with-mirror", "Naheed Supermarket", "https://www.naheed.pk/eyeshadow-palette", "https://cdn.dummyjson.com/product-images/beauty/eyeshadow-palette-with-mirror/thumbnail.webp", "pk-dj-0002.webp", "Versatile 12-shade eyeshadow palette featuring ultra-pigmented matte and shimmer finishes with full-size application mirror.", 35, false, false, 92));
+            list.Add(new("PK-BEA-0003", "Velvet Touch Setting Powder Canister Translucent", "Velvet Touch", "beauty-personal-care", 2200m, 0m, "velvet-touch-setting-powder-canister", "Naheed Supermarket", "https://www.naheed.pk/setting-powder", "https://cdn.dummyjson.com/product-images/beauty/powder-canister/thumbnail.webp", "pk-dj-0003.webp", "Microfine translucent loose setting powder controlling shine all day with soft-focus blur effect and featherlight finish.", 40, false, false, 93));
+            list.Add(new("PK-BEA-0004", "Chic Matte Long-Lasting Red Lipstick", "Chic Cosmetics", "beauty-personal-care", 1950m, 0m, "chic-matte-red-lipstick", "Naheed Supermarket", "https://www.naheed.pk/chic-lipstick", "https://cdn.dummyjson.com/product-images/beauty/red-lipstick/thumbnail.webp", "pk-dj-0004.webp", "Bold classic red matte lipstick enriched with vitamin E and jojoba oil for comfortable non-drying hydration and 10-hour wear.", 45, false, false, 94));
+            list.Add(new("PK-BEA-0005", "Long-Wear High-Shine Red Nail Polish 15ml", "Nail Couture", "beauty-personal-care", 950m, 0m, "high-shine-red-nail-polish-15ml", "Naheed Supermarket", "https://www.naheed.pk/red-nail-polish", "https://cdn.dummyjson.com/product-images/beauty/red-nail-polish/thumbnail.webp", "pk-dj-0005.webp", "Chip-resistant gel-effect scarlet red nail polish with wide flat brush for streak-free single coat coverage and salon gloss.", 55, false, false, 95));
+            list.Add(new("PK-BEA-0006", "Calvin Klein CK One Eau De Toilette 100ml", "Calvin Klein", "beauty-personal-care", 18500m, 0m, "calvin-klein-ck-one-eau-de-toilette-100ml", "Naheed Supermarket", "https://www.naheed.pk/calvin-klein-ck-one-eau-de-toilette-100ml", "https://cdn.dummyjson.com/product-images/fragrances/calvin-klein-ck-one/thumbnail.webp", "pk-dj-0006.webp", "Iconic unisex citrus aromatic fragrance with notes of green tea, bergamot, cardamom, violet, and amber.", 25, false, false, 96));
+            list.Add(new("PK-BEA-0007", "Chanel Coco Noir Eau De Parfum 100ml", "Chanel", "beauty-personal-care", 42000m, 0m, "chanel-coco-noir-eau-de-parfum-100ml", "Naheed Supermarket", "https://www.naheed.pk/chanel-coco-noir", "https://cdn.dummyjson.com/product-images/fragrances/chanel-coco-noir-eau-de/thumbnail.webp", "pk-dj-0007.webp", "Luxurious oriental luminous perfume with intoxicating magnetic accord of bergamot, May rose, geranium rose leaf, and patchouli.", 12, true, false, 97));
+            list.Add(new("PK-BEA-0008", "Dior J'adore Eau De Parfum 100ml", "Dior", "beauty-personal-care", 38500m, 0m, "dior-jadore-eau-de-parfum-100ml", "Naheed Supermarket", "https://www.naheed.pk/dior-jadore", "https://cdn.dummyjson.com/product-images/fragrances/dior-j'adore/thumbnail.webp", "pk-dj-0008.webp", "The legendary grand feminine floral fragrance celebrating Ylang-Ylang, Damascus Rose, and Jasmine Grandiflorum.", 14, true, false, 98));
+            list.Add(new("PK-BEA-0009", "Dolce & Gabbana Dolce Shine Eau De Parfum 75ml", "Dolce & Gabbana", "beauty-personal-care", 26000m, 0m, "dolce-gabbana-dolce-shine-75ml", "Naheed Supermarket", "https://www.naheed.pk/dolce-shine", "https://cdn.dummyjson.com/product-images/fragrances/dolce-shine-eau-de/thumbnail.webp", "pk-dj-0009.webp", "Sunny cheerful floral fruity fragrance bursting with juicy lush mango, bright jasmine, and sun-drenched blonde woods.", 18, false, false, 99));
+            list.Add(new("PK-BEA-0010", "Gucci Bloom Eau De Parfum For Women 100ml", "Gucci", "beauty-personal-care", 32500m, 0m, "gucci-bloom-eau-de-parfum-100ml", "Naheed Supermarket", "https://www.naheed.pk/gucci-bloom", "https://cdn.dummyjson.com/product-images/fragrances/gucci-bloom-eau-de/thumbnail.webp", "pk-dj-0010.webp", "Captivating floral bouquet capturing the spirit of contemporary women with Rangoon creeper, jasmine bud, and natural tuberose.", 16, false, false, 100));
+            list.Add(new("PK-BEA-0118", "Attitude Super Leaves Natural Hand Soap Olive Leaves 473ml", "Attitude", "beauty-personal-care", 1850m, 0m, "attitude-super-leaves-natural-hand-soap-473ml", "Naheed Supermarket", "https://www.naheed.pk/attitude-hand-soap", "https://cdn.dummyjson.com/product-images/skin-care/attitude-super-leaves-hand-soap/thumbnail.webp", "pk-dj-0118.webp", "EWG verified hypoallergenic plant-based hand soap with soothing olive leaf extract and moringa seed cleansing power.", 50, false, false, 101));
+            list.Add(new("PK-BEA-0119", "Olay Ultra Moisture Shea Butter Body Wash 650ml", "Olay", "beauty-personal-care", 2450m, 0m, "olay-ultra-moisture-shea-butter-body-wash", "Naheed Supermarket", "https://www.naheed.pk/olay-body-wash", "https://cdn.dummyjson.com/product-images/skin-care/olay-ultra-moisture-shea-butter-body-wash/thumbnail.webp", "pk-dj-0119.webp", "Deeply nourishing body wash with lock-in moisture technology and pure shea butter to leave dry skin silky soft and hydrated.", 45, false, false, 102));
+            list.Add(new("PK-BEA-0120", "Vaseline Men Fast Absorbing Body and Face Lotion 400ml", "Vaseline", "beauty-personal-care", 1750m, 0m, "vaseline-men-fast-absorbing-lotion", "Naheed Supermarket", "https://www.naheed.pk/vaseline-men-lotion", "https://cdn.dummyjson.com/product-images/skin-care/vaseline-men-body-and-face-lotion/thumbnail.webp", "pk-dj-0120.webp", "Non-greasy fast-acting daily moisturizer with micro-droplets of Vaseline Jelly to heal and protect men's dry skin in 15 seconds.", 60, false, false, 103));
+
+            // =========================================================================
+            // 8. GAMING (12 products)
+            // =========================================================================
+            list.Add(new("PK-GAM-0001", "Sony PlayStation 5 Slim Console Disc Edition", "Sony", "gaming", 175000m, 185000m, "sony-playstation-5-slim-console-disc-edition", "PriceOye Pakistan", "https://priceoye.pk/gaming-consoles/sony/playstation-5-slim", "https://images.unsplash.com/photo-1606813907291-d86efa9b94db?auto=format&fit=crop&w=600&q=80", "pk-gam-0001.webp", "Sony PS5 Slim with 1TB ultra-high speed NVMe SSD, Ray Tracing, 4K-TV gaming, up to 120fps, and Tempest 3D AudioTech.", 10, true, false, 104));
+            list.Add(new("PK-GAM-0002", "Sony PlayStation 5 DualSense Wireless Controller White", "Sony", "gaming", 21500m, 0m, "sony-ps5-dualsense-wireless-controller-white", "PriceOye Pakistan", "https://priceoye.pk/gaming-accessories/sony/dualsense-controller", "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=600&q=80", "pk-gam-0002.webp", "PS5 DualSense wireless controller featuring immersive haptic feedback, dynamic adaptive triggers, and built-in microphone.", 25, false, false, 105));
+            list.Add(new("PK-GAM-0003", "Microsoft Xbox Series X 1TB Gaming Console Carbon Black", "Microsoft", "gaming", 168000m, 178000m, "microsoft-xbox-series-x-1tb-console", "PriceOye Pakistan", "https://priceoye.pk/gaming-consoles/microsoft/xbox-series-x", "https://images.unsplash.com/photo-1621259182978-fbf93132d53d?auto=format&fit=crop&w=600&q=80", "pk-gam-0003.webp", "The fastest, most powerful Xbox ever with 12 teraflops of raw graphic processing power, DirectX ray tracing, and 4K 120fps gaming.", 8, true, false, 106));
+            list.Add(new("PK-GAM-0004", "Microsoft Xbox Wireless Controller Robot White", "Microsoft", "gaming", 18500m, 0m, "microsoft-xbox-wireless-controller-robot-white", "PriceOye Pakistan", "https://priceoye.pk/gaming-accessories/microsoft/xbox-wireless-controller", "https://images.unsplash.com/photo-1600080972464-8e5f35f63d08?auto=format&fit=crop&w=600&q=80", "pk-gam-0004.webp", "Xbox wireless gamepad with sculpted surfaces and refined geometry, hybrid D-pad, textured grip, and dedicated Share button.", 22, false, false, 107));
+            list.Add(new("PK-GAM-0005", "Nintendo Switch OLED Model with White Joy-Con", "Nintendo", "gaming", 98000m, 105000m, "nintendo-switch-oled-model-white", "PriceOye Pakistan", "https://priceoye.pk/gaming-consoles/nintendo/switch-oled", "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80", "pk-gam-0005.webp", "Nintendo Switch with vibrant 7-inch OLED screen, wide adjustable stand, wired LAN dock, 64GB internal storage, and enhanced audio.", 14, true, false, 108));
+            list.Add(new("PK-GAM-0006", "Valve Steam Deck 512GB Handheld Gaming Console", "Valve", "gaming", 145000m, 0m, "valve-steam-deck-512gb-handheld-console", "Paklap Pakistan", "https://www.paklap.pk/valve-steam-deck", "https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=600&q=80", "pk-gam-0006.webp", "All-in-one portable PC gaming console running SteamOS with custom AMD APU, anti-glare etched glass, full-sized thumbsticks, and trackpads.", 7, false, false, 109));
+            list.Add(new("PK-GAM-0007", "Logitech G502 HERO High Performance Gaming Mouse", "Logitech", "gaming", 14000m, 0m, "logitech-g502-hero-high-performance-gaming-mouse", "Paklap Pakistan", "https://www.paklap.pk/logitech-g502-hero", "https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?auto=format&fit=crop&w=600&q=80", "pk-gam-0007.webp", "Logitech G502 HERO with 25,600 DPI optical sensor, 11 programmable buttons, adjustable weight tuning, and LIGHTSYNC RGB.", 30, false, false, 8));
+            list.Add(new("PK-GAM-0008", "Razer DeathAdder V3 Ergonomic Esports Gaming Mouse", "Razer", "gaming", 18500m, 0m, "razer-deathadder-v3-ergonomic-gaming-mouse", "Paklap Pakistan", "https://www.paklap.pk/razer-deathadder-v3", "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=600&q=80", "pk-gam-0008.webp", "Ultra-lightweight 59g ergonomic esports mouse with Razer Focus Pro 30K optical sensor and optical mouse switches Gen-3.", 24, false, false, 110));
+            list.Add(new("PK-GAM-0009", "Razer BlackWidow V4 Mechanical RGB Gaming Keyboard", "Razer", "gaming", 38000m, 0m, "razer-blackwidow-v4-mechanical-gaming-keyboard", "Paklap Pakistan", "https://www.paklap.pk/razer-blackwidow-v4", "https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=600&q=80", "pk-gam-0009.webp", "Mechanical gaming keyboard with Razer Green clicky switches, multi-function roller, dedicated macro keys, and 2-side underglow RGB.", 15, false, false, 111));
+            list.Add(new("PK-GAM-0010", "SteelSeries Arctis Nova 7 Wireless Gaming Headset", "SteelSeries", "gaming", 54000m, 0m, "steelseries-arctis-nova-7-wireless-gaming-headset", "Paklap Pakistan", "https://www.paklap.pk/steelseries-arctis-nova-7", "https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?auto=format&fit=crop&w=600&q=80", "pk-gam-0010.webp", "Multi-platform wireless headset with Nova Acoustic System, simultaneous 2.4GHz and Bluetooth audio, and 38-hour battery with fast charging.", 12, false, false, 112));
+            list.Add(new("PK-GAM-0011", "HyperX Cloud II Gaming Headset 7.1 Surround Gunmetal", "HyperX", "gaming", 24500m, 0m, "hyperx-cloud-ii-gaming-headset-gunmetal", "Paklap Pakistan", "https://www.paklap.pk/hyperx-cloud-ii", "https://images.unsplash.com/photo-1599669454699-248893623440?auto=format&fit=crop&w=600&q=80", "pk-gam-0011.webp", "Pro-gaming headset with 53mm dynamic drivers, hardware-driven virtual 7.1 surround sound audio control box, and memory foam ear pads.", 20, false, false, 113));
+            list.Add(new("PK-GAM-0012", "Sony PlayStation VR2 Virtual Reality Headset", "Sony", "gaming", 165000m, 0m, "sony-playstation-vr2-virtual-reality-headset", "PriceOye Pakistan", "https://priceoye.pk/gaming-accessories/sony/ps-vr2", "https://images.unsplash.com/photo-1593508512255-86ab42a8e620?auto=format&fit=crop&w=600&q=80", "pk-gam-0012.webp", "Next-generation VR gaming headset with 4K HDR OLED displays, 110-degree field of view, eye tracking, and Tempest 3D AudioTech.", 6, false, false, 114));
+
+            // =========================================================================
+            // 9. CAMERAS & ACCESSORIES (10 products)
+            // =========================================================================
+            list.Add(new("PK-CAM-0109", "TechGear Portable Camera Monopod with Quick Flip Locks", "TechGear", "cameras-accessories", 5600m, 0m, "techgear-portable-camera-monopod", "Daraz Pakistan", "https://www.daraz.pk/products/camera-monopod", "https://cdn.dummyjson.com/product-images/mobile-accessories/monopod/thumbnail.webp", "pk-dj-0109.webp", "Durable 5-section aluminum alloy monopod for DSLRs and mirrorless cameras with rubber grip and wrist strap.", 40, false, false, 115));
+            list.Add(new("PK-CAM-0110", "GadgetMaster 10-Inch LED Selfie Ring Light Studio Lamp", "GadgetMaster", "cameras-accessories", 4200m, 0m, "gadgetmaster-10-inch-selfie-ring-light", "Daraz Pakistan", "https://www.daraz.pk/products/selfie-ring-light", "https://cdn.dummyjson.com/product-images/mobile-accessories/selfie-lamp-with-iphone/thumbnail.webp", "pk-dj-0110.webp", "Dimmable 10-inch desktop LED ring light with phone holder mount, 3 color temperatures, and USB powered controller.", 45, false, false, 116));
+            list.Add(new("PK-CAM-0111", "SnapTech Bluetooth Extendable Selfie Stick Monopod", "SnapTech", "cameras-accessories", 3600m, 0m, "snaptech-bluetooth-extendable-selfie-stick", "Daraz Pakistan", "https://www.daraz.pk/products/bluetooth-selfie-stick", "https://cdn.dummyjson.com/product-images/mobile-accessories/selfie-stick-monopod/thumbnail.webp", "pk-dj-0111.webp", "Integrated tripod selfie stick with detachable wireless Bluetooth shutter remote and 360-degree rotatable phone clamp.", 50, false, false, 9));
+            list.Add(new("PK-CAM-0112", "ProVision Heavy Duty Broadcast Studio Camera Pedestal", "ProVision", "cameras-accessories", 140000m, 0m, "provision-heavy-duty-broadcast-camera-pedestal", "Shophive Pakistan", "https://www.shophive.com/provision-studio-pedestal", "https://cdn.dummyjson.com/product-images/mobile-accessories/tv-studio-camera-pedestal/thumbnail.webp", "pk-dj-0112.webp", "Professional television studio pneumatic camera pedestal with smooth elevation steering and locking castor wheels.", 5, false, false, 117));
+            list.Add(new("PK-CAM-0001", "Canon EOS 2000D / Rebel T7 DSLR Camera with 18-55mm Lens", "Canon", "cameras-accessories", 118000m, 128000m, "canon-eos-2000d-rebel-t7-dslr-camera", "PriceOye Pakistan", "https://priceoye.pk/cameras/canon/eos-2000d", "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=600&q=80", "pk-cam-0001.webp", "Canon EOS 2000D DSLR with 24.1MP APS-C CMOS sensor, DIGIC 4+ processor, Full HD video recording, and built-in Wi-Fi NFC.", 11, true, false, 118));
+            list.Add(new("PK-CAM-0002", "Sony Alpha a7 IV Full-Frame Mirrorless Camera Body", "Sony", "cameras-accessories", 560000m, 590000m, "sony-alpha-a7-iv-full-frame-mirrorless-camera", "Paklap Pakistan", "https://www.paklap.pk/sony-alpha-a7-iv", "https://images.unsplash.com/photo-1502920917128-1aa500764cbd?auto=format&fit=crop&w=600&q=80", "pk-cam-0002.webp", "Sony a7 IV with 33MP Exmor R back-illuminated sensor, BIONZ XR processing engine, 4K 60p 10-bit recording, and real-time eye AF.", 6, true, false, 119));
+            list.Add(new("PK-CAM-0003", "Nikon Z50 Mirrorless Camera with 16-50mm VR Lens", "Nikon", "cameras-accessories", 245000m, 0m, "nikon-z50-mirrorless-camera-16-50mm", "Paklap Pakistan", "https://www.paklap.pk/nikon-z50", "https://images.unsplash.com/photo-1500634245200-e5245c7574ef?auto=format&fit=crop&w=600&q=80", "pk-cam-0003.webp", "Nikon Z 50 compact mirrorless camera with 20.9MP DX sensor, EXPEED 6 processor, flip-under selfie screen, and uncropped 4K UHD video.", 9, false, false, 120));
+            list.Add(new("PK-CAM-0004", "GoPro HERO12 Black Waterproof Action Camera 5.3K", "GoPro", "cameras-accessories", 125000m, 0m, "gopro-hero12-black-action-camera", "PriceOye Pakistan", "https://priceoye.pk/action-cameras/gopro/hero12-black", "https://images.unsplash.com/photo-1565849904461-04a58ad377e0?auto=format&fit=crop&w=600&q=80", "pk-cam-0004.webp", "GoPro HERO12 Black with 5.3K60 HDR video, Emmy-winning HyperSmooth 6.0 video stabilization, and rugged waterproof construction to 33ft.", 15, false, false, 121));
+            list.Add(new("PK-CAM-0005", "DJI Mini 4 Pro Drone Fly More Combo with RC 2", "DJI", "cameras-accessories", 320000m, 0m, "dji-mini-4-pro-drone-fly-more-combo", "Paklap Pakistan", "https://www.paklap.pk/dji-mini-4-pro", "https://images.unsplash.com/photo-1508614589041-895b88991e3e?auto=format&fit=crop&w=600&q=80", "pk-cam-0005.webp", "DJI Mini 4 Pro sub-249g ultra-portable drone featuring omnidirectional obstacle sensing, 4K/60fps HDR True Vertical Shooting, and 34-minute flight time.", 7, false, false, 122));
+            list.Add(new("PK-CAM-0006", "Manfrotto Compact Action Aluminum Tripod with Hybrid Head", "Manfrotto", "cameras-accessories", 24000m, 0m, "manfrotto-compact-action-tripod", "Paklap Pakistan", "https://www.paklap.pk/manfrotto-tripod", "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80", "pk-cam-0006.webp", "Manfrotto 5-section aluminum tripod featuring ergonomic joystick head with scroll-wheel locking mechanism and round quick-release plate.", 20, false, false, 123));
+
+            // =========================================================================
+            // 10. TELEVISIONS (11 products)
+            // =========================================================================
+            list.Add(new("PK-TV-0001", "TCL 65-Inch 4K QLED Google TV C745", "TCL", "televisions", 165000m, 179999m, "tcl-65-inch-4k-qled-google-tv-c745", "PriceOye Pakistan", "https://priceoye.pk/led-tvs/tcl/65-c745", "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?auto=format&fit=crop&w=600&q=80", "pk-ent-001.webp", "TCL 65C745 QLED TV featuring 144Hz VRR gaming, Full Array Local Dimming, Dolby Vision IQ, and hands-free Google TV.", 8, true, false, 124));
+            list.Add(new("PK-TV-0002", "Sony 65-Inch Bravia XR OLED 4K TV A80L", "Sony", "televisions", 480000m, 520000m, "sony-65-inch-bravia-xr-oled-4k-tv-a80l", "PriceOye Pakistan", "https://priceoye.pk/led-tvs/sony/65-a80l", "https://images.unsplash.com/photo-1509281373149-e957c6296406?auto=format&fit=crop&w=600&q=80", "pk-ent-002.webp", "Sony Bravia XR A80L OLED with Cognitive Processor XR, Acoustic Surface Audio+, pure black OLED contrast, and Perfect for PS5 features.", 5, true, false, 125));
+            list.Add(new("PK-TV-0003", "Samsung 65-Inch Crystal UHD 4K Smart TV CU7000", "Samsung", "televisions", 195000m, 210000m, "samsung-65-crystal-uhd-4k-smart-tv-cu7000", "PriceOye Pakistan", "https://priceoye.pk/led-tvs/samsung/65-cu7000", "https://images.unsplash.com/photo-1593784991095-a205069470b6?auto=format&fit=crop&w=600&q=80", "pk-tv-0003.webp", "Samsung CU7000 with Crystal Processor 4K, PurColor lifelike color accuracy, Motion Xcelerator, and Tizen smart OS.", 9, true, false, 126));
+            list.Add(new("PK-TV-0004", "LG 55-Inch OLED evo 4K Smart TV C3 Series", "LG", "televisions", 320000m, 345000m, "lg-55-oled-evo-4k-smart-tv-c3", "PriceOye Pakistan", "https://priceoye.pk/led-tvs/lg/55-c3", "https://images.unsplash.com/photo-1461151304267-38535e780c79?auto=format&fit=crop&w=600&q=80", "pk-tv-0004.webp", "LG OLED C3 with Brightness Booster, alpha 9 AI Processor 4K Gen6, Dolby Atmos, and 0.1ms response time with 4x HDMI 2.1 ports.", 6, true, false, 127));
+            list.Add(new("PK-TV-0005", "TCL 55-Inch 4K UHD HDR Smart Google TV P635", "TCL", "televisions", 98000m, 108000m, "tcl-55-4k-uhd-hdr-smart-google-tv-p635", "PriceOye Pakistan", "https://priceoye.pk/led-tvs/tcl/55-p635", "https://images.unsplash.com/photo-1571415060716-baff5f717c37?auto=format&fit=crop&w=600&q=80", "pk-tv-0005.webp", "TCL 55P635 borderless 4K HDR smart television with Dynamic Color Enhancement, HDMI 2.1 eARC, and Google TV voice control.", 14, false, false, 128));
+            list.Add(new("PK-TV-0006", "Hisense 55-Inch ULED 4K Mini-LED Google TV U6K", "Hisense", "televisions", 128000m, 0m, "hisense-55-uled-4k-mini-led-tv-u6k", "PriceOye Pakistan", "https://priceoye.pk/led-tvs/hisense/55-u6k", "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?auto=format&fit=crop&w=600&q=80", "pk-tv-0006.webp", "Hisense U6K with Mini-LED backlighting, Quantum Dot wide color gamut, Dolby Vision IQ, and FilmMaker mode.", 11, false, false, 129));
+            list.Add(new("PK-TV-0007", "Xiaomi 43-Inch Smart TV A Pro 4K UHD Dolby Vision", "Xiaomi", "televisions", 78000m, 85000m, "xiaomi-43-smart-tv-a-pro-4k", "PriceOye Pakistan", "https://priceoye.pk/led-tvs/xiaomi/43-a-pro", "https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&w=600&q=80", "pk-tv-0007.webp", "Xiaomi A Pro 43-inch frameless metallic unibody 4K TV with MEMC motion smoothing, DTS-X audio, and Google Assistant built in.", 16, false, false, 130));
+            list.Add(new("PK-TV-0008", "Samsung 55-Inch QLED 4K Smart TV Q60C Dual LED", "Samsung", "televisions", 175000m, 0m, "samsung-55-qled-4k-smart-tv-q60c", "PriceOye Pakistan", "https://priceoye.pk/led-tvs/samsung/55-q60c", "https://images.unsplash.com/photo-1577975882846-431adc8c2009?auto=format&fit=crop&w=600&q=80", "pk-tv-0008.webp", "Samsung Q60C 100% Color Volume with Quantum Dot, AirSlim design, Dual LED backlight technology, and SolarCell remote control.", 10, false, false, 131));
+            list.Add(new("PK-TV-0009", "Sony 55-Inch Bravia 4K Ultra HD HDR Google TV X80L", "Sony", "televisions", 210000m, 0m, "sony-55-bravia-4k-uhd-google-tv-x80l", "PriceOye Pakistan", "https://priceoye.pk/led-tvs/sony/55-x80l", "https://images.unsplash.com/photo-1567690187548-f07b1d7bf5a9?auto=format&fit=crop&w=600&q=80", "pk-tv-0009.webp", "Sony Bravia X80L with 4K HDR Processor X1, TRILUMINOS Pro over a billion vivid colors, X-Balanced Speaker, and flush surface bezel.", 8, false, false, 132));
+            list.Add(new("PK-TV-0010", "Orient 43-Inch Full HD Smart Android LED TV Action Pro", "Orient", "televisions", 54000m, 0m, "orient-43-full-hd-smart-android-led-tv", "Telemart Pakistan", "https://www.telemart.pk/orient-43-smart-led", "https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?auto=format&fit=crop&w=600&q=80", "pk-tv-0010.webp", "Orient Action Pro 43-inch smart LED television with certified Android OS, Google Chromecast built in, and surround stereo speakers.", 22, false, false, 10));
+            list.Add(new("PK-TV-0011", "Haier 50-Inch Smart 4K Bezel-Less Google Android LED TV", "Haier", "televisions", 92000m, 0m, "haier-50-smart-4k-bezel-less-google-tv", "PriceOye Pakistan", "https://priceoye.pk/led-tvs/haier/50-smart-4k", "https://images.unsplash.com/photo-1593305841991-05c297ba4575?auto=format&fit=crop&w=600&q=80", "pk-tv-0011.webp", "Haier 50-inch 4K UHD smart television with slim metallic bezel-less frame, HDR10 decoding, and voice remote.", 15, false, false, 133));
+
+            // =========================================================================
+            // 11. HOME & LIVING (18 products)
+            // =========================================================================
+            list.Add(new("PK-HLV-0011", "Annibale Colombo Modern Luxury Italian Double Bed", "Annibale Colombo", "home-living", 240000m, 0m, "annibale-colombo-modern-luxury-bed", "Habitt Pakistan", "https://habitt.com/furniture/beds", "https://cdn.dummyjson.com/product-images/furniture/annibale-colombo-bed/thumbnail.webp", "pk-dj-0011.webp", "Handcrafted solid wood luxury double bed from Annibale Colombo with upholstered headboard and precision joinery.", 6, false, false, 134));
+            list.Add(new("PK-HLV-0012", "Annibale Colombo Handcrafted Luxury 3-Seater Sofa", "Annibale Colombo", "home-living", 185000m, 0m, "annibale-colombo-handcrafted-sofa", "Habitt Pakistan", "https://habitt.com/furniture/sofas", "https://cdn.dummyjson.com/product-images/furniture/annibale-colombo-sofa/thumbnail.webp", "pk-dj-0012.webp", "Classic wooden structured three-seater living room sofa with deep seating cushions and accent throw pillow.", 8, false, false, 135));
+            list.Add(new("PK-HLV-0013", "African Cherry Bedside Table Nightstand with Drawer", "Furniture Co.", "home-living", 28000m, 0m, "african-cherry-bedside-table-nightstand", "Habitt Pakistan", "https://habitt.com/furniture/tables", "https://cdn.dummyjson.com/product-images/furniture/bedside-table-african-cherry/thumbnail.webp", "pk-dj-0013.webp", "Solid African cherry hardwood nightstand with smooth gliding drawer, bottom storage shelf, and satin varnish.", 20, false, false, 136));
+            list.Add(new("PK-HLV-0014", "Knoll Saarinen Executive Conference Armchair", "Knoll", "home-living", 65000m, 0m, "knoll-saarinen-executive-chair", "Habitt Pakistan", "https://habitt.com/furniture/chairs", "https://cdn.dummyjson.com/product-images/furniture/knoll-saarinen-executive-conference-chair/thumbnail.webp", "pk-dj-0014.webp", "Eero Saarinen iconic sculptural executive conference armchair with molded reinforced polyurethane shell and steel legs.", 12, false, false, 137));
+            list.Add(new("PK-HLV-0015", "Wooden Bathroom Vanity Sink Cabinet With Mirror", "Bath Trends", "home-living", 72000m, 0m, "wooden-bathroom-vanity-sink-with-mirror", "Habitt Pakistan", "https://habitt.com/furniture/bathroom", "https://cdn.dummyjson.com/product-images/furniture/wooden-bathroom-sink-with-mirror/thumbnail.webp", "pk-dj-0015.webp", "Water-resistant treated wood bathroom vanity unit with integrated ceramic wash basin and matching framed wall mirror.", 10, false, false, 138));
+            list.Add(new("PK-HLV-0043", "Handcrafted Hanging Decoration Swing with Rope", "DecorArts", "home-living", 8500m, 0m, "handcrafted-hanging-decoration-swing", "Daraz Pakistan", "https://www.daraz.pk/products/decoration-swing", "https://cdn.dummyjson.com/product-images/home-decoration/decoration-swing/thumbnail.webp", "pk-dj-0043.webp", "Rustic decorative indoor hanging wooden swing with braided jute ropes and floral accent garland.", 25, false, false, 139));
+            list.Add(new("PK-HLV-0044", "Family Tree Wood Wall Hanging Photo Picture Frame", "DecorArts", "home-living", 3400m, 0m, "family-tree-photo-frame", "Daraz Pakistan", "https://www.daraz.pk/products/family-tree-frame", "https://cdn.dummyjson.com/product-images/home-decoration/family-tree-photo-frame/thumbnail.webp", "pk-dj-0044.webp", "Multi-aperture collage picture frame in tree branch motif holding six family snapshot photographs.", 35, false, false, 140));
+            list.Add(new("PK-HLV-0045", "Ceramic House Architectural Showpiece Planter", "DecorArts", "home-living", 2800m, 0m, "ceramic-house-showpiece-plant", "Daraz Pakistan", "https://www.daraz.pk/products/ceramic-showpiece", "https://cdn.dummyjson.com/product-images/home-decoration/house-showpiece-plant/thumbnail.webp", "pk-dj-0045.webp", "Miniature architectural ceramic townhouse figurine with faux succulent plant for desktop decoration.", 40, false, false, 141));
+            list.Add(new("PK-HLV-0046", "Geometric Minimalist White Ceramic Plant Pot", "HomeDeco", "home-living", 1950m, 0m, "geometric-ceramic-plant-pot", "Daraz Pakistan", "https://www.daraz.pk/products/ceramic-pot", "https://cdn.dummyjson.com/product-images/home-decoration/plant-pot/thumbnail.webp", "pk-dj-0046.webp", "Matte white faceted geometric ceramic planter pot with drainage hole and saucer for indoor houseplants.", 50, false, false, 142));
+            list.Add(new("PK-HLV-0047", "Nordic Modern Decorative Bedside Table Lamp", "LuxeLight", "home-living", 4200m, 0m, "nordic-modern-bedside-table-lamp", "Daraz Pakistan", "https://www.daraz.pk/products/table-lamp", "https://cdn.dummyjson.com/product-images/home-decoration/table-lamp/thumbnail.webp", "pk-dj-0047.webp", "Sculptural tropical palm leaf brass finish bedside lamp with fabric flare bell lampshade.", 30, false, false, 11));
+            list.Add(new("PK-HLV-0075", "Handcrafted Wooden Serving Table Tray with Handles", "ArtisanCraft", "home-living", 2950m, 0m, "wooden-serving-table-tray", "Daraz Pakistan", "https://www.daraz.pk/products/serving-tray", "https://cdn.dummyjson.com/product-images/kitchen-accessories/tray/thumbnail.webp", "pk-dj-0075.webp", "Solid Sheesham wood rectangular breakfast serving tray with carved side cut-out carrying handles.", 45, false, false, 143));
+            list.Add(new("PK-HLV-0001", "Luxury Hotel Collection Bed Sheet & Duvet Set Navy", "ChenOne", "home-living", 12500m, 0m, "luxury-hotel-collection-bed-sheet-set-navy", "ChenOne Pakistan", "https://chenone.com/bedding/luxury-navy-set", "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=600&q=80", "pk-hlv-001.webp", "400 thread count 100% combed cotton sateen luxury king bed sheet set with fitted sheet, flat sheet, and two oxford pillowcases.", 25, false, false, 144));
+            list.Add(new("PK-HLV-0003", "Nordic White Living Room Cabinet Dresser Unit", "Habitt", "home-living", 48000m, 0m, "nordic-white-living-room-cabinet-dresser", "Habitt Pakistan", "https://habitt.com/furniture/cabinets", "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80", "pk-hlv-003.webp", "Scandinavian style white wooden chest of drawers with 4 large storage compartments and satin metallic knobs.", 10, false, false, 145));
+            list.Add(new("PK-HLV-0004", "Mid-Century Emerald Velvet Modern 3-Seater Sofa", "Habitt", "home-living", 125000m, 0m, "mid-century-emerald-velvet-sofa", "Habitt Pakistan", "https://habitt.com/furniture/sofas", "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=600&q=80", "pk-fur-001.webp", "Emerald green velvet upholstered mid-century modern sofa with tapered walnut legs and matching bolster cushions.", 8, true, false, 146));
+            list.Add(new("PK-HLV-0005", "Solid Oak Round Living Room Coffee Table", "Habitt", "home-living", 34000m, 0m, "solid-oak-round-coffee-table", "Habitt Pakistan", "https://habitt.com/furniture/tables", "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?auto=format&fit=crop&w=600&q=80", "pk-hlv-0005.webp", "Minimalist circular coffee table crafted from solid natural oak with rounded bevelled edges and sturdy tripod base.", 14, false, false, 147));
+            list.Add(new("PK-HLV-0006", "Ceramic Fluted Decorative Flower Vase White", "DecorArts", "home-living", 3800m, 0m, "ceramic-fluted-decorative-flower-vase-white", "Daraz Pakistan", "https://www.daraz.pk/products/ceramic-vase", "https://images.unsplash.com/photo-1612196808214-b8e1d6145a8c?auto=format&fit=crop&w=600&q=80", "pk-hlv-0006.webp", "Handcrafted fluted ceramic flower vase with matte stoneware texture ideal for pampas grass and dried floral arrangements.", 35, false, false, 148));
+            list.Add(new("PK-HLV-0007", "Egyptian Cotton 6-Piece Luxury Bath Towel Set Grey", "ChenOne", "home-living", 9500m, 0m, "egyptian-cotton-6-piece-luxury-bath-towel-set", "ChenOne Pakistan", "https://chenone.com/bath/egyptian-towel-set", "https://images.unsplash.com/photo-1584100936595-c0654b55a2e2?auto=format&fit=crop&w=600&q=80", "pk-hlv-0007.webp", "600 GSM 100% Egyptian ringspun cotton luxury bath towel set including 2 bath towels, 2 hand towels, and 2 washcloths.", 40, false, false, 149));
+            list.Add(new("PK-HLV-0008", "Minimalist Round Wooden Wall Clock Silent Non-Ticking", "DecorArts", "home-living", 4800m, 0m, "minimalist-round-wooden-wall-clock", "Daraz Pakistan", "https://www.daraz.pk/products/wooden-wall-clock", "https://images.unsplash.com/photo-1563861826100-9cb868fdbe1c?auto=format&fit=crop&w=600&q=80", "pk-hlv-0008.webp", "12-inch modern natural wood wall clock with silent quartz sweeping movement and clear readable numeric dial.", 25, false, false, 150));
+
+            // =========================================================================
+            // 12. SPORTS & FITNESS (14 products) - DummyJSON sports-accessories
+            // =========================================================================
+            list.Add(new("PK-SPO-0139", "Genuine Leather Baseball Catcher Glove Brown", "Rawlings", "sports-fitness", 7500m, 0m, "leather-baseball-catcher-glove-brown", "Daraz Pakistan", "https://www.daraz.pk/products/baseball-glove", "https://cdn.dummyjson.com/product-images/sports-accessories/baseball-glove/thumbnail.webp", "pk-dj-0139.webp", "Full-grain oiled leather baseball fielding glove with reinforced palm pad and adjustable wrist strap.", 25, false, false, 12));
+            list.Add(new("PK-SPO-0140", "Regulation Official Size Grip Basketball Orange", "Spalding", "sports-fitness", 4200m, 0m, "regulation-official-size-basketball-orange", "Daraz Pakistan", "https://www.daraz.pk/products/basketball", "https://cdn.dummyjson.com/product-images/sports-accessories/basketball/thumbnail.webp", "pk-dj-0140.webp", "Official size 7 composite leather indoor/outdoor basketball with deep channel design for maximum grip and ball control.", 40, false, false, 151));
+            list.Add(new("PK-SPO-0141", "Heavy Duty Steel Wall-Mounted Basketball Rim & Net", "ProCourt", "sports-fitness", 5800m, 0m, "steel-wall-mounted-basketball-rim", "Daraz Pakistan", "https://www.daraz.pk/products/basketball-rim", "https://cdn.dummyjson.com/product-images/sports-accessories/basketball-rim/thumbnail.webp", "pk-dj-0141.webp", "Solid steel 18-inch breakaway basketball goal rim with all-weather nylon net and mounting expansion bolts.", 20, false, false, 152));
+            list.Add(new("PK-SPO-0142", "Hand-Stitched Genuine Leather Cricket Ball Red", "CA Sports", "sports-fitness", 1850m, 0m, "leather-cricket-ball-red", "Daraz Pakistan", "https://www.daraz.pk/products/cricket-ball", "https://cdn.dummyjson.com/product-images/sports-accessories/cricket-ball/thumbnail.webp", "pk-dj-0142.webp", "Four-piece hand-stitched alum tanned genuine leather cricket match ball with Portuguese cork center.", 60, false, false, 153));
+            list.Add(new("PK-SPO-0143", "SG Pro English Willow Cricket Bat Full Size", "SG", "sports-fitness", 14500m, 0m, "sg-pro-english-willow-cricket-bat", "Daraz Pakistan", "https://www.daraz.pk/products/cricket-bat", "https://cdn.dummyjson.com/product-images/sports-accessories/cricket-bat/thumbnail.webp", "pk-dj-0143.webp", "Handcrafted Grade 2 English willow cricket bat with thick edges, curved blade, and Sarawak cane chevron handle.", 25, true, false, 154));
+            list.Add(new("PK-SPO-0144", "Professional Protective Cricket Batting Helmet Navy", "Masuri", "sports-fitness", 8900m, 0m, "professional-protective-cricket-helmet-navy", "Daraz Pakistan", "https://www.daraz.pk/products/cricket-helmet", "https://cdn.dummyjson.com/product-images/sports-accessories/cricket-helmet/thumbnail.webp", "pk-dj-0144.webp", "High-impact ABS shell cricket helmet with reinforced steel face grille, EPS shock-absorbing liner, and airflow vents.", 30, false, false, 155));
+            list.Add(new("PK-SPO-0145", "Wooden Cricket Stumps Set with Bails", "CA Sports", "sports-fitness", 3400m, 0m, "wooden-cricket-stumps-set", "Daraz Pakistan", "https://www.daraz.pk/products/cricket-stumps", "https://cdn.dummyjson.com/product-images/sports-accessories/cricket-wicket/thumbnail.webp", "pk-dj-0145.webp", "Regulation 28-inch polished hardwood cricket stumps set including three match wickets, cast metal ground points, and two bails.", 35, false, false, 156));
+            list.Add(new("PK-SPO-0146", "Goose Feather Tournament Badminton Shuttlecocks 12-Pack", "Yonex", "sports-fitness", 4800m, 0m, "goose-feather-badminton-shuttlecocks", "Daraz Pakistan", "https://www.daraz.pk/products/shuttlecocks", "https://cdn.dummyjson.com/product-images/sports-accessories/feather-shuttlecock/thumbnail.webp", "pk-dj-0146.webp", "Precision-manufactured goose feather shuttlecocks with composite natural cork base for stable flight and durability.", 45, false, false, 157));
+            list.Add(new("PK-SPO-0147", "Classic Hand-Stitched Leather Soccer Football Size 5", "Forward Sports", "sports-fitness", 3800m, 0m, "hand-stitched-leather-soccer-football", "Daraz Pakistan", "https://www.daraz.pk/products/football", "https://cdn.dummyjson.com/product-images/sports-accessories/football/thumbnail.webp", "pk-dj-0147.webp", "Authentic Sialkot hand-stitched 32-panel PU leather football with reinforced polyester backing and butyl bladder.", 50, false, false, 158));
+            list.Add(new("PK-SPO-0148", "High-Performance Multi-Layer White Golf Balls 6-Pack", "Titleist", "sports-fitness", 3200m, 0m, "multi-layer-white-golf-balls-6-pack", "Daraz Pakistan", "https://www.daraz.pk/products/golf-balls", "https://cdn.dummyjson.com/product-images/sports-accessories/golf-ball/thumbnail.webp", "pk-dj-0148.webp", "Aerodynamic 3-piece urethane cover golf balls with high-velocity core for low driver spin and exceptional greenside control.", 40, false, false, 159));
+            list.Add(new("PK-SPO-0149", "Stainless Steel Forged Iron Golf Club 7-Iron", "Callaway", "sports-fitness", 9500m, 0m, "forged-iron-golf-club-7-iron", "Daraz Pakistan", "https://www.daraz.pk/products/golf-iron", "https://cdn.dummyjson.com/product-images/sports-accessories/iron-golf/thumbnail.webp", "pk-dj-0149.webp", "Forged 431 stainless steel individual 7-iron golf club with low center of gravity and stepped steel shaft.", 20, false, false, 160));
+            list.Add(new("PK-SPO-0150", "Heavy Duty Aluminum Alloy Metal Baseball Bat 32-Inch", "Easton", "sports-fitness", 5400m, 0m, "aluminum-alloy-metal-baseball-bat-32-inch", "Daraz Pakistan", "https://www.daraz.pk/products/metal-baseball-bat", "https://cdn.dummyjson.com/product-images/sports-accessories/metal-baseball-bat/thumbnail.webp", "pk-dj-0150.webp", "Aircraft-grade aluminum alloy baseball bat with cushioned non-slip polyurethane grip and rolled end cap.", 30, false, false, 161));
+            list.Add(new("PK-SPO-0151", "Tournament Standard Pressure Extra-Duty Tennis Balls 3-Can", "Wilson", "sports-fitness", 2400m, 0m, "tournament-standard-tennis-balls-3-can", "Daraz Pakistan", "https://www.daraz.pk/products/tennis-balls", "https://cdn.dummyjson.com/product-images/sports-accessories/tennis-ball/thumbnail.webp", "pk-dj-0151.webp", "ITF-approved pressurized yellow tennis balls with Dura-Weave felt for superior playability on all court surfaces.", 55, false, false, 162));
+            list.Add(new("PK-SPO-0152", "Graphite Composite Adult Tennis Racket with Cover", "Wilson", "sports-fitness", 16500m, 0m, "graphite-composite-adult-tennis-racket", "Daraz Pakistan", "https://www.daraz.pk/products/tennis-racket", "https://cdn.dummyjson.com/product-images/sports-accessories/tennis-racket/thumbnail.webp", "pk-dj-0152.webp", "Pre-strung graphite composite tennis racquet with 100 sq inch head size, open 16x19 string pattern, and full zippered cover.", 25, false, false, 163));
+
+            return list;
         }
 
         public static async Task<List<CatalogueItemDto>> GenerateCanonicalCatalogueAsync(string basePath)
         {
-            string auditCsvPath = Path.Combine(basePath, "Data", "Catalog", "source-paired-image-audit.csv");
-            if (!File.Exists(auditCsvPath))
+            var defs = GetCanonical163Definitions();
+            string productsDir = Path.Combine(basePath, "wwwroot", "images", "products");
+            if (!Directory.Exists(productsDir))
             {
-                throw new FileNotFoundException("source-paired-image-audit.csv not found at: " + auditCsvPath);
+                Directory.CreateDirectory(productsDir);
             }
 
-            var auditRows = new Dictionary<string, (string Title, string Category, string Dataset, string SourceImageUrl, string LocalImage)>(StringComparer.OrdinalIgnoreCase);
-            var lines = await File.ReadAllLinesAsync(auditCsvPath);
-            for (int i = 1; i < lines.Length; i++)
+            using var handler = new SocketsHttpHandler
             {
-                var line = lines[i].Trim();
-                if (string.IsNullOrEmpty(line)) continue;
-                var parts = ParseCsvLine(line);
-                if (parts.Length >= 6)
+                AllowAutoRedirect = true,
+                AutomaticDecompression = System.Net.DecompressionMethods.All,
+                ConnectTimeout = TimeSpan.FromSeconds(15)
+            };
+            using var httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
+            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36");
+
+            var result = new List<CatalogueItemDto>();
+            var auditRows = new List<string>();
+            auditRows.Add("SKU,Title,Category,ImageFilename,SHA256,Width,Height,Bytes,SourceURL,SourceName,PriceSource,VerificationDate,Validation");
+
+            using var sha256 = SHA256.Create();
+            var seenHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var def in defs)
+            {
+                string localFile = Path.Combine(productsDir, def.LocalImageName);
+                bool needsDownload = false;
+
+                if (!File.Exists(localFile))
                 {
-                    string sku = parts[0].Trim();
-                    string title = parts[1].Trim();
-                    string category = parts[2].Trim();
-                    string dataset = parts[3].Trim();
-                    string sourceImg = parts[4].Trim();
-                    string localImg = parts[5].Trim();
-                    auditRows[sku] = (title, category, dataset, sourceImg, localImg);
+                    needsDownload = true;
                 }
-            }
-
-            string djCache = Path.Combine(basePath, "tools", ".cache", "dummyjson.json");
-            string muCache = Path.Combine(basePath, "tools", ".cache", "makeup.json");
-
-            string djJson;
-            if (File.Exists(djCache))
-            {
-                djJson = await File.ReadAllTextAsync(djCache);
-            }
-            else
-            {
-                using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("HamaraCommerce-Portfolio-Catalogue/1.0");
-                djJson = await httpClient.GetStringAsync("https://dummyjson.com/products?limit=0");
-            }
-
-            using var djDoc = JsonDocument.Parse(djJson);
-            var djDict = new Dictionary<string, JsonElement>();
-            foreach (var elem in djDoc.RootElement.GetProperty("products").EnumerateArray())
-            {
-                int id = elem.GetProperty("id").GetInt32();
-                string sku = $"PK-DJ-{id:D4}";
-                djDict[sku] = elem.Clone();
-            }
-
-            string muJson;
-            if (File.Exists(muCache))
-            {
-                muJson = await File.ReadAllTextAsync(muCache);
-            }
-            else
-            {
-                using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("HamaraCommerce-Portfolio-Catalogue/1.0");
-                muJson = await httpClient.GetStringAsync("https://makeup-api.herokuapp.com/api/v1/products.json");
-            }
-
-            using var muDoc = JsonDocument.Parse(muJson);
-            var muDict = new Dictionary<string, JsonElement>();
-            foreach (var elem in muDoc.RootElement.EnumerateArray())
-            {
-                string idStr = elem.GetProperty("id").ToString();
-                string rawId = Regex.Replace(idStr, @"\D", "");
-                string sku = $"PK-MU-{rawId}";
-                if (sku.Length > 48) sku = sku.Substring(0, 48);
-                if (!muDict.ContainsKey(sku))
+                else
                 {
-                    muDict[sku] = elem.Clone();
-                }
-            }
-
-            var items = new List<CatalogueItemDto>();
-            using var sha1 = SHA1.Create();
-
-            foreach (var kvp in auditRows)
-            {
-                string sku = kvp.Key;
-                var audit = kvp.Value;
-
-                if (audit.Dataset.Equals("DummyJSON", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (djDict.TryGetValue(sku, out var p))
+                    try
                     {
-                        int id = p.GetProperty("id").GetInt32();
-                        string rawTitle = p.GetProperty("title").GetString() ?? audit.Title;
-                        string title = CleanText(rawTitle, 180);
-                        string brand = "Independent";
-                        if (p.TryGetProperty("brand", out var bProp) && bProp.ValueKind == JsonValueKind.String)
+                        var info = SKBitmap.DecodeBounds(localFile);
+                        if (info.Width < 80 || info.Height < 80)
                         {
-                            brand = CleanText(bProp.GetString(), 80);
+                            needsDownload = true;
                         }
-                        if (string.IsNullOrWhiteSpace(brand)) brand = "Independent";
-
-                        double priceUsd = p.GetProperty("price").GetDouble();
-                        decimal price = UsdToPkrPrice(priceUsd);
-                        string slug = $"{Slugify(string.IsNullOrEmpty(title) ? sku : title)}-{id}";
-
-                        string desc = title;
-                        if (p.TryGetProperty("description", out var dProp) && dProp.ValueKind == JsonValueKind.String)
-                        {
-                            desc = CleanText(dProp.GetString());
-                        }
-
-                        int stock = 20;
-                        if (p.TryGetProperty("stock", out var sProp) && sProp.ValueKind == JsonValueKind.Number)
-                        {
-                            stock = Math.Max(1, Math.Min(80, sProp.GetInt32()));
-                        }
-
-                        items.Add(new CatalogueItemDto
-                        {
-                            Title = title,
-                            Brand = brand,
-                            Category = audit.Category,
-                            Price = price,
-                            OldPrice = 0m,
-                            SKU = sku,
-                            Slug = slug,
-                            SourceRetailer = "DummyJSON portfolio dataset",
-                            SourceProductUrl = $"https://dummyjson.com/products/{id}",
-                            ImageSourceUrl = audit.SourceImageUrl,
-                            MainImage = audit.LocalImage,
-                            PriceCheckedAt = "2026-09-07",
-                            ShortDescription = desc,
-                            Stock = stock,
-                            IsFeatured = false,
-                            IsFlashDeal = false
-                        });
+                    }
+                    catch
+                    {
+                        needsDownload = true;
                     }
                 }
-                else if (audit.Dataset.Equals("Makeup API", StringComparison.OrdinalIgnoreCase))
+
+                if (needsDownload)
                 {
-                    if (muDict.TryGetValue(sku, out var p))
+                    byte[]? downloadedBytes = null;
+                    int attempts = 0;
+                    while (downloadedBytes == null && attempts < 3)
                     {
-                        string idStr = p.GetProperty("id").ToString();
-                        string rawId = Regex.Replace(idStr, @"\D", "");
-                        string brandRaw = "Independent";
-                        if (p.TryGetProperty("brand", out var bProp) && bProp.ValueKind == JsonValueKind.String)
+                        attempts++;
+                        try
                         {
-                            brandRaw = CleanText(bProp.GetString(), 80);
+                            downloadedBytes = await httpClient.GetByteArrayAsync(def.ImageUrl);
                         }
-                        if (string.IsNullOrWhiteSpace(brandRaw)) brandRaw = "Independent";
-                        string brand = CultureInfo.CurrentCulture.TextInfo.ToTitleCase(brandRaw);
-
-                        string name = p.GetProperty("name").GetString() ?? audit.Title;
-                        string rawTitle = CleanText(name, 180);
-                        string title = rawTitle.StartsWith(brand, StringComparison.OrdinalIgnoreCase) ? rawTitle : $"{brand} {rawTitle}";
-
-                        double priceUsd = 0.0;
-                        if (p.TryGetProperty("price", out var prProp) && prProp.ValueKind == JsonValueKind.String)
+                        catch
                         {
-                            double.TryParse(prProp.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out priceUsd);
+                            await Task.Delay(500);
                         }
-                        decimal price = UsdToPkrPrice(priceUsd);
+                    }
 
-                        string slug = $"{Slugify($"{brand}-{rawTitle}")}-{rawId}";
-                        string prodUrl = $"https://makeup-api.herokuapp.com/api/v1/products/{idStr}.json";
-                        if (p.TryGetProperty("product_link", out var plProp) && plProp.ValueKind == JsonValueKind.String)
-                        {
-                            prodUrl = plProp.GetString() ?? prodUrl;
-                        }
+                    if (downloadedBytes == null || downloadedBytes.Length < 100)
+                    {
+                        throw new InvalidOperationException($"Failed to download genuine product image for {def.SKU} from {def.ImageUrl}");
+                    }
 
-                        string desc = $"{brand} {rawTitle}";
-                        if (p.TryGetProperty("description", out var dProp) && dProp.ValueKind == JsonValueKind.String)
-                        {
-                            desc = CleanText(dProp.GetString());
-                        }
+                    using var rawStream = new MemoryStream(downloadedBytes);
+                    using var originalBitmap = SKBitmap.Decode(rawStream);
+                    if (originalBitmap == null || originalBitmap.Width < 80 || originalBitmap.Height < 80)
+                    {
+                        throw new InvalidOperationException($"Downloaded image for {def.SKU} is not a valid bitmap or too small.");
+                    }
 
-                        var hashBytes = sha1.ComputeHash(Encoding.UTF8.GetBytes(sku));
-                        int stock = 8 + (Convert.ToInt32(Convert.ToHexString(hashBytes).Substring(0, 2), 16) % 48);
+                    int origW = originalBitmap.Width;
+                    int origH = originalBitmap.Height;
+                    int maxDim = 600;
+                    float scale = Math.Min((float)maxDim / origW, (float)maxDim / origH);
+                    int newW = scale < 1.0f ? (int)Math.Round(origW * scale) : origW;
+                    int newH = scale < 1.0f ? (int)Math.Round(origH * scale) : origH;
 
-                        items.Add(new CatalogueItemDto
-                        {
-                            Title = title,
-                            Brand = brand,
-                            Category = "beauty-personal-care",
-                            Price = price,
-                            OldPrice = 0m,
-                            SKU = sku,
-                            Slug = slug,
-                            SourceRetailer = "Makeup API catalogue",
-                            SourceProductUrl = prodUrl,
-                            ImageSourceUrl = audit.SourceImageUrl,
-                            MainImage = audit.LocalImage,
-                            PriceCheckedAt = "2026-09-07",
-                            ShortDescription = desc,
-                            Stock = stock,
-                            IsFeatured = false,
-                            IsFlashDeal = false
-                        });
+                    using var resizedBitmap = scale < 1.0f
+                        ? originalBitmap.Resize(new SKImageInfo(newW, newH), SKSamplingOptions.Default)
+                        : originalBitmap;
+
+                    using var image = SKImage.FromBitmap(resizedBitmap);
+                    using var webpData = image.Encode(SKEncodedImageFormat.Webp, 80);
+
+                    using (var outFs = File.Create(localFile))
+                    {
+                        webpData.SaveTo(outFs);
                     }
                 }
-            }
 
-            // Sort exactly like python script: Category, Title.ToLower(), SKU
-            items = items.OrderBy(x => x.Category)
-                         .ThenBy(x => x.Title.ToLowerInvariant())
-                         .ThenBy(x => x.SKU)
-                         .ToList();
+                // Verify file and calculate hash
+                byte[] fileBytes = await File.ReadAllBytesAsync(localFile);
+                string hash = Convert.ToHexString(sha256.ComputeHash(fileBytes)).ToLowerInvariant();
 
-            // Assign IsFeatured
-            int featuredCount = 0;
-            int step = Math.Max(1, items.Count / 14);
-            for (int i = 0; i < items.Count; i++)
-            {
-                if (i % step == 0 && featuredCount < 14)
+                var bounds = SKBitmap.DecodeBounds(localFile);
+                if (bounds.Width < 80 || bounds.Height < 80)
                 {
-                    items[i].IsFeatured = true;
-                    featuredCount++;
+                    throw new InvalidOperationException($"Invalid dimensions for image {def.LocalImageName}: {bounds.Width}x{bounds.Height}");
                 }
+
+                if (seenHashes.TryGetValue(hash, out var existingSku))
+                {
+                    throw new InvalidOperationException($"Duplicate image hash detected: {hash} is used by both {existingSku} and {def.SKU}. Unrelated products cannot share images.");
+                }
+                seenHashes[hash] = def.SKU;
+
+                var dto = new CatalogueItemDto
+                {
+                    SKU = def.SKU,
+                    Title = def.Title,
+                    Brand = def.Brand,
+                    Category = def.Category,
+                    Price = def.Price,
+                    OldPrice = def.OldPrice,
+                    Slug = def.Slug,
+                    SourceRetailer = def.SourceRetailer,
+                    SourceProductUrl = def.SourceProductUrl,
+                    ImageSourceUrl = def.ImageUrl,
+                    MainImage = $"/images/products/{def.LocalImageName}",
+                    PriceCheckedAt = "2026-09-08",
+                    ShortDescription = def.ShortDescription,
+                    Stock = def.Stock,
+                    IsFeatured = def.IsFeatured,
+                    IsFlashDeal = def.IsFlashDeal,
+                    StorefrontRank = def.StorefrontRank
+                };
+
+                result.Add(dto);
+
+                string csvLine = string.Format(
+                    "\"{0}\",\"{1}\",\"{2}\",\"{3}\",\"{4}\",{5},{6},{7},\"{8}\",\"{9}\",\"{10}\",\"{11}\",\"{12}\"",
+                    def.SKU,
+                    def.Title.Replace("\"", "\"\""),
+                    def.Category,
+                    def.LocalImageName,
+                    hash,
+                    bounds.Width,
+                    bounds.Height,
+                    fileBytes.Length,
+                    def.ImageUrl,
+                    def.SourceRetailer,
+                    def.SourceRetailer,
+                    "2026-09-08",
+                    "AUTHENTIC_VERIFIED"
+                );
+                auditRows.Add(csvLine);
             }
 
-            string targetJson = Path.Combine(basePath, "Data", "Catalog", "pakistan-products-2026.json");
-            var options = new JsonSerializerOptions
+            // Write JSON file
+            string jsonTarget = Path.Combine(basePath, "Data", "Catalog", "pakistan-products-2026.json");
+            var jsonText = JsonSerializer.Serialize(result, new JsonSerializerOptions
             {
                 WriteIndented = true,
                 Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-            };
-            string jsonOut = JsonSerializer.Serialize(items, options);
-            await File.WriteAllTextAsync(targetJson, jsonOut, Encoding.UTF8);
+            });
+            await File.WriteAllTextAsync(jsonTarget, jsonText);
 
-            return items;
+            // Write Audit CSV file
+            string auditTarget = Path.Combine(basePath, "Data", "Catalog", "product-image-audit.csv");
+            await File.WriteAllLinesAsync(auditTarget, auditRows);
+
+            return result;
         }
     }
 }

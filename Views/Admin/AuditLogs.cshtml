@@ -83,23 +83,13 @@
     </div>
 </div>
 
-<!-- Pagination -->
-@if (Model.TotalPages > 1)
+<!-- Bounded Pagination -->
+@await Html.PartialAsync("_AdminPagination", new AdminPaginationViewModel
 {
-    <nav class="d-flex justify-content-center">
-        <ul class="pagination">
-            <li class="page-item @(!Model.HasPreviousPage ? "disabled" : "")">
-                <a class="page-link rounded-pill me-1" asp-action="AuditLogs" asp-route-page="@(Model.CurrentPage - 1)" asp-route-entityFilter="@Model.EntityFilter">Previous</a>
-            </li>
-            @for (int p = 1; p <= Model.TotalPages; p++)
-            {
-                <li class="page-item @(p == Model.CurrentPage ? "active" : "")">
-                    <a class="page-link rounded-pill mx-1" asp-action="AuditLogs" asp-route-page="@p" asp-route-entityFilter="@Model.EntityFilter">@p</a>
-                </li>
-            }
-            <li class="page-item @(!Model.HasNextPage ? "disabled" : "")">
-                <a class="page-link rounded-pill ms-1" asp-action="AuditLogs" asp-route-page="@(Model.CurrentPage + 1)" asp-route-entityFilter="@Model.EntityFilter">Next</a>
-            </li>
-        </ul>
-    </nav>
-}
+    CurrentPage = Model.CurrentPage,
+    TotalPages = Model.TotalPages,
+    TotalCount = Model.TotalCount,
+    PageSize = Model.PageSize,
+    Action = "AuditLogs",
+    Controller = "Admin"
+})

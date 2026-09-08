@@ -11,9 +11,10 @@
         ? (int)Math.Round((1 - (double)Model.Price / (double)Model.OldPrice) * 100)
         : 0;
     string productUrl = $"/Shop/Details/{(string.IsNullOrEmpty(Model.Slug) ? Model.Id.ToString() : Model.Slug)}";
+    bool isPriority = ViewData["IsPriority"] as bool? ?? false;
 }
 
-<article class="product-card h-100" data-tilt="product" itemscope itemtype="https://schema.org/Product">
+<article class="product-card h-100 w-100" data-tilt="product" itemscope itemtype="https://schema.org/Product">
     <!-- Glare reflection overlay for 3D tilt -->
     <div class="tilt-glare" aria-hidden="true"></div>
 
@@ -25,14 +26,30 @@
         <a href="@productUrl" tabindex="-1" aria-hidden="true" class="product-card-img-link">
             @if (!string.IsNullOrEmpty(Model.MainImage))
             {
-                <img src="@Model.MainImage"
-                     alt="@Model.Title"
-                     class="product-card-img"
-                     loading="lazy"
-                     width="400"
-                     height="400"
-                     onerror="this.onerror=null;this.src='/images/placeholder-product.svg';"
-                     itemprop="image" />
+                if (isPriority)
+                {
+                    <img src="@Model.MainImage"
+                         alt="@Model.Title"
+                         class="product-card-img"
+                         fetchpriority="high"
+                         decoding="async"
+                         width="400"
+                         height="400"
+                         onerror="this.onerror=null;this.src='/images/placeholder-product.svg';"
+                         itemprop="image" />
+                }
+                else
+                {
+                    <img src="@Model.MainImage"
+                         alt="@Model.Title"
+                         class="product-card-img"
+                         loading="lazy"
+                         decoding="async"
+                         width="400"
+                         height="400"
+                         onerror="this.onerror=null;this.src='/images/placeholder-product.svg';"
+                         itemprop="image" />
+                }
             }
             else
             {
@@ -79,27 +96,6 @@
             <i class="@(isWishlisted ? "fa-solid fa-heart text-danger" : "fa-regular fa-heart")"></i>
         </button>
 
-        <!-- Quick Add Button (Level 3 - Hover/Focus Overlay Action) -->
-        @if (Model.Stock > 0)
-        {
-            <div class="product-card-quick-add" data-tilt-z="action">
-                <button type="button"
-                        class="btn btn-primary-custom btn-sm w-100 rounded-pill shadow-sm"
-                        data-quick-add-btn
-                        data-product-id="@Model.Id"
-                        aria-label="Quick add @Model.Title to cart">
-                    <i class="fa-solid fa-cart-shopping me-1"></i>Add to Cart
-                </button>
-            </div>
-        }
-        else
-        {
-            <div class="product-card-quick-add" data-tilt-z="action">
-                <span class="btn btn-glass btn-sm w-100 rounded-pill" style="opacity:0.85;pointer-events:none;">
-                    <i class="fa-solid fa-ban me-1 text-danger"></i>Out of Stock
-                </span>
-            </div>
-        }
     </div>
 
     <!-- Card Body (Level 2 Content Surface) -->
@@ -138,7 +134,7 @@
         <!-- Star Rating -->
         @if (Model.ReviewCount > 0 && Model.Rating > 0)
         {
-            <div class="d-flex align-items-center gap-1.5 mt-auto pt-1" aria-label="Rating: @Model.Rating.ToString("F1") out of 5">
+            <div class="d-flex align-items-center gap-1.5 pt-1" aria-label="Rating: @Model.Rating.ToString("F1") out of 5">
                 <div class="d-inline-flex text-warning small" style="font-size:0.8rem;">
                     @for (int s = 1; s <= 5; s++)
                     {
@@ -161,7 +157,7 @@
         }
         else
         {
-            <div class="d-flex align-items-center gap-1.5 mt-auto pt-1">
+            <div class="d-flex align-items-center gap-1.5 pt-1">
                 <span class="text-xs" style="color:var(--text-muted);font-style:italic;">No reviews yet</span>
             </div>
         }
@@ -176,6 +172,35 @@
             {
                 <span class="product-card-price-old">Rs. @Model.OldPrice.ToString("N0")</span>
             }
+        </div>
+
+        <!-- Bottom-Aligned Actions (Add to Cart, Details) -->
+        <div class="product-card-footer d-flex align-items-center gap-2 mt-auto pt-2">
+            @if (Model.Stock > 0)
+            {
+                <button type="button"
+                        class="btn btn-primary-custom btn-sm flex-grow-1 rounded-pill"
+                        data-quick-add-btn
+                        data-product-id="@Model.Id"
+                        aria-label="Add @Model.Title to cart">
+                    <i class="fa-solid fa-cart-plus me-1"></i>Add to Cart
+                </button>
+            }
+            else
+            {
+                <button type="button"
+                        class="btn btn-secondary btn-sm flex-grow-1 rounded-pill disabled"
+                        style="opacity:0.6; cursor:not-allowed;"
+                        disabled>
+                    <i class="fa-solid fa-ban me-1 text-danger"></i>Out of Stock
+                </button>
+            }
+            <a href="@productUrl"
+               class="btn btn-outline-secondary btn-sm rounded-pill px-2.5"
+               title="View product details"
+               aria-label="View details of @Model.Title">
+                <i class="fa-solid fa-arrow-right"></i>
+            </a>
         </div>
     </div>
 </article>

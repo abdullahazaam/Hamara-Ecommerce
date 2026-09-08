@@ -18,5 +18,6 @@ namespace HamaraCommerce.Data.Catalog
         public int Stock { get; set; } = 40;
         public bool IsFeatured { get; set; } = false;
         public bool IsFlashDeal { get; set; } = false;
+        public int? StorefrontRank { get; set; }
     }
 }

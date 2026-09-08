@@ -41,7 +41,7 @@ namespace HamaraCommerce.Data.Catalog
                     PropertyNameCaseInsensitive = true
                 });
 
-                if (items != null && items.Count == 342)
+                if (items != null && items.Count == 163)
                 {
                     return items;
                 }

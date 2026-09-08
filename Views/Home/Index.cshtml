@@ -17,8 +17,8 @@
     string heroTitle = heroProduct?.Title ?? "Anker 511 GaN Fast Charger";
     decimal heroPrice = heroProduct?.Price ?? 4799;
     string heroSlug = heroProduct?.Slug ?? heroProduct?.Id.ToString() ?? "";
-    int publishedCount = ViewBag.PublishedProductCount ?? 342;
-    int categoryCount = ViewBag.TotalCategoriesCount ?? (categories.Count > 0 ? categories.Count : 15);
+    int publishedCount = ViewBag.PublishedProductCount ?? 163;
+    int categoryCount = ViewBag.TotalCategoriesCount ?? (categories.Count > 0 ? categories.Count : 12);
 }
 
 <!-- ================================================================
@@ -103,6 +103,8 @@
                              class="hero-img-main rounded-4"
                              width="320"
                              height="320"
+                             fetchpriority="high"
+                             decoding="async"
                              onerror="this.onerror=null;this.src='/images/hero-showcase.webp';" />
                     </a>
 
@@ -235,7 +237,7 @@
         <div class="row g-3">
             @foreach (var (product, idx) in everydayLowPrices.Take(4).Select((p, i) => (p, i)))
             {
-                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
+                <div class="col-xl-3 col-lg-4 col-sm-6 d-flex flex-column reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
                     @await Html.PartialAsync("_ProductCard", product)
                 </div>
             }
@@ -263,7 +265,7 @@
         <div class="row g-3">
             @foreach (var (product, idx) in budgetDeals.Take(4).Select((p, i) => (p, i)))
             {
-                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
+                <div class="col-xl-3 col-lg-4 col-sm-6 d-flex flex-column reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
                     @await Html.PartialAsync("_ProductCard", product)
                 </div>
             }
@@ -272,26 +274,26 @@
 }
 
 <!-- ================================================================
-     6. MOBILE ACCESSORIES
+     6. HEADPHONES & AUDIO
      ================================================================ -->
 @if (mobileAccessories.Any())
 {
-    <section class="section-surface mb-5 reveal-on-scroll" aria-labelledby="accessoriesHeading">
+    <section class="section-surface mb-5 reveal-on-scroll" aria-labelledby="audioHeading">
         <div class="section-header-row">
             <div>
-                <span class="section-eyebrow bg-primary-subtle text-primary border border-primary">High-Speed Tech</span>
-                <h2 id="accessoriesHeading" class="section-title">Mobile Accessories</h2>
-                <p class="section-subtitle">Original GaN fast chargers, 20000mAh power banks, braided cables, and audio gear</p>
+                <span class="section-eyebrow bg-primary-subtle text-primary border border-primary">High-Fidelity Sound</span>
+                <h2 id="audioHeading" class="section-title">Headphones &amp; Audio</h2>
+                <p class="section-subtitle">Active noise-cancelling headphones, wireless earbuds, and portable soundbars</p>
             </div>
-            <a asp-controller="Shop" asp-action="Index" asp-route-category="mobile-accessories" class="btn btn-glass btn-sm rounded-pill px-3">
-                All Accessories <i class="fa-solid fa-arrow-right ms-1"></i>
+            <a asp-controller="Shop" asp-action="Index" asp-route-category="headphones-audio" class="btn btn-glass btn-sm rounded-pill px-3">
+                All Audio <i class="fa-solid fa-arrow-right ms-1"></i>
             </a>
         </div>
 
         <div class="row g-3">
             @foreach (var (product, idx) in mobileAccessories.Take(4).Select((p, i) => (p, i)))
             {
-                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
+                <div class="col-xl-3 col-lg-4 col-sm-6 d-flex flex-column reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
                     @await Html.PartialAsync("_ProductCard", product)
                 </div>
             }
@@ -319,7 +321,7 @@
         <div class="row g-3">
             @foreach (var (product, idx) in beautyPersonalCare.Take(4).Select((p, i) => (p, i)))
             {
-                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
+                <div class="col-xl-3 col-lg-4 col-sm-6 d-flex flex-column reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
                     @await Html.PartialAsync("_ProductCard", product)
                 </div>
             }
@@ -347,7 +349,7 @@
         <div class="row g-3">
             @foreach (var (product, idx) in homeEssentials.Take(4).Select((p, i) => (p, i)))
             {
-                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
+                <div class="col-xl-3 col-lg-4 col-sm-6 d-flex flex-column reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
                     @await Html.PartialAsync("_ProductCard", product)
                 </div>
             }
@@ -356,26 +358,26 @@
 }
 
 <!-- ================================================================
-     9. FASHION PICKS
+     9. GAMING & SMART WEARABLES
      ================================================================ -->
 @if (fashionPicks.Any())
 {
-    <section class="section-surface mb-5 reveal-on-scroll" aria-labelledby="fashionHeading">
+    <section class="section-surface mb-5 reveal-on-scroll" aria-labelledby="gamingHeading">
         <div class="section-header-row">
             <div>
-                <span class="section-eyebrow bg-danger-subtle text-danger border border-danger">Apparel &amp; Footwear</span>
-                <h2 id="fashionHeading" class="section-title">Fashion Picks</h2>
-                <p class="section-subtitle">Designer embroidered lawn suits, stitched cotton kurtas, and durable leather footwear</p>
+                <span class="section-eyebrow bg-danger-subtle text-danger border border-danger">Play &amp; Wearables</span>
+                <h2 id="gamingHeading" class="section-title">Gaming &amp; Smart Wearables</h2>
+                <p class="section-subtitle">Next-generation consoles, pro controllers, mechanical keyboards, and smart fitness watches</p>
             </div>
-            <a asp-controller="Shop" asp-action="Index" asp-route-category="mens-fashion-dept" class="btn btn-glass btn-sm rounded-pill px-3">
-                View All Fashion <i class="fa-solid fa-arrow-right ms-1"></i>
+            <a asp-controller="Shop" asp-action="Index" asp-route-category="gaming" class="btn btn-glass btn-sm rounded-pill px-3">
+                View All Gaming <i class="fa-solid fa-arrow-right ms-1"></i>
             </a>
         </div>
 
         <div class="row g-3">
             @foreach (var (product, idx) in fashionPicks.Take(4).Select((p, i) => (p, i)))
             {
-                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
+                <div class="col-xl-3 col-lg-4 col-sm-6 d-flex flex-column reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
                     @await Html.PartialAsync("_ProductCard", product)
                 </div>
             }
@@ -403,7 +405,7 @@
         <div class="row g-3">
             @foreach (var (product, idx) in electronics.Take(4).Select((p, i) => (p, i)))
             {
-                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
+                <div class="col-xl-3 col-lg-4 col-sm-6 d-flex flex-column reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
                     @await Html.PartialAsync("_ProductCard", product)
                 </div>
             }
@@ -431,7 +433,7 @@
         <div class="row g-3">
             @foreach (var (product, idx) in newArrivals.Take(4).Select((p, i) => (p, i)))
             {
-                <div class="col-xl-3 col-lg-4 col-sm-6 reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
+                <div class="col-xl-3 col-lg-4 col-sm-6 d-flex flex-column reveal-on-scroll" style="transition-delay: @(idx * 60)ms">
                     @await Html.PartialAsync("_ProductCard", product)
                 </div>
             }

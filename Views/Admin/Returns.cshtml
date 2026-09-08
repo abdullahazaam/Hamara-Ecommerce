@@ -154,6 +154,17 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- Bounded Pagination -->
+        @await Html.PartialAsync("_AdminPagination", new AdminPaginationViewModel
+        {
+            CurrentPage = Model.CurrentPage,
+            TotalPages = Model.TotalPages,
+            TotalCount = Model.TotalCount,
+            PageSize = Model.PageSize,
+            Action = "Returns",
+            Controller = "Admin"
+        })
     }
 </div>
 

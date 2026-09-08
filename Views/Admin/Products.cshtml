@@ -158,23 +158,13 @@
     </div>
 </div>
 
-<!-- Pagination -->
-@if (totalPages > 1)
+<!-- Bounded Pagination -->
+@await Html.PartialAsync("_AdminPagination", new AdminPaginationViewModel
 {
-    <nav class="d-flex justify-content-center">
-        <ul class="pagination">
-            <li class="page-item @(currentPage <= 1 ? "disabled" : "")">
-                <a class="page-link rounded-pill me-1" asp-action="Products" asp-route-page="@(currentPage - 1)" asp-route-search="@ViewBag.SearchTerm" asp-route-categoryId="@ViewBag.CategoryId" asp-route-status="@ViewBag.StatusFilter">Previous</a>
-            </li>
-            @for (int pt = 1; pt <= totalPages; pt++)
-            {
-                <li class="page-item @(pt == currentPage ? "active" : "")">
-                    <a class="page-link rounded-pill mx-1" asp-action="Products" asp-route-page="@pt" asp-route-search="@ViewBag.SearchTerm" asp-route-categoryId="@ViewBag.CategoryId" asp-route-status="@ViewBag.StatusFilter">@pt</a>
-                </li>
-            }
-            <li class="page-item @(currentPage >= totalPages ? "disabled" : "")">
-                <a class="page-link rounded-pill ms-1" asp-action="Products" asp-route-page="@(currentPage + 1)" asp-route-search="@ViewBag.SearchTerm" asp-route-categoryId="@ViewBag.CategoryId" asp-route-status="@ViewBag.StatusFilter">Next</a>
-            </li>
-        </ul>
-    </nav>
-}
+    CurrentPage = currentPage,
+    TotalPages = totalPages,
+    TotalCount = totalCount,
+    PageSize = ViewBag.PageSize ?? 10,
+    Action = "Products",
+    Controller = "Admin"
+})

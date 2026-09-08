@@ -19,6 +19,7 @@ using HamaraCommerce.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+
 // ==========================================
 // 1. MVC & GLOBAL ANTI-FORGERY SECURITY
 // ==========================================
@@ -327,8 +328,8 @@ app.UseStaticFiles(new StaticFileOptions
 {
     OnPrepareResponse = ctx =>
     {
-        // Cache public static assets for 7 days
-        ctx.Context.Response.Headers.Append("Cache-Control", "public, max-age=604800, immutable");
+        // Cache public static assets for 1 year (versioned via asp-append-version)
+        ctx.Context.Response.Headers.Append("Cache-Control", "public, max-age=31536000, immutable");
     }
 });
 

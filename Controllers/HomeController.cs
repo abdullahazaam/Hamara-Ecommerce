@@ -68,11 +68,11 @@ namespace HamaraCommerce.Controllers
                 .Take(4)
                 .ToListAsync(cancellationToken);
 
-            // 4. Mobile Accessories
+            // 4. Headphones & Audio
             var mobileAccessories = await _context.Products
                 .AsNoTracking()
                 .Include(p => p.Images)
-                .Where(p => p.Status == ProductStatus.Published && (p.CategoryName == "Mobile Accessories" || p.Category!.Slug == "mobile-accessories"))
+                .Where(p => p.Status == ProductStatus.Published && (p.CategoryName == "Headphones & Audio" || p.Category!.Slug == "headphones-audio"))
                 .OrderBy(p => p.Price)
                 .Take(4)
                 .ToListAsync(cancellationToken);
@@ -81,7 +81,7 @@ namespace HamaraCommerce.Controllers
             var beautyPersonalCare = await _context.Products
                 .AsNoTracking()
                 .Include(p => p.Images)
-                .Where(p => p.Status == ProductStatus.Published && (p.CategoryName == "Beauty & Personal Care" || p.CategoryName == "Health & Wellness" || p.Category!.Slug == "beauty-personal-care"))
+                .Where(p => p.Status == ProductStatus.Published && (p.CategoryName == "Beauty & Personal Care" || p.Category!.Slug == "beauty-personal-care"))
                 .OrderBy(p => p.Price)
                 .Take(4)
                 .ToListAsync(cancellationToken);
@@ -90,25 +90,25 @@ namespace HamaraCommerce.Controllers
             var homeEssentials = await _context.Products
                 .AsNoTracking()
                 .Include(p => p.Images)
-                .Where(p => p.Status == ProductStatus.Published && (p.CategoryName == "Home & Living" || p.CategoryName == "Kitchen Appliances" || p.CategoryName == "Grocery & Beverages"))
+                .Where(p => p.Status == ProductStatus.Published && (p.CategoryName == "Home & Living" || p.CategoryName == "Home Appliances" || p.CategoryName == "Kitchen Appliances" || p.Category!.Slug == "home-living" || p.Category!.Slug == "home-appliances" || p.Category!.Slug == "kitchen-appliances"))
                 .OrderBy(p => p.Price)
                 .Take(4)
                 .ToListAsync(cancellationToken);
 
-            // 7. Fashion Picks
+            // 7. Gaming & Smart Wearables
             var fashionPicks = await _context.Products
                 .AsNoTracking()
                 .Include(p => p.Images)
-                .Where(p => p.Status == ProductStatus.Published && (p.CategoryName == "Men's Fashion" || p.CategoryName == "Women's Fashion" || p.CategoryName == "Shoes & Footwear"))
+                .Where(p => p.Status == ProductStatus.Published && (p.CategoryName == "Gaming" || p.CategoryName == "Smart Watches" || p.Category!.Slug == "gaming" || p.Category!.Slug == "smart-watches"))
                 .OrderBy(p => p.Price)
                 .Take(4)
                 .ToListAsync(cancellationToken);
 
-            // 8. Electronics
+            // 8. Mobile & Computing Electronics
             var electronics = await _context.Products
                 .AsNoTracking()
                 .Include(p => p.Images)
-                .Where(p => p.Status == ProductStatus.Published && (p.CategoryName == "Mobile Phones" || p.CategoryName == "Laptops & Computers" || p.CategoryName == "TVs & Entertainment"))
+                .Where(p => p.Status == ProductStatus.Published && (p.CategoryName == "Mobile Phones" || p.CategoryName == "Laptops & Computers" || p.CategoryName == "Televisions" || p.Category!.Slug == "mobile-phones" || p.Category!.Slug == "laptops-computers" || p.Category!.Slug == "televisions"))
                 .OrderBy(p => p.Price)
                 .Take(4)
                 .ToListAsync(cancellationToken);

@@ -1,0 +1,130 @@
+﻿@model HamaraCommerce.Models.AdminPaginationViewModel
+@{
+    if (Model == null || Model.TotalPages <= 1)
+    {
+        return;
+    }
+
+    var window = Model.Window;
+    var currentAction = string.IsNullOrWhiteSpace(Model.Action)
+        ? (ViewContext.RouteData.Values["action"]?.ToString() ?? "Index")
+        : Model.Action;
+    var currentController = string.IsNullOrWhiteSpace(Model.Controller)
+        ? (ViewContext.RouteData.Values["controller"]?.ToString() ?? "Admin")
+        : Model.Controller;
+
+    // Collect all existing query params from HttpContext.Request.Query, excluding 'page'
+    var queryDict = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+    if (ViewContext?.HttpContext?.Request?.Query != null)
+    {
+        foreach (var queryItem in ViewContext.HttpContext.Request.Query)
+        {
+            if (!string.Equals(queryItem.Key, "page", StringComparison.OrdinalIgnoreCase))
+            {
+                queryDict[queryItem.Key] = queryItem.Value.ToString();
+            }
+        }
+    }
+
+    // Merge explicitly provided RouteParams, excluding 'page'
+    if (Model.RouteParams != null)
+    {
+        foreach (var kvp in Model.RouteParams)
+        {
+            if (!string.Equals(kvp.Key, "page", StringComparison.OrdinalIgnoreCase))
+            {
+                queryDict[kvp.Key] = kvp.Value;
+            }
+        }
+    }
+
+    string BuildPageUrl(int targetPage)
+    {
+        var routeValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var kvp in queryDict)
+        {
+            if (!string.IsNullOrEmpty(kvp.Value))
+            {
+                routeValues[kvp.Key] = kvp.Value;
+            }
+        }
+        routeValues["page"] = targetPage;
+        return Url.Action(currentAction, currentController, routeValues) ?? $"#{targetPage}";
+    }
+}
+
+<nav class="admin-pagination-wrapper d-flex flex-column flex-md-row align-items-center justify-content-between gap-3 py-3 px-2 mt-3 border-top" aria-label="Admin Table Pagination">
+    @if (Model.TotalCount > 0 && Model.PageSize > 0)
+    {
+        int startItem = ((window.CurrentPage - 1) * Model.PageSize) + 1;
+        int endItem = Math.Min(window.CurrentPage * Model.PageSize, Model.TotalCount);
+        <div class="admin-pagination-info text-muted small">
+            Showing <strong class="text-body">@startItem</strong> to <strong class="text-body">@endItem</strong> of <strong class="text-body">@Model.TotalCount</strong> entries
+        </div>
+    }
+    else
+    {
+        <div class="admin-pagination-info text-muted small">
+            Page <strong class="text-body">@window.CurrentPage</strong> of <strong class="text-body">@window.TotalPages</strong>
+        </div>
+    }
+
+    <ul class="pagination pagination-sm admin-pagination mb-0 flex-wrap justify-content-center">
+        <!-- PREVIOUS BUTTON -->
+        <li class="page-item @(!window.HasPrevious ? "disabled" : "")">
+            @if (window.HasPrevious)
+            {
+                <a class="page-link admin-page-link prev-next-link" href="@BuildPageUrl(window.PreviousPage)" aria-label="Previous Page">
+                    <i class="fa-solid fa-chevron-left me-1"></i><span>Prev</span>
+                </a>
+            }
+            else
+            {
+                <span class="page-link admin-page-link prev-next-link" aria-disabled="true">
+                    <i class="fa-solid fa-chevron-left me-1"></i><span>Prev</span>
+                </span>
+            }
+        </li>
+
+        <!-- NUMERIC BUTTONS & ELLIPSES -->
+        @foreach (var item in window.Items)
+        {
+            if (item.IsEllipsis)
+            {
+                <li class="page-item disabled admin-ellipsis-item" aria-hidden="true">
+                    <span class="page-link admin-page-link ellipsis-link">&hellip;</span>
+                </li>
+            }
+            else
+            {
+                string responsiveClass = item.IsSecondary ? "d-none d-sm-inline-block" : "";
+                <li class="page-item @(item.IsActive ? "active" : "") @responsiveClass">
+                    @if (item.IsActive)
+                    {
+                        <span class="page-link admin-page-link" aria-current="page">@item.PageNumber</span>
+                    }
+                    else
+                    {
+                        <a class="page-link admin-page-link" href="@BuildPageUrl(item.PageNumber)">@item.PageNumber</a>
+                    }
+                </li>
+            }
+        }
+
+        <!-- NEXT BUTTON -->
+        <li class="page-item @(!window.HasNext ? "disabled" : "")">
+            @if (window.HasNext)
+            {
+                <a class="page-link admin-page-link prev-next-link" href="@BuildPageUrl(window.NextPage)" aria-label="Next Page">
+                    <span>Next</span><i class="fa-solid fa-chevron-right ms-1"></i>
+                </a>
+            }
+            else
+            {
+                <span class="page-link admin-page-link prev-next-link" aria-disabled="true">
+                    <span>Next</span><i class="fa-solid fa-chevron-right ms-1"></i>
+                </span>
+            }
+        </li>
+    </ul>
+</nav>

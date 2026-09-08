@@ -109,6 +109,17 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- Bounded Pagination -->
+            @await Html.PartialAsync("_AdminPagination", new AdminPaginationViewModel
+            {
+                CurrentPage = ViewBag.CurrentPage ?? 1,
+                TotalPages = ViewBag.TotalPages ?? 1,
+                TotalCount = ViewBag.TotalCount ?? 0,
+                PageSize = ViewBag.PageSize ?? 10,
+                Action = "Inventory",
+                Controller = "Admin"
+            })
         </div>
 
         <!-- RECENT INVENTORY MOVEMENTS AUDIT LOG -->

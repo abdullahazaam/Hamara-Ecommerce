@@ -41,6 +41,7 @@ namespace HamaraCommerce.Controllers
             sort = !string.IsNullOrEmpty(sortBy) ? sortBy : sort;
 
             var query = _context.Products
+                .AsNoTracking()
                 .Include(p => p.Category)
                 .Include(p => p.Images)
                 .Where(p => p.Status == ProductStatus.Published)
@@ -59,6 +60,7 @@ namespace HamaraCommerce.Controllers
             {
                 var catStr = category.ToLower().Trim();
                 var matchedCat = await _context.Categories
+                    .AsNoTracking()
                     .Include(c => c.SubCategories)
                     .FirstOrDefaultAsync(c => c.Slug.ToLower() == catStr || c.Name.ToLower() == catStr, cancellationToken);
 
@@ -114,11 +116,13 @@ namespace HamaraCommerce.Controllers
             var products = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
 
             var categories = await _context.Categories
+                .AsNoTracking()
                 .Include(c => c.SubCategories)
                 .OrderBy(c => c.DisplayOrder)
                 .ToListAsync(cancellationToken);
 
             var brands = await _context.Products
+                .AsNoTracking()
                 .Where(p => p.Status == ProductStatus.Published && !string.IsNullOrEmpty(p.Brand))
                 .Select(p => p.Brand)
                 .Distinct()
@@ -201,6 +205,7 @@ namespace HamaraCommerce.Controllers
 
             bool isInt = int.TryParse(id, out int intId);
             var product = await _context.Products
+                .AsNoTracking()
                 .Include(p => p.Category)
                 .Include(p => p.Reviews.Where(r => r.IsApproved))
                 .Include(p => p.Questions.Where(q => q.IsApproved))
@@ -238,11 +243,12 @@ namespace HamaraCommerce.Controllers
             };
 
             var relatedProducts = await _context.Products
+                .AsNoTracking()
                 .Include(p => p.Images)
                 .Where(p => p.CategoryId == product.CategoryId && p.Id != product.Id && p.Status == ProductStatus.Published)
                 .OrderByDescending(p => p.Rating)
                 .Take(4)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             // Dynamic algorithmic frequently bought together based on real co-orders
             var orderIdsWithProduct = await _context.OrderItems
