@@ -19,14 +19,14 @@
 <meta property="og:url" content="@(seo.OgUrl ?? currentUrl)" />
 <meta property="og:title" content="@(seo.OgTitle ?? seo.Title)" />
 <meta property="og:description" content="@(seo.OgDescription ?? seo.Description)" />
-<meta property="og:image" content="@(seo.OgImage ?? $"{baseUrl}/images/og-banner.png")" />
+<meta property="og:image" content="@(seo.OgImage ?? $"{baseUrl}/images/hero-showcase.webp")" />
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="@seo.TwitterCard" />
 <meta name="twitter:url" content="@(seo.OgUrl ?? currentUrl)" />
 <meta name="twitter:title" content="@(seo.TwitterTitle ?? seo.Title)" />
 <meta name="twitter:description" content="@(seo.TwitterDescription ?? seo.Description)" />
-<meta name="twitter:image" content="@(seo.TwitterImage ?? seo.OgImage ?? $"{baseUrl}/images/og-banner.png")" />
+<meta name="twitter:image" content="@(seo.TwitterImage ?? seo.OgImage ?? $"{baseUrl}/images/hero-showcase.webp")" />
 
 <!-- Global Organization & WebSite JSON-LD Schema -->
 @Html.Raw(SeoService.GenerateOrganizationJsonLd(baseUrl))

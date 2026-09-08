@@ -1,5 +1,5 @@
 /**
- * HAMARACOMMERCE — LUXURY COMMERCE AURORA MOTION & INTERACTION ENGINE
+ * HAMARACOMMERCE - LUXURY COMMERCE AURORA MOTION & INTERACTION ENGINE
  */
 
 (function () {
@@ -963,7 +963,7 @@
 
                     let html = currentResults.map(p => `
                         <a href="/Shop/Details/${encodeURIComponent(p.id)}" class="search-suggest-item" role="option">
-                            <img src="${escapeHtml(p.image || '/images/placeholder.svg')}" alt="${escapeHtml(p.title)}" class="search-suggest-thumb" />
+                            <img src="${escapeHtml(p.image || '/images/placeholder-product.svg')}" alt="${escapeHtml(p.title)}" class="search-suggest-thumb" />
                             <div class="search-suggest-info">
                                 <div class="search-suggest-title">${escapeHtml(p.title)}</div>
                                 <div class="search-suggest-meta">
