@@ -17,10 +17,17 @@
 ## Secrets & Local Environment Overrides
 appsettings.*.local.json
 appsettings.Local.json
+appsettings.Production.local.json
 *.key
 *.pfx
 .env
 .env.*
+Properties/PublishProfiles/
+*.pubxml
+*.pubxml.user
+*.publishsettings
+publish/
+HamaraCommerce-MonsterASP-Publish.zip
 
 ## Database & Local SQL Files
 *.mdf

@@ -4,6 +4,8 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -19,6 +21,13 @@ using HamaraCommerce.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Allow an ignored, machine-local configuration file to supply production
+// secrets without ever committing them. Environment variables remain the
+// highest-precedence source (for example ConnectionStrings__DefaultConnection).
+builder.Configuration
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.local.json", optional: true, reloadOnChange: false)
+    .AddEnvironmentVariables();
+
 
 // ==========================================
 // 1. MVC & GLOBAL ANTI-FORGERY SECURITY
@@ -27,6 +36,13 @@ builder.Services.AddControllersWithViews(options =>
 {
     // Enforce automatic anti-forgery validation on all unsafe HTTP methods (POST, PUT, DELETE, PATCH)
     options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
+});
+
+builder.Services.Configure<FormOptions>(options =>
+{
+    // Product images are limited to 5 MB each by ImageUploadService. Allow
+    // enough multipart overhead and multiple-image admin uploads.
+    options.MultipartBodyLengthLimit = 30 * 1024 * 1024;
 });
 
 // ==========================================
@@ -55,9 +71,17 @@ builder.Services.Configure<BrotliCompressionProviderOptions>(options =>
 // ==========================================
 // 3. PERSISTENT SQL SERVER DATABASE
 // ==========================================
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
-    ?? "Server=(localdb)\\mssqllocaldb;Database=HamaraCommerceDb;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True";
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new InvalidOperationException(
+        "ConnectionStrings:DefaultConnection is required. Configure it with an environment variable or an ignored local settings file.");
+}
+if (builder.Environment.IsProduction() && connectionString.Contains("(localdb)", StringComparison.OrdinalIgnoreCase))
+{
+    throw new InvalidOperationException(
+        "LocalDB cannot be used in production. Configure the production connection through an environment variable or ignored local settings file.");
+}
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString, sqlOptions =>
@@ -153,6 +177,14 @@ builder.Services.AddRateLimiter(options =>
 // 7. SESSION, CACHING & HEALTH CHECKS
 // ==========================================
 builder.Services.AddHttpContextAccessor();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // MonsterASP.NET terminates HTTPS at its IIS reverse proxy. The proxy
+    // addresses are host-managed and may change, so accept its forwarded headers.
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
 {
@@ -192,26 +224,33 @@ if (builder.Environment.IsProduction())
         publicUri.Scheme != Uri.UriSchemeHttps || publicUri.IsLoopback || !string.IsNullOrEmpty(publicUri.UserInfo) ||
         !string.IsNullOrEmpty(publicUri.Query) || !string.IsNullOrEmpty(publicUri.Fragment))
         throw new InvalidOperationException("Set PublicSiteUrl to this store's public HTTPS URL before production startup.");
+
+    builder.Services.ConfigureApplicationCookie(options =>
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always);
+    builder.Services.Configure<SessionOptions>(options =>
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always);
 }
 
 var app = builder.Build();
 
 // ==========================================
-// 9. DATABASE MIGRATION & SEEDING
+// 9. EXPLICIT DATABASE MAINTENANCE COMMANDS
 // ==========================================
-using (var scope = app.Services.CreateScope())
+var maintenanceRequested = args.Any(arg => arg is
+    "--marketplace-transform" or "--seed-marketplace" or
+    "--import-catalogue" or "--seed-catalogue" or
+    "--repair-images" or "--repair-storefront");
+
+if (maintenanceRequested)
 {
+    if (app.Environment.IsProduction() && !builder.Configuration.GetValue<bool>("AllowProductionDatabaseMaintenance"))
+        throw new InvalidOperationException("Production database maintenance commands are disabled.");
+
+    using var scope = app.Services.CreateScope();
     var services = scope.ServiceProvider;
     var logger = services.GetRequiredService<ILogger<Program>>();
     try
     {
-        var context = services.GetRequiredService<ApplicationDbContext>();
-        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
-        var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
-        var config = services.GetRequiredService<IConfiguration>();
-
-        context.Database.Migrate();
-
         if (args.Contains("--marketplace-transform") || args.Contains("--seed-marketplace"))
         {
             logger.LogInformation("Executing CLI marketplace catalogue transformation...");
@@ -265,8 +304,6 @@ using (var scope = app.Services.CreateScope())
             Console.WriteLine("=================================================");
             return;
         }
-
-        DbInitializer.Initialize(context, userManager, roleManager, config, isDevelopment: app.Environment.IsDevelopment());
     }
     catch (Exception ex)
     {
@@ -287,6 +324,7 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/Home/NotFoundPage/{0}");
 
 app.UseResponseCompression();
+app.UseForwardedHeaders();
 app.UseHttpsRedirection();
 
 // Production Security Headers Middleware
