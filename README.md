@@ -2,6 +2,8 @@
 
 Hamara Commerce is a full-featured e-commerce and retail platform demonstration built with ASP.NET Core MVC on .NET 9 and Microsoft SQL Server. Developed as an in-depth software engineering portfolio project, it demonstrates realistic system architecture beyond basic CRUD operations: concurrency-safe inventory adjustments, idempotent checkout processing, multi-stage returns and refund governance, transactional email outbox recovery, and a modern customer storefront.
 
+[Source Code](https://github.com/abdullahazaam/Hamara-Ecommerce)
+
 ---
 
 ## Visual Tour
@@ -103,13 +105,15 @@ Hamara Commerce is a full-featured e-commerce and retail platform demonstration 
 
 Configuration settings can be provided via `appsettings.json`, environment variables, or `.NET User Secrets`:
 
+> **Development-only credentials:** The seeded administrator email and password below are provided only for local development and portfolio evaluation. They must be replaced through secure configuration and must never be used in production.
+
 | Variable / Key | Description | Default / Example |
 | :--- | :--- | :--- |
 | `ConnectionStrings__DefaultConnection` | Primary SQL Server connection string | `Server=(localdb)\mssqllocaldb;Database=HamaraCommerceDb;...` |
 | `HAMARA_TEST_SQL_CONNECTION` | Connection string for real SQL integration tests | Defaults to `DefaultConnection` if omitted |
 | `PublicSiteUrl` | Canonical HTTPS public site URL (required in Production) | `https://example.com` |
-| `AdminSeed:Email` | Seeded development administrator email | `admin@hamaracommerce.pk` |
-| `AdminSeed:Password` | Seeded development administrator password | `Admin@123!` |
+| `AdminSeed:Email` | Development-only seeded administrator email; never use in production | `admin@hamaracommerce.pk` |
+| `AdminSeed:Password` | Development-only seeded administrator password; never use in production | `Admin@123!` |
 | `Smtp:Host` | Outgoing SMTP server hostname | `smtp.example.com` (falls back to logger if omitted) |
 | `Smtp:Port` | Outgoing SMTP server port | `587` |
 | `Smtp:User` | Outgoing SMTP username | `noreply@hamaracommerce.pk` |
