@@ -374,9 +374,157 @@ app.UseStaticFiles(new StaticFileOptions
 app.UseRouting();
 app.UseRateLimiter();
 
+
 app.UseSession();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// ==========================================
+// 11. PORTFOLIO DEMO ACCOUNTS
+// ==========================================
+// These two public demo accounts are intentionally kept available on the
+// portfolio deployment. Only these accounts are touched by this startup block.
+using (var demoScope = app.Services.CreateScope())
+{
+    var demoServices = demoScope.ServiceProvider;
+    var userManager = demoServices.GetRequiredService<UserManager<ApplicationUser>>();
+    var roleManager = demoServices.GetRequiredService<RoleManager<IdentityRole>>();
+    var logger = demoServices.GetRequiredService<ILogger<Program>>();
+
+    foreach (var roleName in new[] { "Admin", "Customer" })
+    {
+        if (!await roleManager.RoleExistsAsync(roleName))
+        {
+            var roleResult = await roleManager.CreateAsync(new IdentityRole(roleName));
+            if (!roleResult.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to create role '{roleName}': " +
+                    string.Join(", ", roleResult.Errors.Select(e => e.Description)));
+            }
+        }
+    }
+
+    async Task EnsureDemoUserAsync(
+        string email,
+        string password,
+        string fullName,
+        string roleName)
+    {
+        var user = await userManager.FindByEmailAsync(email);
+
+        if (user == null)
+        {
+            user = new ApplicationUser
+            {
+                UserName = email,
+                Email = email,
+                FullName = fullName,
+                EmailConfirmed = true,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            var createResult = await userManager.CreateAsync(user, password);
+            if (!createResult.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to create demo user '{email}': " +
+                    string.Join(", ", createResult.Errors.Select(e => e.Description)));
+            }
+        }
+        else
+        {
+            var userChanged = false;
+
+            if (!string.Equals(user.UserName, email, StringComparison.OrdinalIgnoreCase))
+            {
+                user.UserName = email;
+                userChanged = true;
+            }
+
+            if (!user.EmailConfirmed)
+            {
+                user.EmailConfirmed = true;
+                userChanged = true;
+            }
+
+            if (!user.IsActive)
+            {
+                user.IsActive = true;
+                userChanged = true;
+            }
+
+            if (userChanged)
+            {
+                var updateResult = await userManager.UpdateAsync(user);
+                if (!updateResult.Succeeded)
+                {
+                    throw new InvalidOperationException(
+                        $"Failed to update demo user '{email}': " +
+                        string.Join(", ", updateResult.Errors.Select(e => e.Description)));
+                }
+            }
+
+            // Keep the documented portfolio credentials reliable.
+            if (!await userManager.CheckPasswordAsync(user, password))
+            {
+                var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
+                var resetResult = await userManager.ResetPasswordAsync(user, resetToken, password);
+                if (!resetResult.Succeeded)
+                {
+                    throw new InvalidOperationException(
+                        $"Failed to reset demo password for '{email}': " +
+                        string.Join(", ", resetResult.Errors.Select(e => e.Description)));
+                }
+            }
+        }
+
+        var clearLockoutResult = await userManager.SetLockoutEndDateAsync(user, null);
+        if (!clearLockoutResult.Succeeded)
+        {
+            throw new InvalidOperationException(
+                $"Failed to clear lockout for demo user '{email}': " +
+                string.Join(", ", clearLockoutResult.Errors.Select(e => e.Description)));
+        }
+
+        var resetFailuresResult = await userManager.ResetAccessFailedCountAsync(user);
+        if (!resetFailuresResult.Succeeded)
+        {
+            throw new InvalidOperationException(
+                $"Failed to reset access failures for demo user '{email}': " +
+                string.Join(", ", resetFailuresResult.Errors.Select(e => e.Description)));
+        }
+
+        if (!await userManager.IsInRoleAsync(user, roleName))
+        {
+            var addRoleResult = await userManager.AddToRoleAsync(user, roleName);
+            if (!addRoleResult.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to assign role '{roleName}' to '{email}': " +
+                    string.Join(", ", addRoleResult.Errors.Select(e => e.Description)));
+            }
+        }
+
+        logger.LogInformation(
+            "Portfolio demo account ensured: {Email} ({Role})",
+            email,
+            roleName);
+    }
+
+    await EnsureDemoUserAsync(
+        "admin@hamaracommerce.pk",
+        "Admin@123!",
+        "Hamara Administrator",
+        "Admin");
+
+    await EnsureDemoUserAsync(
+        "customer@hamaracommerce.pk",
+        "Customer@123!",
+        "Demo Customer",
+        "Customer");
+}
 
 // Health Check Endpoints
 app.MapHealthChecks("/health", new HealthCheckOptions
