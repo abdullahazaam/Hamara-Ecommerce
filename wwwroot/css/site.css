@@ -239,7 +239,6 @@ a:hover { color: var(--brand-primary-hover); }
 main {
     flex: 1;
     position: relative;
-    z-index: 1;
 }
 
 /* Page Container — mirrors Bootstrap's container for inner pages */
